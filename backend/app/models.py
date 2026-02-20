@@ -20,6 +20,9 @@ SCHEMA = pa.schema([
     pa.field("created_at",    pa.string()),
     pa.field("updated_at",    pa.string()),
     pa.field("hash",          pa.string()),
+    # Raw source conversation text — enables hybrid search (memory for retrieval,
+    # chunk for LLM to read exact values like config numbers / error strings).
+    pa.field("chunk",         pa.string()),
 ])
 
 # ── API request models ─────────────────────────────────────────────────────────

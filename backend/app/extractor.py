@@ -177,7 +177,14 @@ def extract_memories(
     else:
         raw = call_xai(EXTRACTION_SYSTEM, EXTRACTION_USER.format(conversation=truncated))
 
-    return parse_json_array(raw)
+    facts = parse_json_array(raw)
+    # Attach the raw source text to every fact so the route can store it alongside
+    # the extracted memory.  This enables hybrid search: the memory is used for
+    # high-precision vector retrieval; the chunk is injected into the answer context
+    # so the LLM can read exact values (config numbers, error strings, etc.).
+    for fact in facts:
+        fact["chunk"] = truncated
+    return facts
 
 
 def condense_to_learned_pattern(summary_text: str) -> Optional[dict]:

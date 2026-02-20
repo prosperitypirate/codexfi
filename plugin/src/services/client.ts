@@ -14,6 +14,7 @@ const MAX_CONVERSATION_CHARS = 100_000;
 interface MemoryRecord {
   id: string;
   memory: string;
+  chunk?: string;
   score?: number;
   hash?: string;
   metadata?: Record<string, unknown>;
@@ -106,6 +107,7 @@ export class MemoryClient {
       const results = (data.results ?? []).map((m) => ({
         id: m.id,
         memory: m.memory,
+        chunk: m.chunk ?? "",
         similarity: m.score ?? 1,
         metadata: m.metadata,
       }));

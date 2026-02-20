@@ -93,12 +93,13 @@ export class OpencodeMemoryProvider implements Provider {
     }
 
     const data = (await res.json()) as {
-      results: Array<{ id: string; memory: string; score: number; metadata?: Record<string, unknown> }>;
+      results: Array<{ id: string; memory: string; chunk?: string; score: number; metadata?: Record<string, unknown> }>;
     };
 
     return (data.results ?? []).map((r) => ({
       id: r.id,
       memory: r.memory,
+      chunk: r.chunk ?? "",
       score: r.score,
       metadata: r.metadata,
     }));

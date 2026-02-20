@@ -6,8 +6,14 @@ export function buildAnswerPrompt(question: string, results: SearchResult[]): st
   const context = results.length === 0
     ? "(no memories retrieved)"
     : results
-        .map((r, i) => `[${i + 1}] (score: ${(r.score * 100).toFixed(0)}%) ${r.memory}`)
-        .join("\n");
+        .map((r, i) => {
+          const header = `[${i + 1}] Memory (score: ${(r.score * 100).toFixed(0)}%): ${r.memory}`;
+          const chunk = r.chunk?.trim()
+            ? `\n    Source context:\n${r.chunk.trim().split("\n").map(l => `      ${l}`).join("\n")}`
+            : "";
+          return header + chunk;
+        })
+        .join("\n\n");
 
   return `You are a question-answering assistant. Answer the question using ONLY the retrieved memory context below.
 
@@ -17,7 +23,9 @@ Retrieved context from memory system:
 ${context}
 
 Instructions:
+- Each result has a Memory (high-level fact used for retrieval) and a Source context (raw conversation — use this for exact values like config numbers, error messages, function names)
 - Answer ONLY from the retrieved context above
+- Prefer specific values from the Source context over paraphrased values from the Memory summaries
 - If the context does not contain enough information to answer, respond with exactly: "I don't know"
 - Be concise and direct
 - Do NOT use any external knowledge or make assumptions

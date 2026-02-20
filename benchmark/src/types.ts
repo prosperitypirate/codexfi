@@ -71,6 +71,8 @@ export interface IngestResult {
 export interface SearchResult {
   id: string;
   memory: string;
+  /** Raw source conversation text stored alongside the memory (hybrid search). */
+  chunk?: string;
   score: number;
   metadata?: Record<string, unknown>;
 }

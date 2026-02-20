@@ -6,11 +6,24 @@ Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around
 
 ---
 
-## Baseline Results — Run `ab3bff99`
+## Results
 
-> Model: `claude-sonnet-4-6` (judge + answerer) · Backend: opencode-memory v0.1 · 40 questions · 10 sessions
+> Model: `claude-sonnet-4-6` (judge + answerer) · 40 questions · 10 sessions
 
-### Overall: 52.5% (21/40)
+### v0.2 — Hybrid Search (run `e2052c0f`) — **85.0%** ↑ +32.5pp
+
+```
+tech-stack        ████████████████████ 100%  (5/5)  ✓
+architecture      ████████████████████ 100%  (5/5)  ✓
+preference        ████████████████████ 100%  (5/5)  ✓
+error-solution    ████████████████████ 100%  (5/5)  ✓  was 0%  → +100pp
+knowledge-update  ████████████████████ 100%  (5/5)  ✓  was 40% → +60pp
+abstention        ████████████████░░░░  80%  (4/5)  ✓
+cross-synthesis   ████████████░░░░░░░░  60%  (3/5)  ⚠  was 20% → +40pp
+session-cont.     ████████░░░░░░░░░░░░  40%  (2/5)  ⚠  was 20% → +20pp
+```
+
+### v0.1 — Baseline (run `ab3bff99`) — **52.5%**
 
 ```
 preference        ████████████████████ 100%  (5/5)  ✓
@@ -78,18 +91,19 @@ Supermemory published [LongMemEval_s](https://supermemory.ai/research) results (
 | Full-context GPT-4o | 60.2% |
 | Zep (GPT-4o) | 71.2% |
 | **Supermemory (GPT-4o)** | **81.6%** |
+| **opencode-memory v0.2 (claude-sonnet-4-6)** | **85.0%** ← after hybrid search |
 | Supermemory (Gemini 2.5 Pro) | 85.2% |
 
-Our 52.5% is on a different dataset (coding context, different categories), so these are not directly comparable. What is comparable is **why** they score higher:
+Note: different datasets (coding context vs. general conversational), so scores are not directly comparable. What is comparable is **which techniques drive improvement**:
 
-| Supermemory technique | Their result uplift | Our gap |
-|---|---|---|
-| Hybrid search (memory → source chunk) | +22.9% on temporal-reasoning | error-solution 0% |
-| Relational versioning (`updates` link) | +6.2% on knowledge-update | knowledge-update 40%, synthesis 20% |
-| Temporal grounding (documentDate + eventDate) | +22.9% on temporal-reasoning | session-continuity 20% |
-| Contextual memory extraction | Reduces ambiguity across all categories | architecture 1 miss, abstention 1 miss |
+| Supermemory technique | Their uplift | v0.1 gap | v0.2 result |
+|---|---|---|---|
+| Hybrid search (memory → source chunk) | +22.9% temporal | error-solution 0% | **100%** ✓ |
+| Relational versioning (`updates` link) | +6.2% knowledge-update | knowledge-update 40%, synthesis 20% | pending (#17) |
+| Temporal grounding (documentDate + eventDate) | +22.9% temporal | session-continuity 20% | 40% partial (#18) |
+| Contextual memory extraction | Reduces ambiguity | architecture 1 miss, abstention 1 miss | unchanged |
 
-The 3 improvements below directly address each technique.
+The remaining improvements below directly address each open technique.
 
 ---
 
@@ -97,21 +111,13 @@ The 3 improvements below directly address each technique.
 
 These are sequenced by estimated impact. Each is a separate backend PR.
 
-### Priority 1 — Hybrid search: store and return source chunks
+### ~~Priority 1 — Hybrid search: store and return source chunks~~ ✅ Done (PR #19, +32.5pp)
 
-**Impact estimate: error-solution 0% → ~60%, session-continuity partial improvement**
+**Actual results: error-solution 0% → 100%, knowledge-update 40% → 100%, cross-synthesis 20% → 60%, session-continuity 20% → 40%**
 
-Currently: `POST /memories/search` returns only the extracted memory string.
+Backend stores the original conversation text as a `chunk` field alongside each extracted memory. `POST /memories/search` returns both. The benchmark answering prompt injects the chunk as source context so the LLM reads exact values (config numbers, error strings, function names) rather than compressed summaries.
 
-Fix: Store the original conversation text alongside each memory. When returning search results, include both:
-```json
-{
-  "memory": "Always check Redis connection pool settings first...",
-  "chunk":  "user: we're getting connection timeouts in prod\nassistant: ... set max_connections=50, socket_connect_timeout=5, socket_timeout=5 ...",
-  "score":  0.69
-}
-```
-The benchmark answering prompt already has a `chunk` field in the search result type — it just comes back empty. No benchmark changes needed; only the backend `/memories/search` response needs updating.
+Plugin also updated: dual-scope semantic search (user + project) at session start, with raw chunk snippets injected into `[MEMORY]` for hits ≥55% similarity.
 
 ### Priority 2 — Relational versioning: supersede stale memories
 

@@ -133,6 +133,7 @@ def _age_session_summaries(user_id: str) -> None:
                 "created_at": now,
                 "updated_at": now,
                 "hash":       hashlib.md5(condensed["memory"].encode()).hexdigest(),
+                "chunk":      "",  # condensed learned-patterns have no single source chunk
             }])
 
         db.table.delete(f"id = '{oldest['id']}'")

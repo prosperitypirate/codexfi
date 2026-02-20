@@ -61,8 +61,9 @@ async def add_memory(req: AddMemoryRequest):
         now          = datetime.now(timezone.utc).isoformat()
 
         for fact in facts:
-            fact_text = fact["memory"]
-            fact_type = fact.get("type") or base_metadata.get("type") or ""
+            fact_text  = fact["memory"]
+            fact_type  = fact.get("type") or base_metadata.get("type") or ""
+            fact_chunk = fact.get("chunk") or ""
 
             metadata     = {**base_metadata, **({"type": fact_type} if fact_type else {})}
             metadata_str = json.dumps(metadata)
@@ -80,6 +81,7 @@ async def add_memory(req: AddMemoryRequest):
                         "updated_at":    now,
                         "hash":          fact_hash,
                         "metadata_json": metadata_str,
+                        "chunk":         fact_chunk,
                     },
                 )
                 results.append({"id": dup["id"], "memory": fact_text, "event": "UPDATE"})
@@ -95,6 +97,7 @@ async def add_memory(req: AddMemoryRequest):
                     "created_at":    now,
                     "updated_at":    now,
                     "hash":          fact_hash,
+                    "chunk":         fact_chunk,
                 }])
                 results.append({"id": mem_id, "memory": fact_text, "event": "ADD"})
                 logger.debug("Added new memory %s (type=%s)", mem_id, fact_type)
@@ -176,6 +179,7 @@ async def search_memories(req: SearchMemoryRequest):
             {
                 "id":         r["id"],
                 "memory":     r["memory"],
+                "chunk":      r.get("chunk") or "",
                 "score":      round(max(0.0, 1.0 - r.get("_distance", 1.0)), 4),
                 "metadata":   json.loads(r.get("metadata_json") or "{}"),
                 "created_at": r.get("created_at"),

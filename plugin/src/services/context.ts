@@ -109,7 +109,17 @@ export function formatContextForPrompt(
     allSemantic.forEach((mem) => {
       const pct = Math.round(mem.similarity * 100);
       const content = mem.memory || mem.chunk || "";
-      if (content) parts.push(`- [${pct}%] ${content}`);
+      if (!content) return;
+      parts.push(`- [${pct}%] ${content}`);
+      // Append a truncated source snippet for high-confidence hits (≥55%) so
+      // Claude can read exact values (config numbers, error strings, function
+      // names) that are compressed out of the memory summary.
+      // Skipped for low-confidence results to keep token usage reasonable.
+      const snippet = mem.chunk?.trim();
+      if (snippet && snippet !== content && mem.similarity >= 0.55) {
+        const truncated = snippet.length > 400 ? snippet.slice(0, 400) + "…" : snippet;
+        parts.push(`  > ${truncated.replace(/\n/g, "\n  > ")}`);
+      }
     });
   }
 
