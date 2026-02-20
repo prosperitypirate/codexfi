@@ -1,15 +1,15 @@
 # Default owners for everything in the repo
-* @prosperitypirate
+* @prosperitypirate/prosperity-pirates
 
 # Backend (Python/FastAPI)
-/backend/ @prosperitypirate
+/backend/ @prosperitypirate/prosperity-pirates
 
 # Plugin (Bun/TypeScript)
-/plugin/ @prosperitypirate
+/plugin/ @prosperitypirate/prosperity-pirates
 
 # Frontend (Next.js)
-/frontend/ @prosperitypirate
+/frontend/ @prosperitypirate/prosperity-pirates
 
 # Infrastructure
-docker-compose.yml @prosperitypirate
-/scripts/ @prosperitypirate
+docker-compose.yml @prosperitypirate/prosperity-pirates
+/scripts/ @prosperitypirate/prosperity-pirates
