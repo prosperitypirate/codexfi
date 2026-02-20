@@ -1,0 +1,48 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+.next/
+
+# Environment / secrets
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Logs
+*.log
+
+# Lock files (using bun)
+bun.lock
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+
+# Data files (LanceDB runtime)
+*.lance/
+*.parquet
+costs.json
+names.json
+
+# Setup script (not committed — run locally only)
+scripts/setup-github-repo.sh
