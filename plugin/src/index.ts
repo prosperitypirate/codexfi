@@ -229,10 +229,13 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
         if (isFirstMessage) {
           injectedSessions.add(input.sessionID);
 
-          const [profileResult, userMemoriesResult, projectMemoriesListResult] = await Promise.all([
+          const [profileResult, userMemoriesResult, projectMemoriesListResult, projectSearchResult] = await Promise.all([
             memoryClient.getProfile(tags.user, userMessage),
             memoryClient.searchMemories(userMessage, tags.user),
             memoryClient.listMemories(tags.project, CONFIG.maxStructuredMemories),
+            // Semantic search on project scope so scored results (with chunks) reach
+            // the "Relevant to Current Task" section for high-confidence hits.
+            memoryClient.searchMemories(userMessage, tags.project),
           ]);
 
           const profile = profileResult.success ? profileResult : null;
@@ -240,6 +243,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           const projectMemoriesList = projectMemoriesListResult.success
             ? projectMemoriesListResult
             : { memories: [] };
+          const projectSearch = projectSearchResult.success ? projectSearchResult : { results: [] };
 
           const allProjectMemories = projectMemoriesList.memories || [];
 
@@ -271,12 +275,14 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
             });
           }
 
-          // Semantic search hits for "relevant to current task" section
+          // Semantic search hits for "relevant to current task" section —
+          // merge user-scope and project-scope results so chunk snippets from
+          // project memories flow through to formatContextForPrompt.
           const semanticResults = {
-            results: (userMemoriesResult.results || []).map((r) => ({
-              ...r,
-              memory: r.memory,
-            })),
+            results: [
+              ...(userMemoriesResult.results || []),
+              ...(projectSearch.results || []),
+            ].map((r) => ({ ...r, memory: r.memory })),
           };
 
           const memoryContext = formatContextForPrompt(
