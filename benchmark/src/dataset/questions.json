@@ -1,0 +1,282 @@
+[
+  {
+    "questionId": "Q01",
+    "questionType": "tech-stack",
+    "question": "What web framework is the ecommerce-api built with?",
+    "groundTruth": "FastAPI",
+    "haystackSessionIds": ["S01"]
+  },
+  {
+    "questionId": "Q02",
+    "questionType": "tech-stack",
+    "question": "What database does the ecommerce-api use?",
+    "groundTruth": "PostgreSQL",
+    "haystackSessionIds": ["S01"]
+  },
+  {
+    "questionId": "Q03",
+    "questionType": "tech-stack",
+    "question": "What caching layer is used in the ecommerce-api project?",
+    "groundTruth": "Redis",
+    "haystackSessionIds": ["S01"]
+  },
+  {
+    "questionId": "Q04",
+    "questionType": "tech-stack",
+    "question": "What Python version is the ecommerce-api project using?",
+    "groundTruth": "Python 3.12",
+    "haystackSessionIds": ["S01"]
+  },
+  {
+    "questionId": "Q05",
+    "questionType": "tech-stack",
+    "question": "How is the ecommerce-api project containerized?",
+    "groundTruth": "Docker (Docker Compose with separate containers for FastAPI app, PostgreSQL, and Redis)",
+    "haystackSessionIds": ["S01"]
+  },
+  {
+    "questionId": "Q06",
+    "questionType": "architecture",
+    "question": "How is authentication implemented in the ecommerce-api?",
+    "groundTruth": "JWT tokens with access tokens returned in the JSON response body and refresh tokens stored in httpOnly, Secure, SameSite=Strict cookies. Refresh token rotation is used: each time a refresh token is used, a new one is issued and the old one is revoked.",
+    "haystackSessionIds": ["S02"]
+  },
+  {
+    "questionId": "Q07",
+    "questionType": "architecture",
+    "question": "What are the token expiry times for access and refresh tokens?",
+    "groundTruth": "Access tokens expire in 15 minutes. Refresh tokens expire in 7 days.",
+    "haystackSessionIds": ["S02"]
+  },
+  {
+    "questionId": "Q08",
+    "questionType": "architecture",
+    "question": "What payment provider is integrated into the ecommerce-api?",
+    "groundTruth": "Stripe",
+    "haystackSessionIds": ["S07", "S08"]
+  },
+  {
+    "questionId": "Q09",
+    "questionType": "architecture",
+    "question": "What endpoint handles Stripe payment webhooks?",
+    "groundTruth": "POST /webhooks/stripe",
+    "haystackSessionIds": ["S08"]
+  },
+  {
+    "questionId": "Q10",
+    "questionType": "architecture",
+    "question": "How are Stripe webhook events validated?",
+    "groundTruth": "Using stripe.Webhook.construct_event() with the raw request body bytes and the Stripe-Signature header, verified against the STRIPE_WEBHOOK_SECRET environment variable.",
+    "haystackSessionIds": ["S08", "S09"]
+  },
+  {
+    "questionId": "Q11",
+    "questionType": "session-continuity",
+    "question": "What was the most recent session focused on?",
+    "groundTruth": "Fixing the Stripe webhook signature validation failure. The bug was that Starlette had consumed the request body before Stripe's construct_event() could read the raw bytes. Fixed by reading and caching raw_body = await request.body() before any parsing.",
+    "haystackSessionIds": ["S09"]
+  },
+  {
+    "questionId": "Q12",
+    "questionType": "session-continuity",
+    "question": "What was accomplished in the project status session on January 25?",
+    "groundTruth": "Reviewed project status: user authentication, product catalog, and shopping cart are complete. Checkout flow with Stripe is in progress. Email notifications and admin dashboard are pending.",
+    "haystackSessionIds": ["S07"]
+  },
+  {
+    "questionId": "Q13",
+    "questionType": "session-continuity",
+    "question": "What Redis bug was encountered and fixed?",
+    "groundTruth": "Redis connection pool exhaustion causing timeout errors under load. Fixed by configuring the connection pool with max_connections=50, socket_timeout=5, socket_connect_timeout=5, and retry_on_timeout=True.",
+    "haystackSessionIds": ["S04"]
+  },
+  {
+    "questionId": "Q14",
+    "questionType": "session-continuity",
+    "question": "What did the session on January 17 cover?",
+    "groundTruth": "Development setup: how to run the server (uvicorn), run migrations (alembic upgrade head at the time), run tests (pytest), and the required environment variables (DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY).",
+    "haystackSessionIds": ["S03"]
+  },
+  {
+    "questionId": "Q15",
+    "questionType": "session-continuity",
+    "question": "What session directly preceded the Stripe webhook bug fix session?",
+    "groundTruth": "The Stripe integration session (January 28) where the POST /webhooks/stripe endpoint was implemented and the checkout flow was described.",
+    "haystackSessionIds": ["S08", "S09"]
+  },
+  {
+    "questionId": "Q16",
+    "questionType": "preference",
+    "question": "How does this developer prefer responses to be formatted?",
+    "groundTruth": "Concise — no fluff, no lengthy preambles. Just the answer.",
+    "haystackSessionIds": ["S06"]
+  },
+  {
+    "questionId": "Q17",
+    "questionType": "preference",
+    "question": "What is the developer's preference about commented-out code?",
+    "groundTruth": "Never leave commented-out code in files. If code is being removed, delete it entirely.",
+    "haystackSessionIds": ["S06"]
+  },
+  {
+    "questionId": "Q18",
+    "questionType": "preference",
+    "question": "Does this developer want type hints in Python code?",
+    "groundTruth": "Yes — always add type hints to Python functions.",
+    "haystackSessionIds": ["S06"]
+  },
+  {
+    "questionId": "Q19",
+    "questionType": "preference",
+    "question": "What package manager does this developer use for JavaScript and TypeScript projects?",
+    "groundTruth": "bun — not npm or yarn.",
+    "haystackSessionIds": ["S06", "S10"]
+  },
+  {
+    "questionId": "Q20",
+    "questionType": "preference",
+    "question": "What CSS and component framework is the developer using in the dashboard project?",
+    "groundTruth": "Tailwind CSS with shadcn/ui components.",
+    "haystackSessionIds": ["S10"]
+  },
+  {
+    "questionId": "Q21",
+    "questionType": "error-solution",
+    "question": "How was the Redis connection timeout error fixed?",
+    "groundTruth": "Configured the connection pool explicitly with max_connections=50, socket_timeout=5, socket_connect_timeout=5, and retry_on_timeout=True when creating the Redis client.",
+    "haystackSessionIds": ["S04"]
+  },
+  {
+    "questionId": "Q22",
+    "questionType": "error-solution",
+    "question": "What was the root cause of the Stripe webhook signature validation failure?",
+    "groundTruth": "Starlette (FastAPI's underlying framework) had already consumed and decoded the request body before Stripe's construct_event() tried to read it. Stripe requires the original raw bytes for signature verification.",
+    "haystackSessionIds": ["S09"]
+  },
+  {
+    "questionId": "Q23",
+    "questionType": "error-solution",
+    "question": "How was the Stripe webhook bug fixed?",
+    "groundTruth": "Read and cache the raw body bytes first with raw_body = await request.body(), then pass those raw bytes (not a decoded string) to stripe.Webhook.construct_event().",
+    "haystackSessionIds": ["S09"]
+  },
+  {
+    "questionId": "Q24",
+    "questionType": "error-solution",
+    "question": "What specific Redis connection pool settings resolved the timeout problem?",
+    "groundTruth": "max_connections=50, socket_timeout=5, socket_connect_timeout=5, retry_on_timeout=True",
+    "haystackSessionIds": ["S04"]
+  },
+  {
+    "questionId": "Q25",
+    "questionType": "error-solution",
+    "question": "What error message appeared when the Stripe webhook signature check failed?",
+    "groundTruth": "No signatures found matching the expected signature for payload",
+    "haystackSessionIds": ["S09"]
+  },
+  {
+    "questionId": "Q26",
+    "questionType": "knowledge-update",
+    "question": "What database migration tool does the ecommerce-api currently use?",
+    "groundTruth": "Aerich (switched from Alembic for better async ORM support with Tortoise ORM)",
+    "haystackSessionIds": ["S01", "S03", "S05"]
+  },
+  {
+    "questionId": "Q27",
+    "questionType": "knowledge-update",
+    "question": "What is the current command to run database migrations?",
+    "groundTruth": "aerich upgrade (previously it was alembic upgrade head before switching to Aerich)",
+    "haystackSessionIds": ["S03", "S05"]
+  },
+  {
+    "questionId": "Q28",
+    "questionType": "knowledge-update",
+    "question": "Why was the migration tool changed?",
+    "groundTruth": "Switched from Alembic to Aerich because Aerich is designed for async ORMs and works natively with Tortoise ORM, which was adopted to replace SQLAlchemy for better async support.",
+    "haystackSessionIds": ["S05"]
+  },
+  {
+    "questionId": "Q29",
+    "questionType": "knowledge-update",
+    "question": "What features are still pending and not yet implemented?",
+    "groundTruth": "Email notifications (order confirmation, shipping updates) and admin dashboard (order management, inventory).",
+    "haystackSessionIds": ["S07"]
+  },
+  {
+    "questionId": "Q30",
+    "questionType": "knowledge-update",
+    "question": "What ORM is currently used in the ecommerce-api?",
+    "groundTruth": "Tortoise ORM (switched from SQLAlchemy when migrating to Aerich for migrations)",
+    "haystackSessionIds": ["S01", "S05"]
+  },
+  {
+    "questionId": "Q31",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the complete tech stack of the ecommerce-api?",
+    "groundTruth": "FastAPI (Python 3.12), PostgreSQL, Redis (caching), Docker/Docker Compose, Tortoise ORM, Aerich migrations, JWT authentication with httpOnly cookies and refresh token rotation, Stripe payment processing.",
+    "haystackSessionIds": ["S01", "S02", "S05", "S08"]
+  },
+  {
+    "questionId": "Q32",
+    "questionType": "cross-session-synthesis",
+    "question": "How do you set up and run the ecommerce-api development environment from scratch?",
+    "groundTruth": "Set required env vars: DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET. Run migrations: aerich upgrade. Start the server: uvicorn app.main:app --reload --port 8000. Run tests: pytest tests/ -v. Or use Docker Compose: docker compose up --build.",
+    "haystackSessionIds": ["S03", "S05"]
+  },
+  {
+    "questionId": "Q33",
+    "questionType": "cross-session-synthesis",
+    "question": "What external services does the ecommerce-api integrate with and for what purpose?",
+    "groundTruth": "Redis for caching (shopping cart data, session data), Stripe for payment processing (PaymentIntent creation and webhook handling for order fulfillment).",
+    "haystackSessionIds": ["S01", "S07", "S08"]
+  },
+  {
+    "questionId": "Q34",
+    "questionType": "cross-session-synthesis",
+    "question": "What bugs have been encountered and resolved during the project?",
+    "groundTruth": "Two bugs: (1) Redis connection pool exhaustion under load — fixed with explicit pool settings (max_connections=50, socket_timeout=5, socket_connect_timeout=5). (2) Stripe webhook signature validation failing because the request body was consumed before Stripe could read the raw bytes — fixed by caching raw bytes before parsing.",
+    "haystackSessionIds": ["S04", "S09"]
+  },
+  {
+    "questionId": "Q35",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the current overall state of the ecommerce-api project — what is done, in progress, and pending?",
+    "groundTruth": "Done: user authentication, product catalog, shopping cart, Stripe payment integration (checkout + webhook). In progress: checkout flow refinements. Pending: email notifications, admin dashboard.",
+    "haystackSessionIds": ["S07", "S08", "S09"]
+  },
+  {
+    "questionId": "Q36",
+    "questionType": "abstention",
+    "question": "What frontend framework does the ecommerce-api use?",
+    "groundTruth": "Not mentioned — the ecommerce-api is a backend REST API only. No frontend framework was discussed for this project.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q37",
+    "questionType": "abstention",
+    "question": "What cloud provider is the ecommerce-api deployed on?",
+    "groundTruth": "Not mentioned — no cloud provider or deployment target was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q38",
+    "questionType": "abstention",
+    "question": "What is the developer's GitHub username?",
+    "groundTruth": "Not mentioned — the developer's GitHub username was never shared in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q39",
+    "questionType": "abstention",
+    "question": "What is the monthly infrastructure cost of running the project?",
+    "groundTruth": "Not mentioned — infrastructure costs were never discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q40",
+    "questionType": "abstention",
+    "question": "What rate limiting strategy does the API use?",
+    "groundTruth": "Not mentioned — rate limiting was never discussed in any session.",
+    "haystackSessionIds": []
+  }
+]

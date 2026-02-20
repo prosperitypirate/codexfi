@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DevMemBench Results</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:      #0d1117;
+      --surface: #161b22;
+      --border:  #30363d;
+      --text:    #e6edf3;
+      --muted:   #8b949e;
+      --green:   #3fb950;
+      --red:     #f85149;
+      --blue:    #58a6ff;
+      --yellow:  #d29922;
+      --purple:  #bc8cff;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      padding: 32px 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 { font-size: 22px; font-weight: 600; margin-bottom: 4px; }
+    h2 { font-size: 15px; font-weight: 600; margin-bottom: 16px; color: var(--muted); letter-spacing: 0.05em; text-transform: uppercase; }
+
+    .meta { color: var(--muted); font-size: 13px; margin-bottom: 32px; display: flex; gap: 24px; flex-wrap: wrap; }
+    .meta span { display: flex; align-items: center; gap: 6px; }
+    .meta strong { color: var(--text); }
+
+    /* Overall accuracy */
+    .accuracy-hero {
+      display: flex;
+      align-items: center;
+      gap: 40px;
+      margin-bottom: 40px;
+      padding: 24px 28px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+    }
+    .accuracy-big {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1;
+      color: var(--green);
+      white-space: nowrap;
+    }
+    .accuracy-label { color: var(--muted); font-size: 13px; margin-top: 4px; }
+    .accuracy-detail { color: var(--muted); font-size: 13px; }
+    .accuracy-detail strong { color: var(--text); }
+
+    /* Grid: radar + breakdown */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 380px 1fr;
+      gap: 20px;
+      margin-bottom: 32px;
+    }
+
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px 22px;
+    }
+
+    /* Radar chart container */
+    .radar-wrap {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1;
+    }
+
+    /* Category breakdown bars */
+    .category-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .cat-label { width: 140px; font-size: 12px; color: var(--muted); flex-shrink: 0; }
+    .cat-bar-bg {
+      flex: 1;
+      height: 6px;
+      background: var(--border);
+      border-radius: 3px;
+      overflow: hidden;
+    }
+    .cat-bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      background: var(--blue);
+      transition: width 0.6s ease;
+    }
+    .cat-pct { width: 38px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text); }
+    .cat-count { width: 36px; text-align: right; font-size: 11px; color: var(--muted); }
+
+    /* Results table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      text-align: left;
+      padding: 8px 12px;
+      color: var(--muted);
+      font-weight: 500;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-correct   { background: rgba(63,185,80,0.15); color: var(--green); }
+    .badge-incorrect { background: rgba(248,81,73,0.15);  color: var(--red);   }
+
+    .type-chip {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      background: rgba(88,166,255,0.12);
+      color: var(--blue);
+    }
+
+    .truncate { max-width: 260px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .score-num { font-weight: 600; font-size: 12px; }
+
+    .section-title { margin-bottom: 16px; }
+
+    .filter-row { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 4px 12px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all 0.15s;
+    }
+    .filter-btn:hover  { border-color: var(--blue); color: var(--blue); }
+    .filter-btn.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+    .expand-btn {
+      font-size: 11px;
+      color: var(--blue);
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+    .expand-detail {
+      display: none;
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: var(--bg);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .expand-detail.open { display: block; }
+    .expand-detail strong { color: var(--text); display: block; margin-bottom: 2px; }
+  </style>
+</head>
+<body>
+
+<script>
+/* __REPORT_DATA__ */
+</script>
+
+<script>
+(function () {
+  const R = REPORT_DATA;
+
+  // ── Header ────────────────────────────────────────────────────────────────────
+  document.write(`
+    <h1>DevMemBench</h1>
+    <div class="meta">
+      <span>Run <strong>${R.runId}</strong></span>
+      <span>Provider <strong>${R.provider}</strong></span>
+      <span>Judge <strong>${R.judgeModel}</strong></span>
+      <span>Answering model <strong>${R.answeringModel}</strong></span>
+      <span>${new Date(R.timestamp).toLocaleString()}</span>
+    </div>
+  `);
+
+  // ── Accuracy hero ─────────────────────────────────────────────────────────────
+  const pct = (R.summary.accuracy * 100).toFixed(1);
+  document.write(`
+    <div class="accuracy-hero">
+      <div>
+        <div class="accuracy-big">${pct}%</div>
+        <div class="accuracy-label">Overall accuracy</div>
+      </div>
+      <div class="accuracy-detail">
+        <strong>${R.summary.correctCount}</strong> correct out of <strong>${R.summary.totalQuestions}</strong> questions<br/>
+        across <strong>${Object.keys(R.byQuestionType).length}</strong> categories
+      </div>
+    </div>
+  `);
+
+  // ── Radar + breakdown ─────────────────────────────────────────────────────────
+  document.write(`<div class="grid-2">`);
+
+  // Radar chart
+  document.write(`
+    <div class="card">
+      <h2 class="section-title">Accuracy by Category</h2>
+      <div class="radar-wrap"><canvas id="radarChart"></canvas></div>
+    </div>
+  `);
+
+  // Category breakdown bars
+  const typeEntries = Object.entries(R.byQuestionType)
+    .sort((a, b) => b[1].accuracy - a[1].accuracy);
+
+  const TYPE_LABELS = {
+    "tech-stack":            "Tech Stack",
+    "architecture":          "Architecture",
+    "session-continuity":    "Session Continuity",
+    "preference":            "Preferences",
+    "error-solution":        "Error Solutions",
+    "knowledge-update":      "Knowledge Updates",
+    "cross-session-synthesis": "Cross-Session Synthesis",
+    "abstention":            "Abstention",
+  };
+
+  let barsHtml = `<div class="card"><h2 class="section-title">Breakdown</h2>`;
+  for (const [type, stats] of typeEntries) {
+    const label = TYPE_LABELS[type] ?? type;
+    const p = (stats.accuracy * 100).toFixed(0);
+    const color = stats.accuracy >= 0.8 ? "var(--green)" : stats.accuracy >= 0.5 ? "var(--yellow)" : "var(--red)";
+    barsHtml += `
+      <div class="category-row">
+        <div class="cat-label">${label}</div>
+        <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${p}%;background:${color}"></div></div>
+        <div class="cat-pct" style="color:${color}">${p}%</div>
+        <div class="cat-count">${stats.correct}/${stats.total}</div>
+      </div>`;
+  }
+  barsHtml += `</div>`;
+  document.write(barsHtml);
+
+  document.write(`</div>`); // grid-2
+
+  // ── Results table ─────────────────────────────────────────────────────────────
+  document.write(`
+    <div class="card">
+      <h2 class="section-title">All Questions</h2>
+      <div class="filter-row" id="filters">
+        <button class="filter-btn active" data-filter="all">All (${R.evaluations.length})</button>
+        <button class="filter-btn" data-filter="incorrect">Incorrect only</button>
+  `);
+
+  const typeGroups = {};
+  for (const e of R.evaluations) {
+    typeGroups[e.questionType] = (typeGroups[e.questionType] || 0) + 1;
+  }
+  for (const [t, count] of Object.entries(typeGroups)) {
+    const label = TYPE_LABELS[t] ?? t;
+    document.write(`<button class="filter-btn" data-filter="${t}">${label} (${count})</button>`);
+  }
+
+  document.write(`
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Type</th>
+              <th>Question</th>
+              <th>Result</th>
+              <th>Score</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody">
+  `);
+
+  for (const e of R.evaluations) {
+    const label = TYPE_LABELS[e.questionType] ?? e.questionType;
+    const topScore = e.searchResults?.[0]?.score
+      ? `${(e.searchResults[0].score * 100).toFixed(0)}%`
+      : "—";
+    document.write(`
+      <tr data-type="${e.questionType}" data-label="${e.label}">
+        <td>${e.questionId}</td>
+        <td><span class="type-chip">${label}</span></td>
+        <td>
+          <div class="truncate">${escHtml(e.question)}</div>
+          <button class="expand-btn" onclick="toggleDetail(this)">▸ details</button>
+          <div class="expand-detail">
+            <strong>Ground truth:</strong>${escHtml(e.groundTruth)}<br/>
+            <strong>Answer:</strong>${escHtml(e.hypothesis)}<br/>
+            <strong>Judge:</strong>${escHtml(e.explanation)}<br/>
+            <strong>Top search score:</strong>${topScore} &nbsp;
+            <strong>Search results:</strong>${e.searchResults?.length ?? 0}
+          </div>
+        </td>
+        <td><span class="badge badge-${e.label}">${e.label}</span></td>
+        <td class="score-num" style="color:${e.score === 1 ? 'var(--green)' : 'var(--red)'}">${e.score}</td>
+      </tr>
+    `);
+  }
+
+  document.write(`</tbody></table></div></div>`);
+
+  // ── Radar chart init ──────────────────────────────────────────────────────────
+  window.addEventListener("load", () => {
+    const ctx = document.getElementById("radarChart").getContext("2d");
+
+    const labels = typeEntries.map(([t]) => TYPE_LABELS[t] ?? t);
+    const data   = typeEntries.map(([, s]) => +(s.accuracy * 100).toFixed(1));
+
+    new Chart(ctx, {
+      type: "radar",
+      data: {
+        labels,
+        datasets: [{
+          label: "Accuracy %",
+          data,
+          fill: true,
+          backgroundColor: "rgba(88,166,255,0.12)",
+          borderColor: "rgba(88,166,255,0.8)",
+          pointBackgroundColor: "rgba(88,166,255,1)",
+          pointBorderColor: "#fff",
+          pointHoverBackgroundColor: "#fff",
+          pointHoverBorderColor: "rgba(88,166,255,1)",
+          borderWidth: 2,
+          pointRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: true,
+        scales: {
+          r: {
+            min: 0,
+            max: 100,
+            ticks: {
+              stepSize: 25,
+              color: "rgba(139,148,158,0.6)",
+              font: { size: 10 },
+              backdropColor: "transparent",
+            },
+            grid:        { color: "rgba(48,54,61,0.8)" },
+            angleLines:  { color: "rgba(48,54,61,0.8)" },
+            pointLabels: { color: "#8b949e", font: { size: 11 } },
+          },
+        },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => ` ${ctx.raw}%`,
+            },
+          },
+        },
+      },
+    });
+
+    // ── Filter logic ────────────────────────────────────────────────────────────
+    document.getElementById("filters").addEventListener("click", (e) => {
+      const btn = e.target.closest(".filter-btn");
+      if (!btn) return;
+
+      document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      const filter = btn.dataset.filter;
+      document.querySelectorAll("#resultsBody tr").forEach((row) => {
+        const show =
+          filter === "all" ||
+          (filter === "incorrect" && row.dataset.label === "incorrect") ||
+          row.dataset.type === filter;
+        row.style.display = show ? "" : "none";
+      });
+    });
+  });
+
+  function escHtml(s) {
+    return (s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+
+  window.toggleDetail = function (btn) {
+    const detail = btn.nextElementSibling;
+    const open = detail.classList.toggle("open");
+    btn.textContent = open ? "▾ details" : "▸ details";
+  };
+})();
+</script>
+
+</body>
+</html>
