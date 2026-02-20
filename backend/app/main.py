@@ -29,10 +29,18 @@ logger = logging.getLogger("memory-server")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    missing = [k for k, v in {"XAI_API_KEY": XAI_API_KEY, "VOYAGE_API_KEY": VOYAGE_API_KEY}.items() if not v]
+    # Build the list from string literals so that actual key values never flow
+    # into the log call (avoids CodeQL py/clear-text-logging-sensitive-data).
+    missing: list[str] = []
+    if not XAI_API_KEY:
+        missing.append("XAI_API_KEY")
+    if not VOYAGE_API_KEY:
+        missing.append("VOYAGE_API_KEY")
     if missing:
-        for key in missing:
-            logger.error("%s is not set — memory server will not function correctly", key)
+        logger.error(
+            "Required environment variables not set: %s — memory server will not function correctly",
+            ", ".join(missing),
+        )
     else:
         import lancedb
         import voyageai
