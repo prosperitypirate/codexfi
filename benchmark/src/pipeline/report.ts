@@ -60,7 +60,7 @@ export function runReport(cp: Checkpoint): BenchmarkReport {
   }
 
   console.log(`\n  Report saved to: ${path}`);
-  console.log(`  Open the dashboard: bun run bench serve ${cp.runId}\n`);
+  console.log(`  Open the dashboard: bun run bench serve -r ${cp.runId}\n`);
 
   return report;
 }
