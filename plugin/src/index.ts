@@ -275,14 +275,46 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
             });
           }
 
-          // Semantic search hits for "relevant to current task" section —
-          // merge user-scope and project-scope results so chunk snippets from
-          // project memories flow through to formatContextForPrompt.
+          // ── "Relevant to Current Task" — always comprehensive, semantic when possible ──
+          //
+          // Two guarantees that are independent of each other:
+          //
+          //   1. ALWAYS: recent project memories appear as a baseline so "hi" or
+          //      "let's start" still gives the agent useful context about what was
+          //      worked on last.  Recent == almost always relevant.
+          //
+          //   2. ADDITIONALLY: strong semantic hits (≥40%) are surfaced first with
+          //      their chunk snippets so the agent can read exact values when the
+          //      user's opener is specific enough to match something.
+          //
+          const SEMANTIC_THRESHOLD = 0.4;
+
+          // Collect strong hits from both scopes (these may carry chunk snippets)
+          const semanticHits = [
+            ...(userMemoriesResult.results || []),
+            ...(projectSearch.results || []),
+          ].filter((r) => r.similarity >= SEMANTIC_THRESHOLD);
+
+          // Recent project memories as a reliable baseline — exclude any already
+          // covered by a semantic hit so nothing appears twice.
+          const semanticIds = new Set(semanticHits.map((r) => r.id));
+          const recentBaseline = allProjectMemories
+            .slice(0, CONFIG.maxMemories)
+            .filter((m) => !semanticIds.has(m.id))
+            .map((m) => ({
+              id: m.id,
+              memory: m.summary,
+              chunk: "",
+              // 0.45 — shown in "Relevant to Current Task" but below the 0.55
+              // chunk-snippet threshold, so no spurious source block appears.
+              similarity: 0.45,
+              metadata: m.metadata as Record<string, unknown> | undefined,
+            }));
+
+          // Semantic hits go first (higher scores, may carry chunks); recent
+          // baseline fills remaining slots.
           const semanticResults = {
-            results: [
-              ...(userMemoriesResult.results || []),
-              ...(projectSearch.results || []),
-            ].map((r) => ({ ...r, memory: r.memory })),
+            results: [...semanticHits, ...recentBaseline],
           };
 
           const memoryContext = formatContextForPrompt(
