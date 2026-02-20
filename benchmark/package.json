@@ -1,0 +1,19 @@
+{
+  "name": "devmembench",
+  "version": "0.1.0",
+  "description": "Benchmark for coding assistant memory systems — developer context recall, session continuity, preference learning, and knowledge updates",
+  "type": "module",
+  "scripts": {
+    "bench": "bun run src/index.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.56",
+    "@ai-sdk/openai": "^2.0.88",
+    "ai": "^5.0.115"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.14",
+    "@types/json-schema": "^7.0.15",
+    "typescript": "^5.9.3"
+  }
+}
