@@ -61,8 +61,9 @@ async function cmdRun(args: string[]): Promise<void> {
   }
 
   const config = loadConfig();
-  const { sessions, questions: allQuestions } = loadDataset();
+  const { sessions: allSessions, questions: allQuestions } = loadDataset();
   const questions = limit ? allQuestions.slice(0, limit) : allQuestions;
+  const sessions  = limit ? allSessions.slice(0, limit)  : allSessions;
 
   console.log(`\n  DevMemBench — Coding Assistant Memory Benchmark`);
   console.log(`  ${"─".repeat(48)}`);
