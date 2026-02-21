@@ -50,8 +50,11 @@ After every assistant turn, the conversation is automatically analysed. Key fact
 - **100% local** — LanceDB runs embedded in-process; all data lives in a Docker volume on your machine
 - **Code-optimised embeddings** — Voyage `voyage-code-3` is purpose-built for code and technical content
 - **Typed memory system** — memories are classified (`architecture`, `error-solution`, `preference`, `progress`, etc.) and injected in structured blocks
+- **Hybrid search** — semantic search on atomic memory facts for retrieval, raw source chunk injected into context for exact values (config numbers, error strings, function names)
 - **Smart deduplication** — cosine similarity check prevents duplicate memories from accumulating
+- **Relational versioning** — when new memories contradict existing ones, stale entries are automatically marked superseded and excluded from future retrieval
 - **Memory aging** — session summaries auto-condense into compact learned patterns over time; only the latest `progress` entry survives
+- **Temporal grounding** — search results carry their session date; recency blending can optionally boost recent memories for time-sensitive queries
 - **Project + user scope** — separate namespaces for project-specific knowledge vs. cross-project personal preferences
 - **Explicit save support** — say "remember this" and the agent immediately stores it
 - **Compaction-aware** — when the context window fills, memories survive through OpenCode's compaction hook
@@ -189,10 +192,9 @@ Open any project in OpenCode. On your first message, you'll see a `[MEMORY]` blo
 
 On the first user message of every session, the plugin:
 
-1. Searches for memories semantically relevant to your opening message
-2. Fetches recent project-specific memories (by recency)
-3. Retrieves cross-project user preferences
-4. Formats everything into a `[MEMORY]` block prepended to your message
+1. Runs parallel semantic searches across both project and user scopes
+2. Filters hits to those scoring ≥ 55% similarity, truncated to 400 chars each
+3. Formats everything into a `[MEMORY]` block prepended to your message
 
 The agent sees this before generating any response:
 
@@ -222,6 +224,8 @@ Every time the assistant completes a turn, the plugin automatically:
 2. Sends them to `POST /memories`
 3. Grok extracts a JSON array of typed, memorable facts
 4. Each fact is embedded with `voyage-code-3` and stored in LanceDB after a cosine dedup check
+5. The raw source conversation text is stored alongside each memory as a `chunk` (enables hybrid search)
+6. A contradiction search (cosine distance ≤ 0.5) finds semantically related existing memories; an LLM call identifies any that the new memory supersedes — those are marked `superseded_by` and excluded from future retrieval
 
 A 15-second cooldown handles OpenCode's double-fire of the completion event.
 
@@ -275,6 +279,37 @@ Pricing: **$0.18/M tokens** with a generous free tier.
 
 ---
 
+## Benchmark
+
+Memory quality is measured by [DevMemBench](./benchmark/README.md) — a coding-assistant-specific benchmark built for this project. It ingests 10 synthetic sessions from a realistic FastAPI/PostgreSQL/Redis/Stripe project, then evaluates retrieval and answer quality across 40 questions in 8 categories.
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · 40 questions · 10 sessions
+
+```
+tech-stack        ████████████████████ 100%  ✓  stable
+architecture      ████████████████████ 100%  ✓  stable
+preference        ████████████████████ 100%  ✓  stable
+error-solution    ████████████████████ 100%  ✓  stable
+knowledge-update  ████████████████████ 100%  ✓  stable
+abstention        ████████████████░░░░  80%
+session-cont.     ████████████░░░░░░░░  60%
+cross-synthesis   ████████████░░░░░░░░  60%
+─────────────────────────────────────────
+Overall           87.5%  (35/40)
+```
+
+Each technique improvement is tracked against the benchmark:
+
+| Technique | Benchmark impact |
+|---|---|
+| Hybrid search — source chunk storage (#19) | error-solution 0% → 100%, +32.5pp overall |
+| Relational versioning — supersede stale memories (#21) | knowledge-update 40% → 100% |
+| Temporal grounding — recency boost + date in context (#18) | session-continuity 20% → 60% |
+
+See [`benchmark/README.md`](./benchmark/README.md) for full results history and how to run it yourself.
+
+---
+
 ## Architecture
 
 ```
@@ -311,11 +346,11 @@ flowchart TD
     subgraph SERVER["⚙️ Memory Server — Python · FastAPI · Docker"]
         subgraph WRITE["POST /memories"]
             direction LR
-            W1["xAI Grok<br/>extract typed facts"] --> W2["Voyage voyage-code-3<br/>embed · 1024 dims"] --> W3["LanceDB<br/>cosine dedup → upsert"]
+            W1["xAI Grok<br/>extract typed facts + chunks"] --> W2["Voyage voyage-code-3<br/>embed · 1024 dims"] --> W3["LanceDB<br/>cosine dedup → upsert"] --> W4["xAI Grok<br/>contradiction detect → supersede stale"]
         end
         subgraph FIND["POST /memories/search"]
             direction LR
-            F1["Voyage voyage-code-3<br/>embed query"] --> F2["LanceDB<br/>ANN cosine · top-k"]
+            F1["Voyage voyage-code-3<br/>embed query"] --> F2["LanceDB<br/>ANN cosine · top-k<br/>filter superseded_by = ''"] --> F3["recency blend<br/>(optional weight)"]
         end
         REST["GET /memories · /projects · /stats · /costs · /health · /activity"]
         VOL[("opencode-memory-data — Docker volume · Apache Arrow · Parquet")]
