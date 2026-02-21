@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🧠 opencode-memory
+# opencode-memory
 
 **Fully self-hosted, autonomous persistent memory for [OpenCode](https://opencode.ai) AI agents.**
 
@@ -8,19 +8,18 @@ The agent learns from every session automatically — no commands, no manual sav
 
 <br/>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=for-the-badge)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=for-the-badge&logo=bun&logoColor=black)](https://bun.sh/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=for-the-badge&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
-[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker&logoColor=white)](https://www.docker.com/)
-
-[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded_Vector_DB-CF3CFF?style=for-the-badge)](https://lancedb.com/)
-[![xAI Grok](https://img.shields.io/badge/xAI-Grok_Extraction-000000?style=for-the-badge&logo=x&logoColor=white)](https://x.ai/)
-[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=for-the-badge)](https://www.voyageai.com/)
-[![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25_Local-22C55E?style=for-the-badge&logo=homeassistant&logoColor=white)](https://github.com/prosperitypirate/opencode-memory)
-[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-FF6B35?style=for-the-badge)](https://opencode.ai)
+[![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](https://opensource.org/licenses/MIT)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=flat&logo=python&logoColor=white)](https://www.python.org/)
+[![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688?style=flat&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-15-000000?style=flat&logo=nextdotjs&logoColor=white)](https://nextjs.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=flat&logo=docker&logoColor=white)](https://www.docker.com/)
+[![LanceDB](https://img.shields.io/badge/LanceDB-Vector_DB-CF3CFF?style=flat)](https://lancedb.com/)
+[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
+[![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25_Local-22C55E?style=flat&logo=homeassistant&logoColor=white)](https://github.com/prosperitypirate/opencode-memory)
+[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-FF6B35?style=flat)](https://opencode.ai)
 
 </div>
 
@@ -41,6 +40,31 @@ OpenCode starts every session from scratch. No memory of past decisions, establi
 After every assistant turn, the conversation is automatically analysed. Key facts are extracted and stored locally on your machine. At the start of every new session, relevant memories are silently injected into the agent's context. From the agent's perspective, it simply *remembers* — across days, weeks, and projects.
 
 **The agent never thinks about saving memories. It just happens.**
+
+---
+
+## Vision
+
+Memory should be infrastructure, not a ritual.
+
+Today, every AI coding session starts from zero. Tools like Cline's Memory Bank made this disciplined — but still require `/load` at the start of each session and `/save` at the end. The agent can't remember without your help. You are the memory system.
+
+**This is the wrong model.** Memory should operate entirely beneath the agent — invisible, automatic, never requiring a command.
+
+OpenCode makes something remarkable possible: a [plugin hook architecture](https://opencode.ai/docs) that fires on every session start, every assistant turn, and every compaction event. These hooks are the foundation. They allow memory to be captured and injected with complete transparency — the agent receives context it never explicitly asked for, and the user issues no commands they didn't intend.
+
+The result is a new category: **infrastructure-level memory.**
+
+The broader vision goes further:
+
+- **Any agent, any tool** — the memory backend is a standalone local API. Any editor plugin, any agent framework, can query it. The OpenCode plugin is one implementation. VS Code, Cursor, Zed, and others can follow the same pattern.
+- **Zero user overhead** — memory is captured automatically via hooks after every turn. The user never issues a command, never updates a file, never thinks about memory management.
+- **Private by default** — everything lives on your machine. No cloud sync, no accounts, no telemetry.
+- **Self-improving** — memories deduplicate, contradict, condense, and age automatically. The corpus becomes more accurate over time, not more bloated.
+
+The goal is not a better memory bank.
+
+**It is the end of the memory bank as a concept** — replaced by invisible memory infrastructure that any agent, in any tool, simply inherits when it starts work.
 
 ---
 
@@ -65,15 +89,17 @@ After every assistant turn, the conversation is automatically analysed. Key fact
 
 ## How it compares
 
-| | **opencode-memory** | [Supermemory](https://supermemory.ai) plugin | [mem0](https://mem0.ai) fork |
-|---|---|---|---|
-| **Storage** | Local (LanceDB embedded) | Supermemory cloud | Local (Qdrant) |
-| **Embeddings** | Voyage `voyage-code-3` | Supermemory cloud | OpenAI `text-embedding-3-large` |
-| **Extraction model** | xAI `grok-4-1-fast-non-reasoning` | Supermemory cloud | OpenAI `gpt-4o` |
-| **Containers required** | 1 backend + 1 dashboard | 0 (cloud) | 2 (API server + Qdrant) |
-| **Data privacy** | ✅ 100% local | ❌ Cloud | ✅ Local |
-| **Code-optimised embeddings** | ✅ | ❌ | ❌ |
-| **Fully automatic saves** | ✅ Every turn | ❌ Keyword-only | ❌ Manual / keyword-only |
+| | **opencode-memory** | Cline memory bank | [Supermemory](https://supermemory.ai) plugin | [mem0](https://mem0.ai) fork |
+|---|---|---|---|---|
+| **Storage** | Local (LanceDB embedded) | Markdown files in repo | Supermemory cloud | Local (Qdrant) |
+| **Embeddings** | Voyage `voyage-code-3` | None | Cloud | OpenAI `text-embedding-3-large` |
+| **Extraction** | xAI Grok (automatic) | LLM via `/save` (manual) | Cloud | OpenAI `gpt-4o` |
+| **User action required** | ❌ Zero | ✅ `/load` + `/save` each session | ❌ Zero | ❌ Zero |
+| **Data privacy** | ✅ 100% local | ✅ 100% local | ❌ Cloud | ✅ Local |
+| **Code-optimised embeddings** | ✅ | ❌ | ❌ | ❌ |
+| **Fully automatic saves** | ✅ Every turn | ❌ Manual | ❌ Keyword-only | ❌ Keyword-only |
+| **Semantic retrieval** | ✅ | ❌ Full file dump | ✅ | ✅ |
+| **Session token overhead** | ~2K tokens | Up to 50K tokens | Varies | Varies |
 
 ---
 
@@ -200,6 +226,9 @@ The agent sees this before generating any response:
 
 ```
 [MEMORY]
+
+## Project Brief
+- opencode-memory is a self-hosted persistent memory system for OpenCode AI agents.
 
 ## Architecture
 - Backend refactored from monolithic main.py into app/ package with 13 focused modules

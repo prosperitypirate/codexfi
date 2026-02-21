@@ -115,13 +115,20 @@ export function formatContextForPrompt(
       const dateTag = mem.date ? `, ${mem.date}` : "";
       parts.push(`- [${pct}%${dateTag}] ${content}`);
       // Append a truncated source snippet for high-confidence hits (≥55%) so
-      // Claude can read exact values (config numbers, error strings, function
+      // the agent can read exact values (config numbers, error strings, function
       // names) that are compressed out of the memory summary.
       // Skipped for low-confidence results to keep token usage reasonable.
+      // Also skipped for raw conversation transcripts: auto-save chunks begin
+      // with '[assistant]' or '[user]' markers and are conversational noise,
+      // not precise technical reference material.
       const snippet = mem.chunk?.trim();
       if (snippet && snippet !== content && mem.similarity >= 0.55) {
-        const truncated = snippet.length > 400 ? snippet.slice(0, 400) + "…" : snippet;
-        parts.push(`  > ${truncated.replace(/\n/g, "\n  > ")}`);
+        const isTranscript =
+          snippet.startsWith("[assistant]") || snippet.startsWith("[user]");
+        if (!isTranscript) {
+          const truncated = snippet.length > 400 ? snippet.slice(0, 400) + "…" : snippet;
+          parts.push(`  > ${truncated.replace(/\n/g, "\n  > ")}`);
+        }
       }
     });
   }
