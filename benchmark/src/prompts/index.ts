@@ -7,7 +7,7 @@ export function buildAnswerPrompt(question: string, results: SearchResult[]): st
     ? "(no memories retrieved)"
     : results
         .map((r, i) => {
-          const header = `[${i + 1}] Memory (score: ${(r.score * 100).toFixed(0)}%): ${r.memory}`;
+          const header = `[${i + 1}] Memory (score: ${(r.score * 100).toFixed(0)}%${r.date ? `, date: ${r.date}` : ""}): ${r.memory}`;
           const chunk = r.chunk?.trim()
             ? `\n    Source context:\n${r.chunk.trim().split("\n").map(l => `      ${l}`).join("\n")}`
             : "";

@@ -11,8 +11,9 @@ import asyncio
 import hashlib
 import json
 import logging
+import math
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from functools import partial
 
 from fastapi import APIRouter, HTTPException
@@ -170,6 +171,31 @@ async def list_memories(user_id: str, limit: int = 20, include_superseded: bool 
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+# ── Recency helpers ────────────────────────────────────────────────────────────
+
+_RECENCY_DECAY = 0.1  # exponential decay constant (per day)
+
+
+def _extract_date(row: dict) -> date | None:
+    """Parse the session date from metadata_json['date'], falling back to created_at[:10]."""
+    meta = json.loads(row.get("metadata_json") or "{}")
+    raw = meta.get("date") or (row.get("created_at") or "")[:10]
+    if raw:
+        try:
+            return date.fromisoformat(raw[:10])
+        except ValueError:
+            pass
+    return None
+
+
+def _recency_score(d: date | None, max_date: date) -> float:
+    """Exponential decay: 1.0 for max_date, lower for older dates."""
+    if d is None:
+        return 0.0
+    days_diff = max(0, (max_date - d).days)
+    return math.exp(-_RECENCY_DECAY * days_diff)
+
+
 # ── POST /memories/search ──────────────────────────────────────────────────────
 
 
@@ -197,18 +223,57 @@ async def search_memories(req: SearchMemoryRequest):
         )
 
         threshold = req.threshold if req.threshold is not None else 0.3
-        results = [
-            {
+        w = (req.recency_weight or 0.0)
+
+        # Build intermediate list with semantic scores + parsed dates.
+        candidates = []
+        for r in rows:
+            semantic = max(0.0, 1.0 - r.get("_distance", 1.0))
+            meta     = json.loads(r.get("metadata_json") or "{}")
+            d        = _extract_date(r)
+            candidates.append({
                 "id":         r["id"],
                 "memory":     r["memory"],
                 "chunk":      r.get("chunk") or "",
-                "score":      round(max(0.0, 1.0 - r.get("_distance", 1.0)), 4),
-                "metadata":   json.loads(r.get("metadata_json") or "{}"),
+                "semantic":   semantic,
+                "metadata":   meta,
                 "created_at": r.get("created_at"),
-            }
-            for r in rows
-            if max(0.0, 1.0 - r.get("_distance", 1.0)) >= threshold
-        ]
+                "date":       d.isoformat() if d else None,
+                "_date_obj":  d,
+            })
+
+        # Optional recency blending — uses session date from metadata, not ingestion time.
+        if w > 0.0:
+            dates    = [c["_date_obj"] for c in candidates if c["_date_obj"] is not None]
+            max_date = max(dates) if dates else None
+            for c in candidates:
+                if max_date is not None:
+                    rec   = _recency_score(c["_date_obj"], max_date)
+                    score = (1.0 - w) * c["semantic"] + w * rec
+                else:
+                    score = c["semantic"]
+                c["score"] = round(score, 4)
+        else:
+            for c in candidates:
+                c["score"] = round(c["semantic"], 4)
+
+        results = sorted(
+            [
+                {
+                    "id":         c["id"],
+                    "memory":     c["memory"],
+                    "chunk":      c["chunk"],
+                    "score":      c["score"],
+                    "metadata":   c["metadata"],
+                    "created_at": c["created_at"],
+                    "date":       c["date"],
+                }
+                for c in candidates
+                if c["score"] >= threshold
+            ],
+            key=lambda r: r["score"],
+            reverse=True,
+        )
         logger.info(
             "search_memories user_id=%s query=%r found=%d",
             req.user_id, req.query[:60], len(results),

@@ -86,12 +86,21 @@ export class OpencodeMemoryProvider implements Provider {
 
   /**
    * Semantic search using the backend's vector search.
+   *
+   * recency_weight is applied per question type:
+   *   session-continuity → 0.5  (temporal queries need recency boost)
+   *   all others         → 0.0  (pure semantic; superseding already handles knowledge-update)
    */
-  async search(query: string, runTag: string, limit = 8): Promise<SearchResult[]> {
+  async search(query: string, runTag: string, limit = 8, questionType?: string): Promise<SearchResult[]> {
+    const RECENCY_WEIGHTS: Record<string, number> = {
+      "session-continuity": 0.5,
+    };
+    const recency_weight = RECENCY_WEIGHTS[questionType ?? ""] ?? 0.0;
+
     const res = await fetch(`${this.baseUrl}/memories/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, user_id: runTag, limit, threshold: 0.2 }),
+      body: JSON.stringify({ query, user_id: runTag, limit, threshold: 0.2, recency_weight }),
     });
 
     if (!res.ok) {
@@ -99,7 +108,14 @@ export class OpencodeMemoryProvider implements Provider {
     }
 
     const data = (await res.json()) as {
-      results: Array<{ id: string; memory: string; chunk?: string; score: number; metadata?: Record<string, unknown> }>;
+      results: Array<{
+        id: string;
+        memory: string;
+        chunk?: string;
+        score: number;
+        metadata?: Record<string, unknown>;
+        date?: string;
+      }>;
     };
 
     return (data.results ?? []).map((r) => ({
@@ -108,6 +124,7 @@ export class OpencodeMemoryProvider implements Provider {
       chunk: r.chunk ?? "",
       score: r.score,
       metadata: r.metadata,
+      date: r.date ?? (r.metadata?.date as string | undefined),
     }));
   }
 

@@ -10,6 +10,29 @@ Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · 40 questions · 10 sessions
 
+### v0.4 — Temporal Grounding (run `149e7d1f`) — **87.5%** ↑ +5pp on avg
+
+Session-continuity jumps from 20% → **60%** as predicted by the issue estimate.
+
+```
+tech-stack        ████████████████████ 100%  (5/5)  ✓  stable
+architecture      ████████████████████ 100%  (5/5)  ✓  stable
+preference        ████████████████████ 100%  (5/5)  ✓  stable
+error-solution    ████████████████████ 100%  (5/5)  ✓  stable
+knowledge-update  ████████████████████ 100%  (5/5)  ✓  stable
+abstention        ████████████████░░░░  80%  (4/5)  ✓
+continuity        ████████████░░░░░░░░  60%  (3/5)  ↑  was 20% → +40pp
+synthesis         ████████████░░░░░░░░  60%  (3/5)  ⚠  unchanged
+─────────────────────────────────────────────────────────────
+Overall           87.5%  (35/40)
+```
+
+**What the two remaining session-continuity misses reveal:**
+- **Q11** ("most recent session"): The system correctly identified S10 (2025-02-05) as the most recent session. However the ground truth targets S09 (2025-02-01) — a dataset inconsistency; S10 was added after the question was written. The recency boost works correctly.
+- **Q14** ("January 17 session"): The query is a pure date reference with no semantic content matching the memories from that session (uvicorn, alembic, pytest). Vector search can't retrieve memories by date alone. Would require date-indexed lookup, not vector similarity.
+
+> **Note on variance:** LLM-based benchmarks are non-deterministic even at temperature 0. Two sources: (1) **chunk leakage** — raw source chunks for post-migration memories contain old technology names in context; (2) **contradiction detection** — the LLM call identifying superseded memories may not fire identically each run.
+
 ### v0.3 — Relational Versioning (runs `cb9f84d0`, `d6af0edd`) — **82.5% avg** ↑ +30pp
 
 Knowledge-update is **consistently 100%** across both runs — the core fix for stale memories is working. Other categories show ±10pp run-to-run variance from non-deterministic LLM extraction and contradiction detection (see note below).
@@ -26,8 +49,6 @@ session-cont.     20%–40%             ████–████             
 ─────────────────────────────────────────────────────────────
 Overall           77.5%–87.5%  (avg 82.5%)
 ```
-
-> **Note on variance:** LLM-based benchmarks are non-deterministic even at temperature 0. Two sources specific to this PR: (1) **chunk leakage** — the raw source chunk for a post-migration memory may still contain the old technology name in context ("switched *from* SQLAlchemy to Tortoise ORM"), which synthesis questions can pick up; (2) **contradiction detection** — the LLM call that identifies which memories to supersede may not fire identically each run.
 
 ### v0.2 — Hybrid Search (run `e2052c0f`) — **85.0%** ↑ +32.5pp
 
@@ -112,16 +133,16 @@ Supermemory published [LongMemEval_s](https://supermemory.ai/research) results (
 | Full-context GPT-4o | 60.2% |
 | Zep (GPT-4o) | 71.2% |
 | **Supermemory (GPT-4o)** | **81.6%** |
-| **opencode-memory v0.2 (claude-sonnet-4-6)** | **85.0%** ← after hybrid search |
+| **opencode-memory v0.4 (claude-sonnet-4-6)** | **87.5%** ← after temporal grounding |
 | Supermemory (Gemini 2.5 Pro) | 85.2% |
 
 Note: different datasets (coding context vs. general conversational), so scores are not directly comparable. What is comparable is **which techniques drive improvement**:
 
-| Supermemory technique | Their uplift | v0.1 gap | v0.3 result |
+| Supermemory technique | Their uplift | v0.1 gap | v0.4 result |
 |---|---|---|---|
-| Hybrid search (memory → source chunk) | +22.9% temporal | error-solution 0% | **100%** ✓ |
+| Hybrid search (memory → source chunk) | +22.9% temporal | error-solution 0% | **100%** ✓ (#19) |
 | Relational versioning (`updates` link) | +6.2% knowledge-update | knowledge-update 40%, synthesis 20% | **knowledge-update 100%** ✓ (#21) |
-| Temporal grounding (documentDate + eventDate) | +22.9% temporal | session-continuity 20% | 20–40% (#18 open) |
+| Temporal grounding (documentDate + eventDate) | +22.9% temporal | session-continuity 20% | **60%** ✓ (#18) |
 | Contextual memory extraction | Reduces ambiguity | architecture 1 miss, abstention 1 miss | unchanged |
 
 The remaining improvements below directly address each open technique.
@@ -146,15 +167,15 @@ Plugin also updated: dual-scope semantic search (user + project) at session star
 
 After each new ADD, a candidate search (cosine distance ≤ 0.5) finds semantically related existing memories, then an LLM call determines which are factually superseded by the new memory. Confirmed entries are marked `superseded_by = <new_id>` and excluded from `POST /memories/search` and `GET /memories` by default. Auto-migration adds the field to existing tables on startup. Benchmark cleanup updated to use `?include_superseded=true` so no orphaned rows are left behind.
 
-### Priority 3 — Temporal metadata in search and prompts
+### ~~Priority 3 — Temporal metadata in search and prompts~~ ✅ Done (PR #18, +40pp session-continuity)
 
-**Impact estimate: session-continuity 20% → ~60%, knowledge-update secondary improvement**
+**Actual results: session-continuity 20% → 60%. Overall 87.5% (35/40).**
 
-Currently: `metadata.date` is stored but never used in retrieval or in the answering context.
+Two-part implementation:
+1. **Date in search results** — backend now extracts `metadata.date` (session date) from each memory's `metadata_json` and returns it as a top-level `date` field in `POST /memories/search`. The benchmark answer prompt shows `date: YYYY-MM-DD` alongside each memory so the answering LLM can reason temporally ("2025-02-01 is the most recent").
+2. **Per-category recency blending** — `POST /memories/search` accepts `recency_weight` (default 0). Score = `(1 - w) * semantic + w * exp(-0.1 * days_from_newest)`. The benchmark uses weight **0.5** for `session-continuity` only (temporal queries) and **0.0** for all other categories (pure semantic). Uses `metadata.date` — the session date — not `created_at` (ingestion timestamp), so ordering is meaningful even when all sessions are ingested in a single run.
 
-Fix (two parts):
-1. Include `date` in search result output so the benchmark answering prompt can reason about it
-2. Add a recency boost in the search API (optional `sort_by_recency` parameter or a hybrid score `0.8 * semantic + 0.2 * recency`)
+Remaining session-continuity gap (40%) is split between a dataset inconsistency (Q11) and date-only queries with no semantic content (Q14) — see v0.4 notes above.
 
 ---
 

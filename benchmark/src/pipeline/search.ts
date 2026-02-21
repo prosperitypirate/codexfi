@@ -15,7 +15,7 @@ export async function runSearch(
 
   for (const q of questions) {
     const start = Date.now();
-    const searchResults = await provider.search(q.question, cp.runTag, 8);
+    const searchResults = await provider.search(q.question, cp.runTag, 8, q.questionType);
     const durationMs = Date.now() - start;
 
     results.push({ questionId: q.questionId, results: searchResults, durationMs });

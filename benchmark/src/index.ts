@@ -49,16 +49,14 @@ function loadDataset(): { sessions: UnifiedSession[]; questions: UnifiedQuestion
 
 async function cmdRun(args: string[]): Promise<void> {
   const noCleanup = args.includes("--no-cleanup");
-  const live      = args.includes("--live");
   const ridIdx    = args.indexOf("-r");
   const runId     = ridIdx !== -1 ? args[ridIdx + 1] : randomBytes(4).toString("hex");
   const limitIdx  = args.indexOf("--limit");
   const limit     = limitIdx !== -1 ? parseInt(args[limitIdx + 1]) : undefined;
 
-  if (live) {
-    activateLiveMode();
-    startLiveServer();
-  }
+  // Always start the live dashboard — opens browser automatically via server.ts.
+  activateLiveMode();
+  startLiveServer();
 
   const config = loadConfig();
   const { sessions: allSessions, questions: allQuestions } = loadDataset();
@@ -238,7 +236,7 @@ function printHelp(): void {
 
   Usage:
     bun run bench run                   Full pipeline (ingest → search → answer → evaluate → report)
-    bun run bench run --live            Same + live dashboard at http://localhost:4242
+                                        Live dashboard auto-opens at http://localhost:4242
     bun run bench run -r <id>           Named run (resumes if exists)
     bun run bench run --no-cleanup      Keep ingested memories after run
     bun run bench run --limit <n>       Run only first N questions

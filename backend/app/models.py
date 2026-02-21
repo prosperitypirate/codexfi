@@ -44,6 +44,9 @@ class SearchMemoryRequest(BaseModel):
     user_id: str
     limit: Optional[int] = 5
     threshold: Optional[float] = 0.3
+    # 0.0 = pure semantic (default); blend recency when > 0.
+    # final_score = (1 - w) * semantic_score + w * recency_score
+    recency_weight: Optional[float] = 0.0
 
 
 class RegisterNameRequest(BaseModel):

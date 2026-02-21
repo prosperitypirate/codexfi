@@ -75,6 +75,8 @@ export interface SearchResult {
   chunk?: string;
   score: number;
   metadata?: Record<string, unknown>;
+  /** Session date (YYYY-MM-DD) sourced from metadata.date — used for temporal reasoning. */
+  date?: string;
 }
 
 export type IngestProgressCallback = (sessionId: string, added: number, updated: number, done: number) => void;
@@ -83,7 +85,7 @@ export interface Provider {
   name: string;
   initialize(): Promise<void>;
   ingest(sessions: UnifiedSession[], runTag: string, onProgress?: IngestProgressCallback): Promise<IngestResult>;
-  search(query: string, runTag: string, limit?: number): Promise<SearchResult[]>;
+  search(query: string, runTag: string, limit?: number, questionType?: string): Promise<SearchResult[]>;
   clear(runTag: string): Promise<void>;
 }
 
