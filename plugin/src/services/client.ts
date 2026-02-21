@@ -18,6 +18,7 @@ interface MemoryRecord {
   score?: number;
   hash?: string;
   metadata?: Record<string, unknown>;
+  date?: string;
   created_at?: string;
   updated_at?: string;
   user_id?: string;
@@ -110,6 +111,9 @@ export class MemoryClient {
         chunk: m.chunk ?? "",
         similarity: m.score ?? 1,
         metadata: m.metadata,
+        // date: session date (YYYY-MM-DD) from metadata.date, falling back to
+        // the top-level date field the backend now returns directly.
+        date: (m.date ?? (m.metadata?.date as string | undefined)) || undefined,
       }));
 
       log("searchMemories: success", { count: results.length });

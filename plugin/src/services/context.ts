@@ -6,6 +6,7 @@ export interface StructuredMemory {
   chunk?: string;
   similarity?: number;
   metadata?: Record<string, unknown>;
+  date?: string;
   createdAt?: string;
 }
 
@@ -20,6 +21,7 @@ interface MemoryResultMinimal {
   similarity: number;
   memory?: string;
   chunk?: string;
+  date?: string;
 }
 
 interface MemoriesResponseMinimal {
@@ -110,7 +112,8 @@ export function formatContextForPrompt(
       const pct = Math.round(mem.similarity * 100);
       const content = mem.memory || mem.chunk || "";
       if (!content) return;
-      parts.push(`- [${pct}%] ${content}`);
+      const dateTag = mem.date ? `, ${mem.date}` : "";
+      parts.push(`- [${pct}%${dateTag}] ${content}`);
       // Append a truncated source snippet for high-confidence hits (≥55%) so
       // Claude can read exact values (config numbers, error strings, function
       // names) that are compressed out of the memory summary.
