@@ -268,10 +268,12 @@ function handle(ev) {
         runDone = true;
         setTimeout(() => {
           es.close();
-          connDot.className = "conn-dot";
-          connTxt.textContent = "Run finished";
           badgeLive.textContent = "done";
           badgeLive.className = "badge green";
+          // Replace the connection status block with a clear completion notice
+          document.querySelector(".conn-status").innerHTML =
+            \`<span style="color:var(--green)">✓</span>
+             <span style="color:var(--text)">Benchmark complete — you can close this tab</span>\`;
         }, 400);
       }
       break;
