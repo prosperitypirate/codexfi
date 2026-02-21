@@ -9,7 +9,10 @@ import { formatContextForPrompt, type StructuredMemory } from "./services/contex
 import { getTags, getDisplayNames } from "./services/tags.js";
 import { stripPrivateContent, isFullyPrivate } from "./services/privacy.js";
 import { createCompactionHook, type CompactionContext } from "./services/compaction.js";
-import { createAutoSaveHook, updateMessageCache } from "./services/auto-save.js";
+import {
+  createAutoSaveHook, updateMessageCache,
+  updateAssistantTextBuffer, popAssistantText, injectFinalAssistantMessage,
+} from "./services/auto-save.js";
 
 import { isConfigured, CONFIG } from "./config.js";
 import { log } from "./services/logger.js";
@@ -587,6 +590,26 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
         await compactionHook.event(input);
       }
 
+      if (!isConfigured()) return;
+
+      // Capture streaming assistant text via message.part.updated.
+      // The transform cache never contains the final LLM response (transform fires BEFORE
+      // the LLM call). By accumulating text parts here we can inject the final response
+      // into the cache before auto-save runs — no SDK fetch required.
+      if (input.event.type === "message.part.updated") {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const part = (input.event.properties as any)?.part;
+        if (
+          part &&
+          part.type === "text" &&
+          !part.synthetic &&
+          typeof part.text === "string" && part.text.trim() &&
+          part.sessionID && part.messageID
+        ) {
+          updateAssistantTextBuffer(part.sessionID as string, part.messageID as string, part.text as string);
+        }
+      }
+
       // Auto-save: fire when an assistant message finishes with a terminal reason.
       // finish="tool-calls" = mid-turn tool usage, skip.
       // finish="stop" (or any other non-tool-calls value) = turn truly done, extract.
@@ -603,6 +626,29 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           info.id
         ) {
           log("auto-save: terminal finish detected", { finish: info.finish, sessionID: info.sessionID });
+
+          // Inject the final assistant response (captured via message.part.updated streaming)
+          // into the transform cache before onSessionIdle reads it.
+          const bufferedText = popAssistantText(info.sessionID as string, info.id as string);
+          if (bufferedText) {
+            injectFinalAssistantMessage({
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              info: info as any,
+              parts: [{
+                id: `buffered-text-${info.id}`,
+                sessionID: info.sessionID as string,
+                messageID: info.id as string,
+                type: "text",
+                text: bufferedText,
+              }],
+            });
+          } else {
+            log("auto-save: no buffered text for final message (may have been empty or tool-only)", {
+              sessionID: info.sessionID,
+              messageID: info.id,
+            });
+          }
+
           // Await the hook so opencode run doesn't exit before extraction completes
           await autoSaveHook.onSessionIdle(info.sessionID as string);
         }
