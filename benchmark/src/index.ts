@@ -154,6 +154,14 @@ async function cmdRun(args: string[]): Promise<void> {
   }
 
   emit({ type: "phase_start", phase: "done" });
+
+  if (isLiveMode()) {
+    // Give SSE clients time to receive the final event, then exit cleanly.
+    // Without this, Bun.serve keeps the process alive and the browser reconnects
+    // indefinitely, replaying history on every reconnect.
+    await new Promise((r) => setTimeout(r, 1500));
+    process.exit(0);
+  }
 }
 
 function cmdStatus(args: string[]): void {

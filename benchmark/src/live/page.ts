@@ -261,6 +261,16 @@ function handle(ev) {
     case "phase_start":
       setPhase(ev.phase);
       appendPhaseRow(ev.phase.toUpperCase());
+      if (ev.phase === "done") {
+        // Run is complete — stop reconnecting
+        setTimeout(() => {
+          es.close();
+          connDot.className = "conn-dot";
+          connTxt.textContent = "Run finished";
+          badgeLive.textContent = "done";
+          badgeLive.className = "badge green";
+        }, 400);
+      }
       break;
 
     case "ingest_session":
