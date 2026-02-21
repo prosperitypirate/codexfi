@@ -223,9 +223,11 @@ function updateScore() {
 
 // ── SSE ──────────────────────────────────────────────────────────────────
 let runDone = false;
+let closeStream = () => {};  // set once connect() runs — used by handle()
 
 function connect() {
   const es = new EventSource("/events");
+  closeStream = () => es.close();
 
   es.onopen = () => {
     connDot.className = "conn-dot";
@@ -267,7 +269,7 @@ function handle(ev) {
       if (ev.phase === "done") {
         runDone = true;
         setTimeout(() => {
-          es.close();
+          closeStream();
           badgeLive.textContent = "done";
           badgeLive.className = "badge green";
           const status = document.getElementById("conn-status");
