@@ -1,6 +1,7 @@
 import type { UnifiedQuestion, EvaluationResult, Checkpoint } from "../types.js";
 import { getJudgePrompt, formatJudgePrompt } from "../prompts/index.js";
 import { judge } from "../judges/llm.js";
+import { calculateRetrievalMetrics } from "./retrieval-eval.js";
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
@@ -33,26 +34,49 @@ export async function runEvaluate(
 
     const template = getJudgePrompt(q.questionType);
     const prompt = formatJudgePrompt(template, q.question, q.groundTruth, answerPhase.answer);
-    const result = await judge(prompt, config);
+
+    // Run answer judge and retrieval metrics in parallel — zero extra wall-clock time
+    const [result, retrievalMetrics] = await Promise.all([
+      judge(prompt, config),
+      calculateRetrievalMetrics(
+        q.question,
+        q.groundTruth,
+        searchPhase?.results ?? [],
+        config
+      ),
+    ]);
 
     if (result.score === 1) correct++;
 
     const mark = result.score === 1 ? "✓" : "✗";
-    log.dim(`  ${mark} ${q.questionId} [${q.questionType}]: ${result.explanation.slice(0, 70)}`);
-    emit({ type: "evaluate_question", questionId: q.questionId, questionType: q.questionType, correct: result.score === 1, explanation: result.explanation, done: evaluations.length + 1, total: questions.length, runningCorrect: correct });
+    const precisionLabel = `P=${Math.round(retrievalMetrics.precisionAtK * (retrievalMetrics.k || 8))}/${retrievalMetrics.k || 8}`;
+    const mrrLabel = `MRR=${retrievalMetrics.mrr.toFixed(2)}`;
+    log.dim(`  ${mark} ${q.questionId} [${q.questionType}]: ${result.explanation.slice(0, 60)} | ${precisionLabel} ${mrrLabel}`);
+    emit({
+      type: "evaluate_question",
+      questionId: q.questionId,
+      questionType: q.questionType,
+      correct: result.score === 1,
+      explanation: result.explanation,
+      done: evaluations.length + 1,
+      total: questions.length,
+      runningCorrect: correct,
+      retrievalMetrics,
+    });
 
     evaluations.push({
-      questionId:       q.questionId,
-      questionType:     q.questionType,
-      question:         q.question,
-      groundTruth:      q.groundTruth,
-      hypothesis:       answerPhase.answer,
-      score:            result.score,
-      label:            result.label,
-      explanation:      result.explanation,
-      searchResults:    searchPhase?.results ?? [],
-      searchDurationMs: searchPhase?.durationMs ?? 0,
-      answerDurationMs: answerPhase.durationMs,
+      questionId:        q.questionId,
+      questionType:      q.questionType,
+      question:          q.question,
+      groundTruth:       q.groundTruth,
+      hypothesis:        answerPhase.answer,
+      score:             result.score,
+      label:             result.label,
+      explanation:       result.explanation,
+      searchResults:     searchPhase?.results ?? [],
+      searchDurationMs:  searchPhase?.durationMs ?? 0,
+      answerDurationMs:  answerPhase.durationMs,
+      retrievalMetrics,
     });
   }
 

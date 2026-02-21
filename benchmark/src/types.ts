@@ -89,6 +89,37 @@ export interface Provider {
   clear(runTag: string): Promise<void>;
 }
 
+// ── Retrieval metrics ───────────────────────────────────────────────────────────
+
+export interface RetrievalMetrics {
+  /** Did at least one relevant result appear in top-K? */
+  hitAtK: number;           // 0 or 1
+  /** Fraction of top-K results that are relevant */
+  precisionAtK: number;     // 0..1
+  /** F1 of precision and hit */
+  f1AtK: number;            // 0..1
+  /** Reciprocal rank of first relevant result (0 if none) */
+  mrr: number;              // 0..1
+  /** Normalised discounted cumulative gain */
+  ndcg: number;             // 0..1
+  /** K value used */
+  k: number;
+  /** Per-result relevance scores (0|1), length = min(k, results.length) */
+  relevanceScores: number[];
+}
+
+// ── Latency stats ───────────────────────────────────────────────────────────────
+
+export interface LatencyStats {
+  min: number;
+  max: number;
+  mean: number;
+  median: number;
+  p95: number;
+  p99: number;
+  count: number;
+}
+
 // ── Pipeline result types ───────────────────────────────────────────────────────
 
 export interface SearchPhaseResult {
@@ -116,6 +147,8 @@ export interface EvaluationResult {
   searchResults: SearchResult[];
   searchDurationMs: number;
   answerDurationMs: number;
+  /** Retrieval quality metrics for this question (computed in parallel with answer judge) */
+  retrievalMetrics?: RetrievalMetrics;
 }
 
 // ── Report types ────────────────────────────────────────────────────────────────
@@ -124,6 +157,15 @@ export interface QuestionTypeStats {
   total: number;
   correct: number;
   accuracy: number;
+}
+
+export interface AggregateRetrievalStats {
+  hitAtK: number;
+  precisionAtK: number;
+  f1AtK: number;
+  mrr: number;
+  ndcg: number;
+  k: number;
 }
 
 export interface BenchmarkReport {
@@ -139,6 +181,16 @@ export interface BenchmarkReport {
   };
   byQuestionType: Record<string, QuestionTypeStats>;
   evaluations: EvaluationResult[];
+  /** Latency stats per pipeline phase */
+  latency?: {
+    search: LatencyStats;
+    answer: LatencyStats;
+    evaluate: LatencyStats;
+  };
+  /** Aggregate retrieval metrics */
+  retrieval?: AggregateRetrievalStats;
+  /** Per-category retrieval metrics */
+  retrievalByType?: Record<string, AggregateRetrievalStats>;
 }
 
 // ── Checkpoint ──────────────────────────────────────────────────────────────────

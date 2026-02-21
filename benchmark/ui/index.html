@@ -262,6 +262,88 @@
 
   document.write(`</div>`); // grid-2
 
+  // ── Retrieval Quality section ──────────────────────────────────────────────────
+  if (R.retrieval) {
+    const retr = R.retrieval;
+    const retrByType = R.retrievalByType || {};
+    let retrHtml = `<div class="card" style="margin-bottom:20px"><h2 class="section-title">Retrieval Quality (K=${retr.k})</h2>`;
+    retrHtml += `<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:20px;margin-bottom:20px">`;
+
+    // Overall bar metrics
+    const retrMetrics = [
+      { label: `Hit@${retr.k}`,       val: retr.hitAtK,       pct: true },
+      { label: `Precision@${retr.k}`, val: retr.precisionAtK, pct: true },
+      { label: "F1",                  val: retr.f1AtK,        pct: true },
+    ];
+    let barsLeft = `<div>`;
+    for (const m of retrMetrics) {
+      const p = (m.val * 100).toFixed(1);
+      const color = m.val >= 0.7 ? "var(--green)" : m.val >= 0.4 ? "var(--yellow)" : "var(--red)";
+      barsLeft += `
+        <div class="category-row">
+          <div class="cat-label" style="width:120px">${m.label}</div>
+          <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${p}%;background:${color}"></div></div>
+          <div class="cat-pct" style="color:${color}">${p}%</div>
+        </div>`;
+    }
+    barsLeft += `</div>`;
+
+    // MRR / NDCG scalars
+    const scalars = `<div style="display:flex;flex-direction:column;gap:12px;justify-content:center">
+      <div style="font-size:13px;color:var(--muted)">MRR <span style="color:var(--text);font-weight:600;margin-left:8px">${retr.mrr.toFixed(3)}</span></div>
+      <div style="font-size:13px;color:var(--muted)">NDCG <span style="color:var(--text);font-weight:600;margin-left:8px">${retr.ndcg.toFixed(3)}</span></div>
+    </div>`;
+
+    retrHtml += barsLeft + scalars + `</div>`;
+
+    // Per-category retrieval table
+    if (Object.keys(retrByType).length > 0) {
+      retrHtml += `<table style="font-size:12px"><thead><tr>
+        <th>Category</th><th>Hit@${retr.k}</th><th>Prec@${retr.k}</th><th>F1</th><th>MRR</th><th>NDCG</th>
+      </tr></thead><tbody>`;
+      for (const [type, m] of Object.entries(retrByType).sort((a,b) => b[1].precisionAtK - a[1].precisionAtK)) {
+        const label = TYPE_LABELS[type] ?? type;
+        const fmt1 = (v) => (v * 100).toFixed(0) + "%";
+        const fmt3 = (v) => v.toFixed(3);
+        retrHtml += `<tr>
+          <td>${label}</td>
+          <td>${fmt1(m.hitAtK)}</td><td>${fmt1(m.precisionAtK)}</td><td>${fmt1(m.f1AtK)}</td>
+          <td>${fmt3(m.mrr)}</td><td>${fmt3(m.ndcg)}</td>
+        </tr>`;
+      }
+      retrHtml += `</tbody></table>`;
+    }
+
+    retrHtml += `</div>`;
+    document.write(retrHtml);
+  }
+
+  // ── Latency section ────────────────────────────────────────────────────────────
+  if (R.latency && R.latency.search.count > 0) {
+    const lat = R.latency;
+    const fmtMs = (v) => v == null ? "—" : Math.round(v) + "ms";
+    document.write(`
+      <div class="card" style="margin-bottom:20px">
+        <h2 class="section-title">Latency</h2>
+        <div class="table-wrap">
+          <table style="font-size:12px">
+            <thead><tr><th>Phase</th><th>Min</th><th>Mean</th><th>Median</th><th>P95</th><th>P99</th><th>Count</th></tr></thead>
+            <tbody>
+              <tr><td>Search</td>
+                <td>${fmtMs(lat.search.min)}</td><td>${fmtMs(lat.search.mean)}</td><td>${fmtMs(lat.search.median)}</td>
+                <td>${fmtMs(lat.search.p95)}</td><td>${fmtMs(lat.search.p99)}</td><td>${lat.search.count}</td>
+              </tr>
+              <tr><td>Answer</td>
+                <td>${fmtMs(lat.answer.min)}</td><td>${fmtMs(lat.answer.mean)}</td><td>${fmtMs(lat.answer.median)}</td>
+                <td>${fmtMs(lat.answer.p95)}</td><td>${fmtMs(lat.answer.p99)}</td><td>${lat.answer.count}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `);
+  }
+
   // ── Results table ─────────────────────────────────────────────────────────────
   document.write(`
     <div class="card">
@@ -290,6 +372,7 @@
               <th>Type</th>
               <th>Question</th>
               <th>Result</th>
+              <th>Retrieval</th>
               <th>Score</th>
             </tr>
           </thead>
@@ -301,6 +384,12 @@
     const topScore = e.searchResults?.[0]?.score
       ? `${(e.searchResults[0].score * 100).toFixed(0)}%`
       : "—";
+    const rm = e.retrievalMetrics;
+    const retrCell = rm
+      ? `<span style="color:${rm.hitAtK===1?'var(--green)':'var(--red)'}">H=${rm.hitAtK}</span>&nbsp;` +
+        `P=${Math.round(rm.precisionAtK*rm.k)}/${rm.k}&nbsp;` +
+        `<span style="color:var(--muted)">MRR=${rm.mrr.toFixed(2)}</span>`
+      : `<span style="color:var(--muted)">—</span>`;
     document.write(`
       <tr data-type="${e.questionType}" data-label="${e.label}">
         <td>${e.questionId}</td>
@@ -317,6 +406,7 @@
           </div>
         </td>
         <td><span class="badge badge-${e.label}">${e.label}</span></td>
+        <td style="font-size:11px;white-space:nowrap">${retrCell}</td>
         <td class="score-num" style="color:${e.score === 1 ? 'var(--green)' : 'var(--red)'}">${e.score}</td>
       </tr>
     `);

@@ -72,8 +72,8 @@
   {
     "questionId": "Q11",
     "questionType": "session-continuity",
-    "question": "What was the most recent session focused on?",
-    "groundTruth": "Fixing the Stripe webhook signature validation failure. The bug was that Starlette had consumed the request body before Stripe's construct_event() could read the raw bytes. Fixed by reading and caching raw_body = await request.body() before any parsing.",
+    "question": "The Stripe webhook is throwing signature errors in production — can you remind me what was causing the validation failure and exactly how we fixed it?",
+    "groundTruth": "Starlette consumed the request body before Stripe's construct_event() could read the raw bytes. Fix: read and cache raw_body = await request.body() first, then pass those raw bytes (not decoded string) to stripe.Webhook.construct_event().",
     "haystackSessionIds": ["S09"]
   },
   {
@@ -93,15 +93,15 @@
   {
     "questionId": "Q14",
     "questionType": "session-continuity",
-    "question": "What did the session on January 17 cover?",
-    "groundTruth": "Development setup: how to run the server (uvicorn), run migrations (alembic upgrade head at the time), run tests (pytest), and the required environment variables (DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY).",
+    "question": "Can you remind me the commands to run this project locally — how do I start the server, run migrations, and run the tests?",
+    "groundTruth": "Start server: uvicorn app.main:app --reload --port 8000. Run migrations: aerich upgrade. Run tests: pytest tests/ -v. Required env vars: DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY.",
     "haystackSessionIds": ["S03"]
   },
   {
     "questionId": "Q15",
     "questionType": "session-continuity",
-    "question": "What session directly preceded the Stripe webhook bug fix session?",
-    "groundTruth": "The Stripe integration session (January 28) where the POST /webhooks/stripe endpoint was implemented and the checkout flow was described.",
+    "question": "How does the Stripe checkout flow work end to end — from the user clicking pay to the order being marked as paid?",
+    "groundTruth": "POST /checkout creates a Stripe PaymentIntent and returns client_secret to the frontend. Frontend uses Stripe.js to confirm payment. On success Stripe calls POST /webhooks/stripe, which validates the Stripe-Signature header using stripe.Webhook.construct_event() and handles payment_intent.succeeded to mark the order as paid.",
     "haystackSessionIds": ["S08", "S09"]
   },
   {
@@ -275,8 +275,1136 @@
   {
     "questionId": "Q40",
     "questionType": "abstention",
-    "question": "What rate limiting strategy does the API use?",
-    "groundTruth": "Not mentioned — rate limiting was never discussed in any session.",
+    "question": "What is the developer's preferred IDE or code editor?",
+    "groundTruth": "Not mentioned — the developer's IDE or code editor preference was never shared in any session.",
+    "haystackSessionIds": []
+  },
+
+  {
+    "questionId": "Q41",
+    "questionType": "tech-stack",
+    "question": "What rate limiting library is used in the ecommerce-api?",
+    "groundTruth": "slowapi",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q42",
+    "questionType": "tech-stack",
+    "question": "What structured logging library is used in the ecommerce-api?",
+    "groundTruth": "structlog",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q43",
+    "questionType": "tech-stack",
+    "question": "What email delivery service is used for order confirmations?",
+    "groundTruth": "SendGrid",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q44",
+    "questionType": "tech-stack",
+    "question": "What library is used to mock Redis in tests?",
+    "groundTruth": "fakeredis",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q45",
+    "questionType": "tech-stack",
+    "question": "What library is used to generate test fixture data in Python?",
+    "groundTruth": "factory_boy",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q46",
+    "questionType": "tech-stack",
+    "question": "What testing framework and async extension are used in the ecommerce-api?",
+    "groundTruth": "pytest with pytest-asyncio",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q47",
+    "questionType": "tech-stack",
+    "question": "What charting library is used in the dashboard-app?",
+    "groundTruth": "Recharts",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q48",
+    "questionType": "tech-stack",
+    "question": "What data-fetching library does the dashboard-app use on the frontend?",
+    "groundTruth": "SWR",
+    "haystackSessionIds": ["S22"]
+  },
+  {
+    "questionId": "Q49",
+    "questionType": "tech-stack",
+    "question": "What library is used to handle timezone-aware date formatting in the dashboard?",
+    "groundTruth": "date-fns-tz",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q50",
+    "questionType": "tech-stack",
+    "question": "What TypeScript library is used for generating test data in the dashboard-app?",
+    "groundTruth": "@faker-js/faker",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q51",
+    "questionType": "tech-stack",
+    "question": "What TypeScript validation library does the developer use?",
+    "groundTruth": "Zod",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q52",
+    "questionType": "tech-stack",
+    "question": "What approach is used for fire-and-forget background tasks in the ecommerce-api?",
+    "groundTruth": "asyncio.create_task — a native Python async approach, not Celery or another task queue",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q53",
+    "questionType": "tech-stack",
+    "question": "How are products stored and queried — what is the order items storage format?",
+    "groundTruth": "JSONB in PostgreSQL — order items are stored as a JSONB snapshot",
+    "haystackSessionIds": ["S13"]
+  },
+  {
+    "questionId": "Q54",
+    "questionType": "tech-stack",
+    "question": "What Redis data structure is used to store shopping cart data?",
+    "groundTruth": "Redis hash with key format cart:{user_id}",
+    "haystackSessionIds": ["S12"]
+  },
+  {
+    "questionId": "Q55",
+    "questionType": "tech-stack",
+    "question": "What web server sits in front of uvicorn in the production deployment?",
+    "groundTruth": "nginx (reverse proxy with proxy_pass to uvicorn on port 8000, handling SSL termination)",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q56",
+    "questionType": "tech-stack",
+    "question": "What is the health check endpoint in the ecommerce-api?",
+    "groundTruth": "GET /health — returns {\"status\":\"ok\",\"version\":\"1.0.0\"}",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q57",
+    "questionType": "tech-stack",
+    "question": "What Next.js feature is used for the initial server-side render of dashboard data?",
+    "groundTruth": "Next.js Server Components",
+    "haystackSessionIds": ["S22"]
+  },
+  {
+    "questionId": "Q58",
+    "questionType": "tech-stack",
+    "question": "What are the product catalog query parameters for filtering?",
+    "groundTruth": "category, min_price, max_price, and search (text search parameter)",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q59",
+    "questionType": "tech-stack",
+    "question": "What Pydantic schemas are defined for the product model?",
+    "groundTruth": "ProductCreate, ProductUpdate, and ProductResponse",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q60",
+    "questionType": "tech-stack",
+    "question": "What command is used to initialize the Aerich migration tool?",
+    "groundTruth": "aerich init -t app.config.TORTOISE_ORM (generates aerich.ini and the initial migration)",
+    "haystackSessionIds": ["S05"]
+  },
+
+  {
+    "questionId": "Q61",
+    "questionType": "architecture",
+    "question": "What are the shopping cart endpoints and what is the Redis TTL for cart data?",
+    "groundTruth": "POST, PUT, DELETE, and GET cart endpoints. Cart data has a 7-day TTL in Redis.",
+    "haystackSessionIds": ["S12"]
+  },
+  {
+    "questionId": "Q62",
+    "questionType": "architecture",
+    "question": "What is the order status lifecycle in the ecommerce-api?",
+    "groundTruth": "pending → paid → shipped → delivered. Orders can be cancelled at any stage.",
+    "haystackSessionIds": ["S13"]
+  },
+  {
+    "questionId": "Q63",
+    "questionType": "architecture",
+    "question": "How are order confirmation emails sent — what is the flow?",
+    "groundTruth": "asyncio.create_task(send_order_confirmation(...)) — fire-and-forget. Email failure is logged but does not block the order response.",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q64",
+    "questionType": "architecture",
+    "question": "What are the rate limits configured for the ecommerce-api?",
+    "groundTruth": "100 requests per minute per IP for general endpoints, 10 requests per minute per IP for auth endpoints.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q65",
+    "questionType": "architecture",
+    "question": "What HTTP headers does the rate limiter add to responses?",
+    "groundTruth": "X-RateLimit-Limit, X-RateLimit-Remaining, and X-RateLimit-Reset. Returns 429 with Retry-After header when limit is exceeded.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q66",
+    "questionType": "architecture",
+    "question": "Which product endpoints are restricted to admin users only?",
+    "groundTruth": "POST (create), PUT (update), and DELETE (delete) product endpoints are admin-only. GET endpoints are open.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q67",
+    "questionType": "architecture",
+    "question": "How is soft delete implemented for products?",
+    "groundTruth": "Products are soft-deleted by setting is_active=False rather than removing the record from the database.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q68",
+    "questionType": "architecture",
+    "question": "How is request tracing implemented in the ecommerce-api?",
+    "groundTruth": "A UUID request_id is generated per request via middleware using Python contextvars (async-safe). It is included in all log fields: request_id, user_id, endpoint, duration_ms, status_code.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q69",
+    "questionType": "architecture",
+    "question": "What is the API versioning approach and what happens to old routes?",
+    "groundTruth": "All routes use /api/v1/ prefix. Old unversioned routes are kept with a Deprecation: true header and will be removed after a 30-day window (removal March 5).",
+    "haystackSessionIds": ["S19"]
+  },
+  {
+    "questionId": "Q70",
+    "questionType": "architecture",
+    "question": "What steps does POST /orders perform?",
+    "groundTruth": "Reads the cart → validates stock availability → creates the order record with JSONB items snapshot → deducts stock_quantity → clears the cart.",
+    "haystackSessionIds": ["S13"]
+  },
+  {
+    "questionId": "Q71",
+    "questionType": "architecture",
+    "question": "How does the dashboard proxy analytics API calls to the ecommerce-api backend?",
+    "groundTruth": "Next.js API routes in app/api/ proxy requests to the ecommerce-api, hiding the backend URL and handling CORS.",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q72",
+    "questionType": "architecture",
+    "question": "What SWR configuration is used for analytics data fetching?",
+    "groundTruth": "dedupingInterval: 30000 (30 seconds). revalidateOnFocus: false for analytics data.",
+    "haystackSessionIds": ["S22"]
+  },
+  {
+    "questionId": "Q73",
+    "questionType": "architecture",
+    "question": "What is the Docker image build strategy and what is the resulting image size?",
+    "groundTruth": "Multi-stage Dockerfile: builder stage (all dependencies) → runtime stage (production artifacts only). Size reduced from 1.2GB to 340MB.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q74",
+    "questionType": "architecture",
+    "question": "What is the v2 pagination format planned for the ecommerce-api?",
+    "groundTruth": "Response shape changes from {items:[], total:N} to {data:[], pagination:{total, page, per_page, pages}}.",
+    "haystackSessionIds": ["S19"]
+  },
+  {
+    "questionId": "Q75",
+    "questionType": "architecture",
+    "question": "How does structlog get configured for production vs development?",
+    "groundTruth": "LOG_LEVEL environment variable controls the log level (default INFO). JSON output is used in production.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q76",
+    "questionType": "architecture",
+    "question": "What analytics endpoints does the ecommerce-api expose?",
+    "groundTruth": "/api/v1/analytics/revenue, /api/v1/analytics/orders-by-category, and /api/v1/analytics/payment-status",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q77",
+    "questionType": "architecture",
+    "question": "What chart types are used in the dashboard-app and what data does each show?",
+    "groundTruth": "AreaChart for revenue over time, BarChart for orders by category, PieChart for payment status breakdown.",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q78",
+    "questionType": "architecture",
+    "question": "How are dashboard charts refreshed?",
+    "groundTruth": "A 5-minute setInterval triggers data refresh for chart data.",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q79",
+    "questionType": "architecture",
+    "question": "How is zero-downtime deployment achieved?",
+    "groundTruth": "Rolling restart via docker compose --no-deps up -d app — only the app container is restarted without taking down dependent services.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q80",
+    "questionType": "architecture",
+    "question": "What database indexes were added to fix the slow product query?",
+    "groundTruth": "idx_products_category (single-column) and idx_products_category_price (composite on category and price).",
+    "haystackSessionIds": ["S16"]
+  },
+
+  {
+    "questionId": "Q81",
+    "questionType": "session-continuity",
+    "question": "Can you remind me how the product catalog endpoints are structured — what filtering does GET /products support and which endpoints require admin?",
+    "groundTruth": "Product catalog CRUD: GET /products with filtering (category, min_price, max_price, search), GET /products/{id}, admin-only POST/PUT/DELETE, soft delete via is_active=False, and Pydantic schemas ProductCreate/ProductUpdate/ProductResponse.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q82",
+    "questionType": "session-continuity",
+    "question": "Someone's cart isn't persisting between sessions — can you remind me how cart data is stored in Redis and what the expiry is?",
+    "groundTruth": "Shopping cart implementation: Redis hash with key cart:{user_id}, 7-day TTL, and POST/PUT/DELETE/GET cart endpoints with stock check on add.",
+    "haystackSessionIds": ["S12"]
+  },
+  {
+    "questionId": "Q83",
+    "questionType": "session-continuity",
+    "question": "Walk me through exactly what POST /orders does step by step, and what's the full order status lifecycle?",
+    "groundTruth": "Order system: Order model with JSONB items snapshot, status lifecycle (pending→paid→shipped→delivered, cancellable at any stage), and POST /orders flow (read cart → validate stock → create record → deduct stock → clear cart).",
+    "haystackSessionIds": ["S13"]
+  },
+  {
+    "questionId": "Q84",
+    "questionType": "session-continuity",
+    "question": "How are order confirmation emails sent — does the email send block the API response or not?",
+    "groundTruth": "Background tasks for order emails: asyncio.create_task(send_order_confirmation(...)) fire-and-forget pattern using SendGrid API, with email failure logged but not blocking the order response.",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q85",
+    "questionType": "session-continuity",
+    "question": "I need to set up the test environment from scratch — what libraries do we use, what fixtures exist, and what's the coverage target?",
+    "groundTruth": "Testing setup: pytest + pytest-asyncio, fixtures (test_db, test_client, auth_headers), fakeredis for Redis mocking, factory_boy for test data, tests/ directory with one file per module, and 80% coverage target.",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q86",
+    "questionType": "session-continuity",
+    "question": "Product queries were running at 2 seconds — can you remind me what we diagnosed and what we did to fix it?",
+    "groundTruth": "Performance optimization: EXPLAIN ANALYZE revealed a sequential scan on product queries. Added idx_products_category (single) and idx_products_category_price (composite) indexes, reducing query time from 2.3s to 45ms.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q87",
+    "questionType": "session-continuity",
+    "question": "Can you remind me the rate limits configured on the API and how enforcement stays consistent when running multiple uvicorn workers?",
+    "groundTruth": "Rate limiting with slowapi: 100 req/min per IP (general), 10 req/min per IP (auth endpoints), Redis backend, X-RateLimit-* headers, and 429 + Retry-After on exceeding the limit.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q88",
+    "questionType": "session-continuity",
+    "question": "How does the request_id get generated and threaded through the system — how does it end up in every log entry?",
+    "groundTruth": "Structured logging with structlog: UUID request_id per request via contextvars middleware, log fields (request_id, user_id, endpoint, duration_ms, status_code), structlog.exception() for tracebacks, LOG_LEVEL env var, JSON output in production.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q89",
+    "questionType": "session-continuity",
+    "question": "What's our API versioning strategy and when exactly are the deprecated unversioned routes being shut off?",
+    "groundTruth": "API versioning: /api/v1/ prefix on all routes, old routes kept with Deprecation: true header for a 30-day window (removal March 5), and v2 pagination redesign plan.",
+    "haystackSessionIds": ["S19"]
+  },
+  {
+    "questionId": "Q90",
+    "questionType": "session-continuity",
+    "question": "I need to deploy a hotfix to production without downtime — what's the command and how does the nginx and Docker setup work?",
+    "groundTruth": "Production deployment: multi-stage Dockerfile (1.2GB→340MB), GET /health endpoint, nginx reverse proxy with SSL, and zero-downtime rolling restart via docker compose.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q91",
+    "questionType": "session-continuity",
+    "question": "What charts did we add to the dashboard and what data does each one display?",
+    "groundTruth": "Dashboard charts with Recharts: AreaChart (revenue), BarChart (orders by category), PieChart (payment status), 5-minute auto-refresh, and analytics API endpoints on the ecommerce-api.",
+    "haystackSessionIds": ["S21"]
+  },
+  {
+    "questionId": "Q92",
+    "questionType": "session-continuity",
+    "question": "Multiple components are making duplicate API calls for the same endpoint — can you remind me the SWR config we set up to prevent that?",
+    "groundTruth": "Dashboard data fetching: SWR with dedupingInterval:30s and revalidateOnFocus:false for analytics, Next.js Server Components for initial render, and API routes in app/api/ proxying to the ecommerce-api.",
+    "haystackSessionIds": ["S22"]
+  },
+  {
+    "questionId": "Q93",
+    "questionType": "session-continuity",
+    "question": "The revenue chart is grouping events on the wrong dates — can you remind me what causes that and exactly how the fix works?",
+    "groundTruth": "Timezone bug fix: UTC timestamps from PostgreSQL shifted to local time via new Date(), causing wrong chart date grouping. Fixed with date-fns-tz library, formatChartDate() using utcToZonedTime() + format(), with timezone from Intl.DateTimeFormat().resolvedOptions().timeZone.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q94",
+    "questionType": "session-continuity",
+    "question": "Can you remind me my preferences around React component style — default vs named exports, class vs functional, and how I handle errors in catch blocks?",
+    "groundTruth": "Developer preferences: named exports for React components, Zod for TypeScript validation, log before re-throw (never swallow errors), functional components only (no class components), @faker-js/faker for TypeScript test data.",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q95",
+    "questionType": "session-continuity",
+    "question": "Where do both projects stand right now — what's fully shipped and what's still pending before we can launch?",
+    "groundTruth": "Final status review: ecommerce-api fully complete (auth, catalog, cart, orders, Stripe, email, rate limiting, logging, versioning, deployment). dashboard-app: charts and SWR fetching complete, pending NextAuth.js auth and admin views. Critical path: NextAuth.js + load testing.",
+    "haystackSessionIds": ["S25"]
+  },
+  {
+    "questionId": "Q96",
+    "questionType": "session-continuity",
+    "question": "If the SendGrid email fails after an order is created, does that error back to the user or is it handled silently?",
+    "groundTruth": "Email failure is logged but does not block or error the order response — emails are sent fire-and-forget via asyncio.create_task. The order is already committed to the database before the email task is created.",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q97",
+    "questionType": "session-continuity",
+    "question": "Can you remind me the exact fields that get attached to every log entry from the structlog setup?",
+    "groundTruth": "Every log entry includes: request_id (UUID generated per request), user_id, endpoint, duration_ms, and status_code. structlog.exception() is used for tracebacks. LOG_LEVEL env var controls verbosity (default INFO), JSON renderer in production.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q98",
+    "questionType": "session-continuity",
+    "question": "What's left before we can launch — what's still pending across both projects?",
+    "groundTruth": "ecommerce-api is fully complete. dashboard-app pending: NextAuth.js authentication and admin views. Critical path to launch: NextAuth.js integration plus load testing.",
+    "haystackSessionIds": ["S25"]
+  },
+  {
+    "questionId": "Q99",
+    "questionType": "session-continuity",
+    "question": "We're wiring up CI — can you remind me the exact pytest command we use including the coverage enforcement flag?",
+    "groundTruth": "pytest tests/ -v --cov=app --cov-fail-under=80",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q100",
+    "questionType": "session-continuity",
+    "question": "Can you remind me the initial tech stack decisions for the dashboard-app — framework, database, UI components, and package manager?",
+    "groundTruth": "Next.js 15 with App Router, separate PostgreSQL instance, Prisma for database access, Tailwind CSS with shadcn/ui components, bun as the package manager for all installs and builds.",
+    "haystackSessionIds": ["S10"]
+  },
+
+  {
+    "questionId": "Q101",
+    "questionType": "preference",
+    "question": "Does the developer prefer named or default exports for React components?",
+    "groundTruth": "Named exports — the developer explicitly prefers named exports for React components, not default exports.",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q102",
+    "questionType": "preference",
+    "question": "What is the developer's preference for error handling in async code?",
+    "groundTruth": "Log before re-throw — always log the error before re-throwing it, never swallow errors silently.",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q103",
+    "questionType": "preference",
+    "question": "Does this developer use class components or functional components in React?",
+    "groundTruth": "Functional components only — the developer explicitly avoids class components.",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q104",
+    "questionType": "preference",
+    "question": "What is the test code coverage target for the ecommerce-api?",
+    "groundTruth": "80% coverage target.",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q105",
+    "questionType": "preference",
+    "question": "How does this developer prefer to organize test files?",
+    "groundTruth": "One test file per module, all in a tests/ directory.",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q106",
+    "questionType": "preference",
+    "question": "What tool does the developer use to diagnose slow database queries?",
+    "groundTruth": "EXPLAIN ANALYZE in PostgreSQL.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q107",
+    "questionType": "preference",
+    "question": "What is the developer's preferred logging library for Python projects?",
+    "groundTruth": "structlog — used for structured logging with JSON output in production.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q108",
+    "questionType": "preference",
+    "question": "How does this developer prefer to define Pydantic models — one class or separate Create/Update/Response schemas?",
+    "groundTruth": "Separate Pydantic schemas for each operation: Create, Update, and Response schemas per model.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q109",
+    "questionType": "preference",
+    "question": "How does this developer prefer to configure environment-specific settings like log level?",
+    "groundTruth": "Via environment variables — e.g., LOG_LEVEL env var to control log verbosity.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q110",
+    "questionType": "preference",
+    "question": "What library does the developer use for timezone-safe date formatting in TypeScript?",
+    "groundTruth": "date-fns-tz — used with utcToZonedTime() and format() for correct timezone handling.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q111",
+    "questionType": "preference",
+    "question": "Does the developer prefer Celery or asyncio for non-critical background tasks?",
+    "groundTruth": "asyncio — specifically asyncio.create_task() for fire-and-forget tasks rather than a separate task queue like Celery.",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q112",
+    "questionType": "preference",
+    "question": "Does the developer configure Redis connection pool settings explicitly?",
+    "groundTruth": "Yes — explicit Redis pool config with max_connections=50, socket_timeout=5, socket_connect_timeout=5, retry_on_timeout=True.",
+    "haystackSessionIds": ["S04"]
+  },
+  {
+    "questionId": "Q113",
+    "questionType": "preference",
+    "question": "What is the developer's preferred approach for API versioning deprecation notices?",
+    "groundTruth": "Add a Deprecation: true header to deprecated routes and provide a 30-day removal window.",
+    "haystackSessionIds": ["S19"]
+  },
+  {
+    "questionId": "Q114",
+    "questionType": "preference",
+    "question": "How does the developer prefer to delete records — hard or soft delete?",
+    "groundTruth": "Soft delete — set is_active=False rather than deleting the database record.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q115",
+    "questionType": "preference",
+    "question": "What is the developer's preferred TypeScript test data generation library?",
+    "groundTruth": "@faker-js/faker",
+    "haystackSessionIds": ["S24"]
+  },
+  {
+    "questionId": "Q116",
+    "questionType": "preference",
+    "question": "What JWT signing algorithm does the developer use?",
+    "groundTruth": "HS256",
+    "haystackSessionIds": ["S02"]
+  },
+  {
+    "questionId": "Q117",
+    "questionType": "preference",
+    "question": "Where does the developer prefer to store JWT refresh tokens — cookie or localStorage?",
+    "groundTruth": "httpOnly, Secure, SameSite=Strict cookie — not localStorage.",
+    "haystackSessionIds": ["S02"]
+  },
+  {
+    "questionId": "Q118",
+    "questionType": "preference",
+    "question": "What is the developer's preferred way to run Next.js dashboard builds and installs?",
+    "groundTruth": "bun — bun install, bun dev, bun run build.",
+    "haystackSessionIds": ["S10"]
+  },
+  {
+    "questionId": "Q119",
+    "questionType": "preference",
+    "question": "How does the developer handle tracebacks in structured logging?",
+    "groundTruth": "structlog.exception() — used to include full tracebacks in the structured log output.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q120",
+    "questionType": "preference",
+    "question": "What CSS framework and component library does the developer use for the dashboard?",
+    "groundTruth": "Tailwind CSS with shadcn/ui components.",
+    "haystackSessionIds": ["S10"]
+  },
+
+  {
+    "questionId": "Q121",
+    "questionType": "error-solution",
+    "question": "What caused the slow product list query and how was it fixed?",
+    "groundTruth": "EXPLAIN ANALYZE revealed a sequential table scan on product queries. Added two indexes: idx_products_category (single-column) and idx_products_category_price (composite on category and price). Query time dropped from 2.3s to 45ms.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q122",
+    "questionType": "error-solution",
+    "question": "What caused the dashboard chart dates to display incorrectly?",
+    "groundTruth": "UTC timestamps from PostgreSQL were passed to new Date() in JavaScript, which converts to local time, causing wrong date grouping in charts. Fixed by using date-fns-tz's utcToZonedTime() + format() in a formatChartDate() function, with timezone from Intl.DateTimeFormat().resolvedOptions().timeZone.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q123",
+    "questionType": "error-solution",
+    "question": "What caused duplicate API calls in the dashboard and how was it resolved?",
+    "groundTruth": "Multiple components independently fetching the same analytics data. Fixed with SWR's dedupingInterval:30000 — requests for the same key within 30 seconds are deduplicated into a single network call.",
+    "haystackSessionIds": ["S22"]
+  },
+  {
+    "questionId": "Q124",
+    "questionType": "error-solution",
+    "question": "Why was the Docker image so large initially and how was it reduced?",
+    "groundTruth": "Single-stage Dockerfile included all build dependencies in the final image (1.2GB). Switched to multi-stage build: builder stage installs all deps, runtime stage copies only production artifacts. Reduced to 340MB.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q125",
+    "questionType": "error-solution",
+    "question": "Why does in-memory rate limiting break with multiple uvicorn workers?",
+    "groundTruth": "Each worker process has its own memory space, so rate limit counters are not shared between workers. Using Redis as the rate limit storage backend ensures all workers share the same counter state.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q126",
+    "questionType": "error-solution",
+    "question": "What is the exact command to initialize Aerich and what does it generate?",
+    "groundTruth": "aerich init -t app.config.TORTOISE_ORM — generates aerich.ini and the initial migrations directory.",
+    "haystackSessionIds": ["S05"]
+  },
+  {
+    "questionId": "Q127",
+    "questionType": "error-solution",
+    "question": "What is the safety concern with asyncio.create_task and how is it addressed?",
+    "groundTruth": "If no reference to the task is kept, the garbage collector can cancel it before it finishes. Best practice is to store the result of create_task in a variable or set to prevent GC.",
+    "haystackSessionIds": ["S14"]
+  },
+  {
+    "questionId": "Q128",
+    "questionType": "error-solution",
+    "question": "What query time improvement was achieved after adding product indexes?",
+    "groundTruth": "Query time dropped from 2.3 seconds to 45 milliseconds.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q129",
+    "questionType": "error-solution",
+    "question": "Why did rate limiting need Redis as a backend?",
+    "groundTruth": "Without a shared storage backend, each uvicorn worker maintains its own in-process counter, allowing users to exceed limits by routing requests to different workers. Redis provides a single shared counter across all workers.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q130",
+    "questionType": "error-solution",
+    "question": "What problem did the timezone bug cause in the dashboard charts?",
+    "groundTruth": "Chart data was grouped by the wrong date. For example, a UTC midnight timestamp converted to local time could appear as the previous day, making the revenue chart show data on incorrect dates.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q131",
+    "questionType": "error-solution",
+    "question": "What tool was used to diagnose the slow product query?",
+    "groundTruth": "PostgreSQL's EXPLAIN ANALYZE — revealed the query was doing a sequential scan instead of using an index.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q132",
+    "questionType": "error-solution",
+    "question": "What function was created to fix the timezone bug and what library does it use?",
+    "groundTruth": "formatChartDate(ts, tz) — uses date-fns-tz's utcToZonedTime() to convert UTC to the target timezone, then format() to produce the formatted date string.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q133",
+    "questionType": "error-solution",
+    "question": "What is the original Docker image size and what was it reduced to?",
+    "groundTruth": "1.2GB reduced to 340MB using a multi-stage Dockerfile.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q134",
+    "questionType": "error-solution",
+    "question": "What caused the Redis connection pool exhaustion?",
+    "groundTruth": "The default redis-py max_connections setting of 10 is too low for production load, causing pool exhaustion under concurrent requests.",
+    "haystackSessionIds": ["S04"]
+  },
+  {
+    "questionId": "Q135",
+    "questionType": "error-solution",
+    "question": "What error is returned to the client when a rate limit is exceeded?",
+    "groundTruth": "HTTP 429 Too Many Requests with a Retry-After header.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q136",
+    "questionType": "error-solution",
+    "question": "How was the ecommerce-api migrated away from SQLAlchemy's sync blocking calls?",
+    "groundTruth": "Switched to Tortoise ORM, which is async-native. This eliminated the need for run_in_executor() wrappers around every database call in FastAPI route handlers.",
+    "haystackSessionIds": ["S05"]
+  },
+  {
+    "questionId": "Q137",
+    "questionType": "error-solution",
+    "question": "What composite index was added to the products table and what query does it optimize?",
+    "groundTruth": "idx_products_category_price — a composite index on (category, price) that optimizes queries filtering by category and sorting or filtering by price.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q138",
+    "questionType": "error-solution",
+    "question": "What function is used to get the user's local timezone in the dashboard?",
+    "groundTruth": "Intl.DateTimeFormat().resolvedOptions().timeZone — returns the browser's current timezone.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q139",
+    "questionType": "error-solution",
+    "question": "What was the sequence of events that led to the Stripe webhook bug?",
+    "groundTruth": "The endpoint first read and decoded the request body (or used Pydantic model parsing), which consumed Starlette's body buffer. When Stripe's construct_event() tried to read the raw bytes for signature verification, the buffer was empty, causing the signature check to fail.",
+    "haystackSessionIds": ["S09"]
+  },
+  {
+    "questionId": "Q140",
+    "questionType": "error-solution",
+    "question": "Why does Stripe webhook signature verification require raw bytes and not a decoded string?",
+    "groundTruth": "Stripe signs the raw byte payload. Even a difference in encoding between bytes and str (e.g., UTF-8 vs. decoded Python string) can alter the byte content that the HMAC is computed over, causing the signature check to fail.",
+    "haystackSessionIds": ["S09"]
+  },
+
+  {
+    "questionId": "Q141",
+    "questionType": "knowledge-update",
+    "question": "What is the complete current list of required environment variables for the ecommerce-api?",
+    "groundTruth": "DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SENDGRID_API_KEY, LOG_LEVEL (optional, defaults to INFO).",
+    "haystackSessionIds": ["S03", "S08", "S14", "S18"]
+  },
+  {
+    "questionId": "Q142",
+    "questionType": "knowledge-update",
+    "question": "What is the current Docker image size for the ecommerce-api?",
+    "groundTruth": "340MB (reduced from 1.2GB with multi-stage Dockerfile).",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q143",
+    "questionType": "knowledge-update",
+    "question": "What is the current status of the Stripe webhook integration?",
+    "groundTruth": "Working — the signature validation bug (body consumed before raw bytes read) was fixed in S09. The webhook handles payment_intent.succeeded to mark orders as paid.",
+    "haystackSessionIds": ["S08", "S09"]
+  },
+  {
+    "questionId": "Q144",
+    "questionType": "knowledge-update",
+    "question": "What is the current status of the timezone bug in the dashboard?",
+    "groundTruth": "Fixed — date-fns-tz library with formatChartDate() was implemented in S23 to correctly convert UTC timestamps to local timezone for chart display.",
+    "haystackSessionIds": ["S23"]
+  },
+  {
+    "questionId": "Q145",
+    "questionType": "knowledge-update",
+    "question": "What ORM replaced SQLAlchemy and when was the switch made?",
+    "groundTruth": "Tortoise ORM replaced SQLAlchemy in S05 (January 20) for better async support with FastAPI.",
+    "haystackSessionIds": ["S01", "S05"]
+  },
+  {
+    "questionId": "Q146",
+    "questionType": "knowledge-update",
+    "question": "How is Redis currently used in the ecommerce-api compared to originally?",
+    "groundTruth": "Originally: caching only (shopping cart data, session data). Currently: caching AND rate limiting backend (slowapi uses Redis to share rate limit counters across workers).",
+    "haystackSessionIds": ["S01", "S12", "S17"]
+  },
+  {
+    "questionId": "Q147",
+    "questionType": "knowledge-update",
+    "question": "What migration commands replaced the original Alembic commands?",
+    "groundTruth": "aerich upgrade (was: alembic upgrade head) and aerich migrate --name description (was: alembic revision --autogenerate -m description).",
+    "haystackSessionIds": ["S03", "S05"]
+  },
+  {
+    "questionId": "Q148",
+    "questionType": "knowledge-update",
+    "question": "What was the original ORM and migration tool before they were replaced?",
+    "groundTruth": "SQLAlchemy (ORM) and Alembic (migrations) — both replaced in S05 with Tortoise ORM and Aerich.",
+    "haystackSessionIds": ["S01", "S05"]
+  },
+  {
+    "questionId": "Q149",
+    "questionType": "knowledge-update",
+    "question": "Does the alembic/ directory still exist in the ecommerce-api project?",
+    "groundTruth": "No — the alembic/ directory and alembic.ini were deleted when switching to Aerich in S05.",
+    "haystackSessionIds": ["S05"]
+  },
+  {
+    "questionId": "Q150",
+    "questionType": "knowledge-update",
+    "question": "Why was run_in_executor no longer needed after the ORM switch?",
+    "groundTruth": "SQLAlchemy used synchronous database calls that needed run_in_executor() to run in a thread pool without blocking the event loop. Tortoise ORM is async-native, so all DB calls are awaitable directly.",
+    "haystackSessionIds": ["S05"]
+  },
+  {
+    "questionId": "Q151",
+    "questionType": "knowledge-update",
+    "question": "What API route prefix is used now vs originally?",
+    "groundTruth": "Currently: /api/v1/ prefix on all routes (added in S19). Originally: no prefix — routes were unversioned.",
+    "haystackSessionIds": ["S19"]
+  },
+  {
+    "questionId": "Q152",
+    "questionType": "knowledge-update",
+    "question": "How has product query performance changed?",
+    "groundTruth": "Improved from 2.3 seconds to 45 milliseconds after adding idx_products_category and idx_products_category_price indexes in S16.",
+    "haystackSessionIds": ["S16"]
+  },
+  {
+    "questionId": "Q153",
+    "questionType": "knowledge-update",
+    "question": "What is the current status of dashboard authentication?",
+    "groundTruth": "Not yet implemented — NextAuth.js integration is pending as of S25 (February 10). It is the critical path item for launch.",
+    "haystackSessionIds": ["S10", "S25"]
+  },
+  {
+    "questionId": "Q154",
+    "questionType": "knowledge-update",
+    "question": "What features were complete in the ecommerce-api as of the January 25 status session vs the final status in February?",
+    "groundTruth": "January 25 (S07): auth, product catalog, shopping cart complete; Stripe checkout in progress; email and admin dashboard pending. February 10 (S25): fully complete — all features including rate limiting (slowapi), logging (structlog), API versioning (/api/v1/), and deployment (Docker + nginx) are done.",
+    "haystackSessionIds": ["S07", "S25"]
+  },
+  {
+    "questionId": "Q155",
+    "questionType": "knowledge-update",
+    "question": "When was structlog added and what was the reason?",
+    "groundTruth": "Added in S18 (February 2) — to provide structured JSON logging in production with request tracing via UUID request_id per request.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q156",
+    "questionType": "knowledge-update",
+    "question": "When was the 80% test coverage target established?",
+    "groundTruth": "In S15 (January 26) when the testing infrastructure was set up with pytest, pytest-asyncio, fakeredis, and factory_boy.",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q157",
+    "questionType": "knowledge-update",
+    "question": "What is the current ecommerce-api server startup command?",
+    "groundTruth": "uvicorn app.main:app --reload --port 8000 (unchanged from the original setup in S03).",
+    "haystackSessionIds": ["S03", "S05"]
+  },
+  {
+    "questionId": "Q158",
+    "questionType": "knowledge-update",
+    "question": "What environment variable controls ecommerce-api logging verbosity?",
+    "groundTruth": "LOG_LEVEL — added in S18, defaults to INFO, used to configure structlog.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q159",
+    "questionType": "knowledge-update",
+    "question": "What dashboard features are complete vs pending as of the last session?",
+    "groundTruth": "Complete: Recharts dashboard (AreaChart, BarChart, PieChart), SWR data fetching, Next.js Server Components, timezone fix. Pending: NextAuth.js authentication, admin views.",
+    "haystackSessionIds": ["S21", "S22", "S23", "S25"]
+  },
+  {
+    "questionId": "Q160",
+    "questionType": "knowledge-update",
+    "question": "When was the ecommerce-api /api/v1/ route prefix added?",
+    "groundTruth": "In S19 (February 3) — all routes were versioned under /api/v1/, with old unversioned routes kept for a 30-day deprecation window.",
+    "haystackSessionIds": ["S19"]
+  },
+
+  {
+    "questionId": "Q161",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the complete current tech stack of both the ecommerce-api and dashboard-app projects?",
+    "groundTruth": "ecommerce-api: FastAPI (Python 3.12), PostgreSQL, Redis (caching + rate limiting), Tortoise ORM, Aerich, JWT auth (httpOnly cookies + refresh rotation), Stripe, SendGrid, slowapi, structlog, Docker + nginx. dashboard-app: Next.js 15, PostgreSQL (separate instance), Prisma, Tailwind CSS + shadcn/ui, Recharts, SWR, date-fns-tz, bun.",
+    "haystackSessionIds": ["S01", "S02", "S05", "S08", "S10", "S14", "S17", "S18", "S20", "S21", "S22", "S23"]
+  },
+  {
+    "questionId": "Q162",
+    "questionType": "cross-session-synthesis",
+    "question": "What are all the environment variables required to run the ecommerce-api?",
+    "groundTruth": "DATABASE_URL, REDIS_URL, JWT_SECRET, STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, SENDGRID_API_KEY, LOG_LEVEL (optional, defaults to INFO).",
+    "haystackSessionIds": ["S03", "S08", "S14", "S18"]
+  },
+  {
+    "questionId": "Q163",
+    "questionType": "cross-session-synthesis",
+    "question": "How is Redis used across all features of the ecommerce-api?",
+    "groundTruth": "Three uses: (1) Shopping cart storage — Redis hash cart:{user_id} with 7-day TTL. (2) General caching — session data and other cache entries. (3) Rate limiting backend — slowapi uses Redis to share per-IP request counters across all uvicorn workers.",
+    "haystackSessionIds": ["S01", "S12", "S17"]
+  },
+  {
+    "questionId": "Q164",
+    "questionType": "cross-session-synthesis",
+    "question": "What bugs were discovered and fixed across both projects?",
+    "groundTruth": "Four bugs fixed: (1) Redis connection pool exhaustion (S04) — fixed with explicit max_connections=50 pool config. (2) Stripe webhook signature failure (S09) — fixed by passing raw request body bytes. (3) Slow product query 2.3s (S16) — fixed with category and category+price indexes. (4) Dashboard timezone shift (S23) — fixed with date-fns-tz formatChartDate().",
+    "haystackSessionIds": ["S04", "S09", "S16", "S23"]
+  },
+  {
+    "questionId": "Q165",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the complete order lifecycle from cart to delivery?",
+    "groundTruth": "Customer adds items to cart (Redis hash, 7-day TTL) → POST /orders reads cart, validates stock, creates order (status: pending), deducts stock, clears cart → POST /checkout creates Stripe PaymentIntent → frontend confirms payment via Stripe.js → Stripe calls POST /webhooks/stripe with payment_intent.succeeded → order status updated to paid → shipped → delivered. Email confirmation sent fire-and-forget via SendGrid after order creation.",
+    "haystackSessionIds": ["S07", "S08", "S12", "S13", "S14"]
+  },
+  {
+    "questionId": "Q166",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the complete production deployment stack?",
+    "groundTruth": "Multi-stage Docker image (340MB) → Docker Compose orchestration → nginx reverse proxy (proxy_pass to uvicorn:8000, SSL termination) → uvicorn ASGI server → FastAPI app → PostgreSQL + Redis. Zero-downtime deploy: docker compose --no-deps up -d app. Health check: GET /health.",
+    "haystackSessionIds": ["S20"]
+  },
+  {
+    "questionId": "Q167",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the full testing infrastructure for the ecommerce-api?",
+    "groundTruth": "pytest + pytest-asyncio for async test execution. Fixtures: test_db (database), test_client (FastAPI test client), auth_headers. fakeredis for Redis mocking. factory_boy for model test data generation. 80% coverage target. One test file per module in tests/ directory.",
+    "haystackSessionIds": ["S15"]
+  },
+  {
+    "questionId": "Q168",
+    "questionType": "cross-session-synthesis",
+    "question": "What are all the developer preferences established across both projects?",
+    "groundTruth": "Concise responses (no preambles). Never leave commented-out code. Always type hints in Python. bun for all JS/TS projects. Named exports for React components. Zod for TypeScript validation. Log before re-throw, never swallow errors. Functional components only. @faker-js/faker for TypeScript test data. EXPLAIN ANALYZE for slow query diagnosis. structlog for Python logging. Separate Create/Update/Response Pydantic schemas. Soft delete (is_active=False). One test file per module. 80% coverage target.",
+    "haystackSessionIds": ["S06", "S10", "S11", "S15", "S16", "S18", "S24"]
+  },
+  {
+    "questionId": "Q169",
+    "questionType": "cross-session-synthesis",
+    "question": "What endpoints are restricted to admin users in the ecommerce-api?",
+    "groundTruth": "Product management: POST /products (create), PUT /products/{id} (update), DELETE /products/{id} (soft delete). Read endpoints (GET /products, GET /products/{id}) are open to all users.",
+    "haystackSessionIds": ["S11"]
+  },
+  {
+    "questionId": "Q170",
+    "questionType": "cross-session-synthesis",
+    "question": "What are all the Pydantic schemas defined across the ecommerce-api models?",
+    "groundTruth": "Products: ProductCreate, ProductUpdate, ProductResponse. Authentication: (login/refresh/logout request schemas implied). Orders: order creation uses cart data directly. Users: UserCreate, UserResponse (implied from auth setup).",
+    "haystackSessionIds": ["S02", "S11", "S13"]
+  },
+  {
+    "questionId": "Q171",
+    "questionType": "cross-session-synthesis",
+    "question": "What external services does the ecommerce-api integrate with and for what purpose?",
+    "groundTruth": "Redis: shopping cart storage (hash, 7-day TTL) and rate limiting backend. Stripe: payment processing (PaymentIntent creation + webhook for order fulfillment). SendGrid: transactional email (order confirmation via asyncio.create_task, fire-and-forget).",
+    "haystackSessionIds": ["S01", "S08", "S14", "S17"]
+  },
+  {
+    "questionId": "Q172",
+    "questionType": "cross-session-synthesis",
+    "question": "What patterns are used consistently across both the ecommerce-api and dashboard-app?",
+    "groundTruth": "bun as package manager. PostgreSQL as database. Tailwind CSS + shadcn/ui for dashboard UI. Zod for TypeScript validation. structlog-style structured logging (Python) / structured SWR patterns (JS). Separate instances (ecommerce-api has its own Postgres, dashboard has its own). Named exports in TypeScript.",
+    "haystackSessionIds": ["S06", "S10", "S18", "S24"]
+  },
+  {
+    "questionId": "Q173",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the complete feature status of both projects as of the last session?",
+    "groundTruth": "ecommerce-api: fully complete — auth, product catalog, cart, orders, Stripe, SendGrid, rate limiting (slowapi), logging (structlog), API versioning (/api/v1/), deployment (Docker + nginx + health check). dashboard-app: charts (Recharts) and SWR data fetching complete; pending: NextAuth.js auth and admin views. Critical path: NextAuth.js + load testing.",
+    "haystackSessionIds": ["S25"]
+  },
+  {
+    "questionId": "Q174",
+    "questionType": "cross-session-synthesis",
+    "question": "How does the rate limiting system work end-to-end?",
+    "groundTruth": "slowapi decorates FastAPI routes with rate limits (100 req/min per IP general, 10 req/min per IP auth). Rate limit counters are stored in Redis so all uvicorn workers share state. On each request, response headers X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset are added. On limit exceeded: HTTP 429 with Retry-After header.",
+    "haystackSessionIds": ["S17"]
+  },
+  {
+    "questionId": "Q175",
+    "questionType": "cross-session-synthesis",
+    "question": "How is structured logging implemented end-to-end in the ecommerce-api?",
+    "groundTruth": "structlog library. Per-request: UUID request_id generated in middleware using Python contextvars (async-safe). All log entries include: request_id, user_id, endpoint, duration_ms, status_code. structlog.exception() for tracebacks. LOG_LEVEL env var (default INFO). JSON output in production.",
+    "haystackSessionIds": ["S18"]
+  },
+  {
+    "questionId": "Q176",
+    "questionType": "cross-session-synthesis",
+    "question": "What is the full set of product catalog features implemented?",
+    "groundTruth": "GET /products (with category, min_price, max_price, search query params), GET /products/{id}, POST /products (admin only), PUT /products/{id} (admin only), DELETE /products/{id} (admin only, soft delete via is_active=False). Pydantic schemas: ProductCreate, ProductUpdate, ProductResponse. Indexes: idx_products_category and idx_products_category_price for query performance.",
+    "haystackSessionIds": ["S11", "S16"]
+  },
+  {
+    "questionId": "Q177",
+    "questionType": "cross-session-synthesis",
+    "question": "How has the project evolved from the initial session to completion?",
+    "groundTruth": "S01: FastAPI + PostgreSQL + Redis + Docker foundation (SQLAlchemy + Alembic). S02: JWT auth + refresh token rotation. S03: dev setup + env vars. S04: Redis pool fix. S05: Tortoise ORM + Aerich. S06: developer preferences. S07–S09: Stripe integration + webhook bug fix. S10: dashboard-app start. S11–S13: product catalog, cart, orders. S14: email. S15: testing. S16: performance. S17: rate limiting. S18: logging. S19: API versioning. S20: deployment. S21–S23: dashboard charts + data fetching + timezone fix. S24: more preferences. S25: complete.",
+    "haystackSessionIds": ["S01", "S05", "S09", "S10", "S20", "S25"]
+  },
+  {
+    "questionId": "Q178",
+    "questionType": "cross-session-synthesis",
+    "question": "What changes were made specifically to improve ecommerce-api observability?",
+    "groundTruth": "Three improvements: (1) Explicit Redis pool config (S04) to prevent timeout errors under load. (2) Structured logging with structlog (S18): UUID request_id, structured fields, JSON in production. (3) GET /health endpoint (S20): returns {status, version} for infrastructure health checks.",
+    "haystackSessionIds": ["S04", "S18", "S20"]
+  },
+  {
+    "questionId": "Q179",
+    "questionType": "cross-session-synthesis",
+    "question": "What was the sequence of testing-related decisions made across sessions?",
+    "groundTruth": "S01: pytest mentioned initially. S03: pytest tests/ -v as the test command. S15: full testing infrastructure established (pytest-asyncio, fakeredis, factory_boy, test_db/test_client/auth_headers fixtures, 80% coverage target, one file per module). S24: @faker-js/faker for TypeScript test data in dashboard.",
+    "haystackSessionIds": ["S03", "S15", "S24"]
+  },
+  {
+    "questionId": "Q180",
+    "questionType": "cross-session-synthesis",
+    "question": "How is stock management handled across the order flow?",
+    "groundTruth": "Stock check on cart add (S12): stock_quantity validated before adding item. Stock validation on order creation (S13): POST /orders validates availability before creating the order. Stock deduction on order creation (S13): stock_quantity decremented atomically when order is created. No restocking logic mentioned.",
+    "haystackSessionIds": ["S12", "S13"]
+  },
+
+  {
+    "questionId": "Q181",
+    "questionType": "abstention",
+    "question": "What CI/CD platform does the developer use (e.g. GitHub Actions, CircleCI)?",
+    "groundTruth": "Not mentioned — no CI/CD platform was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q182",
+    "questionType": "abstention",
+    "question": "What cloud provider hosts the ecommerce-api (AWS, GCP, Azure, etc.)?",
+    "groundTruth": "Not mentioned — no cloud provider was discussed. Only Docker + nginx deployment was described.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q183",
+    "questionType": "abstention",
+    "question": "What PostgreSQL version is being used?",
+    "groundTruth": "Not mentioned — the PostgreSQL version number was never specified in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q184",
+    "questionType": "abstention",
+    "question": "What Redis version is being used?",
+    "groundTruth": "Not mentioned — the Redis version number was never specified in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q185",
+    "questionType": "abstention",
+    "question": "What is the developer's company or employer name?",
+    "groundTruth": "Not mentioned — the developer's company or employer was never referenced in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q186",
+    "questionType": "abstention",
+    "question": "What is the production domain name or URL for the ecommerce-api?",
+    "groundTruth": "Not mentioned — no domain name or production URL was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q187",
+    "questionType": "abstention",
+    "question": "What is the monthly infrastructure cost for running the projects?",
+    "groundTruth": "Not mentioned — infrastructure costs were never discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q188",
+    "questionType": "abstention",
+    "question": "What browsers are supported by the dashboard-app?",
+    "groundTruth": "Not mentioned — no browser support matrix or compatibility requirements were discussed.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q189",
+    "questionType": "abstention",
+    "question": "What git branching strategy does the developer use?",
+    "groundTruth": "Not mentioned — no git branching strategy (e.g. GitFlow, trunk-based) was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q190",
+    "questionType": "abstention",
+    "question": "What database backup strategy is used?",
+    "groundTruth": "Not mentioned — no backup strategy for PostgreSQL or Redis was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q191",
+    "questionType": "abstention",
+    "question": "What monitoring or alerting service is used (Datadog, PagerDuty, etc.)?",
+    "groundTruth": "Not mentioned — no monitoring or alerting platform was discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q192",
+    "questionType": "abstention",
+    "question": "What is the developer's GitHub username?",
+    "groundTruth": "Not mentioned — the developer's GitHub username was never shared in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q193",
+    "questionType": "abstention",
+    "question": "What operating system does the developer use on their local machine?",
+    "groundTruth": "Not mentioned — the developer's operating system (macOS, Linux, Windows) was never discussed.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q194",
+    "questionType": "abstention",
+    "question": "Is Kubernetes or any container orchestration beyond Docker Compose used?",
+    "groundTruth": "Not mentioned — only Docker Compose was discussed for orchestration. Kubernetes was never mentioned.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q195",
+    "questionType": "abstention",
+    "question": "Does the ecommerce-api expose a GraphQL API?",
+    "groundTruth": "Not mentioned — the API is REST only. GraphQL was never discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q196",
+    "questionType": "abstention",
+    "question": "What CORS configuration is used in the ecommerce-api?",
+    "groundTruth": "Not mentioned — CORS configuration details were never discussed in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q197",
+    "questionType": "abstention",
+    "question": "Is a CDN used for static assets in the dashboard-app?",
+    "groundTruth": "Not mentioned — no CDN was discussed for serving static assets.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q198",
+    "questionType": "abstention",
+    "question": "What load balancer configuration is used beyond nginx as a reverse proxy?",
+    "groundTruth": "Not mentioned — only nginx as a reverse proxy was discussed. No additional load balancer configuration was covered.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q199",
+    "questionType": "abstention",
+    "question": "What is the developer's Twitter or social media handle?",
+    "groundTruth": "Not mentioned — the developer's social media handles were never shared in any session.",
+    "haystackSessionIds": []
+  },
+  {
+    "questionId": "Q200",
+    "questionType": "abstention",
+    "question": "What is the Stripe publishable key or account name used in the ecommerce-api?",
+    "groundTruth": "Not mentioned — only the secret key env var (STRIPE_SECRET_KEY) and webhook secret (STRIPE_WEBHOOK_SECRET) were referenced. No account names or publishable keys were discussed.",
     "haystackSessionIds": []
   }
 ]

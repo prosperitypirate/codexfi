@@ -88,6 +88,15 @@ export const HTML = /* html */ `<!DOCTYPE html>
 
   .waiting-msg { color: var(--muted); font-size: 12px; padding: 40px 8px; text-align: center; }
 
+  /* ── Retrieval metrics panel ── */
+  .retr-row      { margin-bottom: 7px; }
+  .retr-header   { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 3px; }
+  .retr-name     { color: var(--muted); }
+  .retr-val      { color: var(--text); }
+  .retr-bar-bg   { height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .retr-bar      { height: 4px; border-radius: 2px; transition: width 0.4s ease; background: var(--purple); }
+  .retr-scalar   { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); padding: 2px 0; }
+
   /* Scrollbar */
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -130,6 +139,10 @@ export const HTML = /* html */ `<!DOCTYPE html>
         <div class="score-sub" id="score-sub">awaiting results</div>
       </div>
       <div id="cats"></div>
+      <div id="retrieval-panel" style="display:none">
+        <div class="sidebar-title">Retrieval Quality (K=8)</div>
+        <div id="retr-metrics"></div>
+      </div>
       <div>
         <div class="sidebar-title">Connection</div>
         <div class="conn-status" id="conn-status"><div class="conn-dot connecting" id="conn-dot"></div><span id="conn-text">Connecting…</span></div>
@@ -155,10 +168,42 @@ const connTxt = document.getElementById("conn-text");
 const badgeLive = document.getElementById("badge-live");
 const badgeRun  = document.getElementById("badge-run");
 const headerMeta= document.getElementById("header-meta");
+const retrievalPanel = document.getElementById("retrieval-panel");
+const retrMetrics    = document.getElementById("retr-metrics");
 
 // Live score state
 const catState = {};  // { type: { correct, total } }
 let totalCorrect = 0, totalDone = 0;
+
+// Live retrieval state
+let retrHitSum = 0, retrPrecSum = 0, retrMrrSum = 0, retrNdcgSum = 0, retrCount = 0;
+
+function updateRetrieval(rm) {
+  if (!rm) return;
+  retrHitSum  += rm.hitAtK;
+  retrPrecSum += rm.precisionAtK;
+  retrMrrSum  += rm.mrr;
+  retrNdcgSum += rm.ndcg;
+  retrCount++;
+  if (retrievalPanel) retrievalPanel.style.display = "";
+  if (!retrMetrics) return;
+  const avgHit  = retrHitSum  / retrCount;
+  const avgPrec = retrPrecSum / retrCount;
+  const avgMrr  = retrMrrSum  / retrCount;
+  const avgNdcg = retrNdcgSum / retrCount;
+  retrMetrics.innerHTML = \`
+    <div class="retr-row">
+      <div class="retr-header"><span class="retr-name">Hit@\${rm.k || 8}</span><span class="retr-val">\${Math.round(avgHit*100)}%</span></div>
+      <div class="retr-bar-bg"><div class="retr-bar" style="width:\${Math.round(avgHit*100)}%"></div></div>
+    </div>
+    <div class="retr-row">
+      <div class="retr-header"><span class="retr-name">Precision@\${rm.k || 8}</span><span class="retr-val">\${Math.round(avgPrec*100)}%</span></div>
+      <div class="retr-bar-bg"><div class="retr-bar" style="width:\${Math.round(avgPrec*100)}%"></div></div>
+    </div>
+    <div class="retr-scalar"><span>MRR</span><span style="color:var(--text)">\${avgMrr.toFixed(3)}</span></div>
+    <div class="retr-scalar"><span>NDCG</span><span style="color:var(--text)">\${avgNdcg.toFixed(3)}</span></div>
+  \`;
+}
 
 function setPhase(phase) {
   document.querySelectorAll(".phase-step").forEach(el => {
@@ -318,12 +363,18 @@ function handle(ev) {
       }
       totalDone++;
       updateScore();
+      updateRetrieval(ev.retrievalMetrics);
       const icon = ev.correct ? "✓" : "✗";
       const cls  = ev.correct ? "correct" : "incorrect";
+      const k = ev.retrievalMetrics?.k || 8;
+      const precN = ev.retrievalMetrics ? Math.round(ev.retrievalMetrics.precisionAtK * k) : null;
+      const mrrStr = ev.retrievalMetrics ? ev.retrievalMetrics.mrr.toFixed(2) : null;
+      const retrSub = precN !== null ? \`P=\${precN}/\${k} · MRR=\${mrrStr}\` : "";
+      const subText = ev.explanation + (retrSub ? \`<br><span style="color:var(--purple);font-size:10px">\${retrSub}</span>\` : "");
       appendRow(
         \`<span class="\${cls}">\${icon}</span>\`,
         \`<span class="\${cls}">\${ev.questionId}</span> <span style='color:var(--muted)'>[</span><span style='color:var(--muted)'>\${TYPE_LABELS[ev.questionType]||ev.questionType}</span><span style='color:var(--muted)'>]</span>\`,
-        ev.explanation,
+        subText,
         ev.runningCorrect + "/" + ev.done
       );
       break;

@@ -139,6 +139,22 @@ async function cmdRun(args: string[]): Promise<void> {
       if (e.score === 1) byType[e.questionType].correct++;
     }
     emit({ type: "run_complete", accuracy: correct / total, correct, total, byType });
+
+    // Print retrieval summary to terminal if metrics are available
+    const evalsWithR = cp.evaluations.filter(e => e.retrievalMetrics != null);
+    if (evalsWithR.length > 0) {
+      const n = evalsWithR.length;
+      const avg = (key: keyof NonNullable<typeof evalsWithR[0]["retrievalMetrics"]>) =>
+        evalsWithR.reduce((s, e) => s + (e.retrievalMetrics![key] as number), 0) / n;
+      const k = evalsWithR[0].retrievalMetrics!.k;
+      console.log(`  Retrieval (K=${k}, n=${n}):`);
+      console.log(`    Hit@${k}:       ${(avg("hitAtK") * 100).toFixed(1)}%`);
+      console.log(`    Precision@${k}: ${(avg("precisionAtK") * 100).toFixed(1)}%`);
+      console.log(`    F1@${k}:        ${(avg("f1AtK") * 100).toFixed(1)}%`);
+      console.log(`    MRR:           ${avg("mrr").toFixed(3)}`);
+      console.log(`    NDCG:          ${avg("ndcg").toFixed(3)}`);
+      console.log();
+    }
   }
 
   // ── Cleanup ───────────────────────────────────────────────────────────────────
