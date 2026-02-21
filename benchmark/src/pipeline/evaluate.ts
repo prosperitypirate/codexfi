@@ -3,6 +3,7 @@ import { getJudgePrompt, formatJudgePrompt } from "../prompts/index.js";
 import { judge } from "../judges/llm.js";
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
+import { emit } from "../live/emitter.js";
 import type { Config } from "../utils/config.js";
 
 export async function runEvaluate(
@@ -38,6 +39,7 @@ export async function runEvaluate(
 
     const mark = result.score === 1 ? "✓" : "✗";
     log.dim(`  ${mark} ${q.questionId} [${q.questionType}]: ${result.explanation.slice(0, 70)}`);
+    emit({ type: "evaluate_question", questionId: q.questionId, questionType: q.questionType, correct: result.score === 1, explanation: result.explanation, done: evaluations.length + 1, total: questions.length, runningCorrect: correct });
 
     evaluations.push({
       questionId:       q.questionId,

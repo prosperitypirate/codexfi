@@ -77,10 +77,12 @@ export interface SearchResult {
   metadata?: Record<string, unknown>;
 }
 
+export type IngestProgressCallback = (sessionId: string, added: number, updated: number, done: number) => void;
+
 export interface Provider {
   name: string;
   initialize(): Promise<void>;
-  ingest(sessions: UnifiedSession[], runTag: string): Promise<IngestResult>;
+  ingest(sessions: UnifiedSession[], runTag: string, onProgress?: IngestProgressCallback): Promise<IngestResult>;
   search(query: string, runTag: string, limit?: number): Promise<SearchResult[]>;
   clear(runTag: string): Promise<void>;
 }

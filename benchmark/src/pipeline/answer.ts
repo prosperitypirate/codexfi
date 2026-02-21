@@ -3,6 +3,7 @@ import { buildAnswerPrompt } from "../prompts/index.js";
 import { answer as generateAnswer } from "../judges/llm.js";
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
+import { emit } from "../live/emitter.js";
 import type { Config } from "../utils/config.js";
 
 export async function runAnswer(
@@ -35,6 +36,7 @@ export async function runAnswer(
     });
 
     log.dim(`  ${q.questionId}: ${ans.slice(0, 80)}${ans.length > 80 ? "…" : ""}`);
+    emit({ type: "answer_question", questionId: q.questionId, preview: ans.slice(0, 100), done: results.length, total: questions.length });
   }
 
   cp.answerResults = results;

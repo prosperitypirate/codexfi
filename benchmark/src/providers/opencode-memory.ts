@@ -12,9 +12,11 @@ import type {
   Provider,
   UnifiedSession,
   IngestResult,
+  IngestProgressCallback,
   SearchResult,
 } from "../types.js";
 import { log } from "../utils/logger.js";
+import { emit } from "../live/emitter.js";
 
 export class OpencodeMemoryProvider implements Provider {
   readonly name = "opencode-memory";
@@ -39,10 +41,11 @@ export class OpencodeMemoryProvider implements Provider {
    * Each session is sent as a list of messages — the backend LLM extractor
    * extracts typed memories automatically (exactly how the plugin works in prod).
    */
-  async ingest(sessions: UnifiedSession[], runTag: string): Promise<IngestResult> {
+  async ingest(sessions: UnifiedSession[], runTag: string, onProgress?: IngestProgressCallback): Promise<IngestResult> {
     let memoriesAdded = 0;
     let memoriesUpdated = 0;
     const sessionIds: string[] = [];
+    let done = 0;
 
     for (const session of sessions) {
       log.dim(`  Ingesting ${session.sessionId} (${session.messages.length} messages)`);
@@ -65,11 +68,14 @@ export class OpencodeMemoryProvider implements Provider {
       }
 
       const data = (await res.json()) as { results: Array<{ event: string }> };
+      let sessionAdded = 0, sessionUpdated = 0;
       for (const r of data.results) {
-        if (r.event === "ADD") memoriesAdded++;
-        else if (r.event === "UPDATE") memoriesUpdated++;
+        if (r.event === "ADD") { memoriesAdded++; sessionAdded++; }
+        else if (r.event === "UPDATE") { memoriesUpdated++; sessionUpdated++; }
       }
       sessionIds.push(session.sessionId);
+      done++;
+      onProgress?.(session.sessionId, sessionAdded, sessionUpdated, done);
 
       // Small delay to avoid hammering the LLM extractor
       await sleep(500);
@@ -132,7 +138,14 @@ export class OpencodeMemoryProvider implements Provider {
     let deleted = 0;
     for (const id of ids) {
       const del = await fetch(`${this.baseUrl}/memories/${id}`, { method: "DELETE" });
-      if (del.ok) deleted++;
+      if (del.ok) {
+        deleted++;
+        // Emit at 25%, 50%, 75%, and 100% to avoid flooding the feed
+        const pct = deleted / ids.length;
+        if (pct === 1 || deleted === 1 || Math.floor((deleted - 1) / ids.length * 4) < Math.floor(pct * 4)) {
+          emit({ type: "cleanup_progress", deleted, total: ids.length });
+        }
+      }
     }
     log.success(`Cleaned up ${deleted}/${ids.length} memories for run tag ${runTag}`);
   }

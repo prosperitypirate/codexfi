@@ -1,6 +1,7 @@
 import type { Provider, UnifiedQuestion, SearchPhaseResult, Checkpoint } from "../types.js";
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
+import { emit } from "../live/emitter.js";
 
 export async function runSearch(
   provider: Provider,
@@ -19,10 +20,11 @@ export async function runSearch(
 
     results.push({ questionId: q.questionId, results: searchResults, durationMs });
 
-    const found = searchResults.length;
-    const top = searchResults[0];
-    const topScore = top ? `${(top.score * 100).toFixed(0)}%` : "—";
-    log.dim(`  ${q.questionId} [${q.questionType}]: ${found} results, top score ${topScore}`);
+    const found    = searchResults.length;
+    const top      = searchResults[0];
+    const topScore = top ? top.score : 0;
+    log.dim(`  ${q.questionId} [${q.questionType}]: ${found} results, top score ${top ? `${(topScore * 100).toFixed(0)}%` : "—"}`);
+    emit({ type: "search_question", questionId: q.questionId, questionType: q.questionType, resultCount: found, topScore, done: results.length, total: questions.length });
   }
 
   cp.searchResults = results;

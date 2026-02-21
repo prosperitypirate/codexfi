@@ -1,6 +1,7 @@
 import type { Provider, UnifiedSession, Checkpoint } from "../types.js";
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
+import { emit } from "../live/emitter.js";
 
 export async function runIngest(
   provider: Provider,
@@ -11,7 +12,9 @@ export async function runIngest(
   log.info(`Ingesting ${sessions.length} sessions into ${provider.name}...`);
   log.info(`Run tag: ${cp.runTag}`);
 
-  const result = await provider.ingest(sessions, cp.runTag);
+  const result = await provider.ingest(sessions, cp.runTag, (sessionId, added, updated, done) => {
+    emit({ type: "ingest_session", sessionId, added, updated, done, total: sessions.length });
+  });
 
   cp.ingestResult = result;
   markPhaseComplete(cp, "ingest");
