@@ -28,7 +28,11 @@ Rules:
 - Prefer specific over vague
 - Omit: greetings, filler, one-word confirmations, anything transient or obvious
 - Assign each memory one of these types:
-    "project-brief"   — Core project definition, goals, scope, purpose
+    "project-brief"   — Use ONLY for a 1-2 sentence statement of what this project IS and what
+                        problem it solves. This is the single top-level label for the entire
+                        project — the first thing a new agent reads. Do NOT use for tech stack,
+                        architecture, or implementation details; use "tech-context" and
+                        "architecture" for those.
     "architecture"    — System design, patterns, component relationships, critical paths
     "tech-context"    — Tech stack, setup, constraints, dependencies, tool preferences
     "product-context" — Why the project exists, problems solved, UX goals
@@ -59,8 +63,11 @@ INIT_EXTRACTION_SYSTEM = """\
 You are a memory extraction assistant for an AI coding agent (OpenCode).
 Your job is to extract structured project knowledge from raw project files.
 
-Extract facts for these categories (only where the files give clear evidence):
-  "project-brief"   — Project name, what it does, its purpose and core goals
+Extract facts for these categories:
+  "project-brief"   — MANDATORY: always extract exactly ONE project-brief — a 1-2 sentence
+                      summary of what this project is called and what it does. Even if the
+                      files are entirely technical, derive a plain-language description. This
+                      is the single most important memory; do NOT skip it.
   "architecture"    — How it's structured, key patterns, component relationships
   "tech-context"    — Languages, frameworks, build/run/test commands, key dependencies
   "product-context" — Why it exists, what problem it solves, who it's for
@@ -68,7 +75,7 @@ Extract facts for these categories (only where the files give clear evidence):
 Rules:
 - Each memory = one self-contained, searchable fact (1-3 sentences max)
 - Be specific: include exact commands, file names, version constraints where present
-- Skip a category entirely if the files don't provide clear information for it
+- Always include a "project-brief" entry; skip other categories only if the files give no evidence
 - Do NOT invent or infer beyond what the files explicitly state
 - Return ONLY a valid JSON array of objects:
   [{"memory": "...", "type": "..."}]

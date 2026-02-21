@@ -102,6 +102,44 @@ async function triggerSilentAutoInit(
   log("auto-init: extraction done", { success: result.success, count: result.count });
 }
 
+// ── Project-brief seeding fallback ────────────────────────────────────────────
+// If auto-init ran but the extraction model still produced zero project-brief
+// memories (a known extraction-prompt failure mode), read the README's opening
+// paragraph and POST it as a very explicitly labelled brief so that the
+// (now sharpened) extraction prompt is almost certain to emit type=project-brief.
+// Fire-and-forget — does not block session start.  The backend dedup logic
+// (STRUCTURAL_DEDUP_DISTANCE) ensures at most one project-brief exists.
+async function seedProjectBrief(
+  directory: string,
+  tags: { project: string }
+): Promise<void> {
+  // Only seed from README (most reliable source for a plain-language description)
+  const readmePath = join(directory, "README.md");
+  const rstPath    = join(directory, "README.rst");
+  const chosen     = existsSync(readmePath) ? readmePath : existsSync(rstPath) ? rstPath : null;
+  if (!chosen) return;
+
+  const raw = readFileSync(chosen, "utf-8");
+
+  // Find the first substantive paragraph: skip blank lines, headings (# …),
+  // badge lines ([![…), HTML tags, and horizontal rules.
+  const SKIP = /^(#|\[!\[|<|---|===|\s*$)/;
+  const firstPara = raw
+    .split("\n")
+    .map((l) => l.trim())
+    .find((l) => l.length > 20 && !SKIP.test(l));
+
+  if (!firstPara) return;
+
+  const projectName = directory.split("/").pop() ?? "this project";
+  // Prefix makes the intent crystal-clear to the extraction model
+  const content = `Project Brief for "${projectName}": ${firstPara}`;
+
+  log("seed-brief: seeding project-brief from README", { contentLength: content.length });
+  const result = await memoryClient.addMemory(content, tags.project, { type: "project-brief" });
+  log("seed-brief: done", { success: result.success, id: result.id });
+}
+
 const MEMORY_KEYWORD_PATTERN = new RegExp(`\\b(${CONFIG.keywordPatterns.join("|")})\\b`, "i");
 
 const MEMORY_NUDGE_MESSAGE = `[MEMORY TRIGGER DETECTED]
@@ -273,6 +311,17 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
               metadata: m.metadata as Record<string, unknown> | undefined,
               createdAt: m.createdAt,
             });
+          }
+
+          // ── Project-brief fallback seeding ────────────────────────────────
+          // If there are existing memories but still no project-brief (e.g. auto-init
+          // ran in a previous session but extraction never emitted type=project-brief),
+          // seed one from the README in the background.  The backend dedup logic
+          // prevents duplicate briefs from accumulating.
+          if (allProjectMemories.length > 0 && !byType["project-brief"]) {
+            seedProjectBrief(directory, tags).catch(
+              (err) => log("seed-brief: failed", { error: String(err) })
+            );
           }
 
           // ── "Relevant to Current Task" — genuine semantic hits only ──
