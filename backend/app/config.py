@@ -58,8 +58,13 @@ STRUCTURAL_TYPES: frozenset[str] = frozenset({
 # Broader than dedup (0.12) to catch topic-related contradictions like ORM migrations.
 CONTRADICTION_CANDIDATE_DISTANCE: float = 0.5
 
+# Wider distance for structural types (tech-context, architecture, project-brief, etc.)
+# These types evolve across sessions (e.g. ORM migration, new infra component) and need
+# a wider net to catch supersession relationships even when wording differs significantly.
+STRUCTURAL_CONTRADICTION_DISTANCE: float = 0.65
+
 # Max candidate memories to send to the contradiction-detection LLM call per new memory.
-CONTRADICTION_CANDIDATE_LIMIT: int = 10
+CONTRADICTION_CANDIDATE_LIMIT: int = 15
 
 # Memory types that skip contradiction detection (they have dedicated lifecycle rules).
 VERSIONING_SKIP_TYPES: frozenset[str] = frozenset({"session-summary", "progress"})

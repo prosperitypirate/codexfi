@@ -99,7 +99,7 @@ The goal is not a better memory bank.
 | **Code-optimised embeddings** | ✅ | ❌ | ❌ | ❌ |
 | **Fully automatic saves** | ✅ Every turn | ❌ Manual | ❌ Keyword-only | ❌ Keyword-only |
 | **Semantic retrieval** | ✅ | ❌ Full file dump | ✅ | ✅ |
-| **Session token overhead** | ~2K tokens | Up to 50K tokens | Varies | Varies |
+| **Session token overhead** | ~3K tokens | Up to 50K tokens | Varies | Varies |
 
 ---
 
@@ -218,8 +218,8 @@ Open any project in OpenCode. On your first message, you'll see a `[MEMORY]` blo
 
 On the first user message of every session, the plugin:
 
-1. Runs parallel semantic searches across both project and user scopes
-2. Filters hits to those scoring ≥ 55% similarity, truncated to 400 chars each
+1. Runs parallel semantic searches across both project and user scopes (top 10 each)
+2. Filters hits to those scoring ≥ 45% similarity, truncated to 400 chars each
 3. Formats everything into a `[MEMORY]` block prepended to your message
 
 The agent sees this before generating any response:
@@ -229,20 +229,32 @@ The agent sees this before generating any response:
 
 ## Project Brief
 - opencode-memory is a self-hosted persistent memory system for OpenCode AI agents.
-
-## Architecture
-- Backend refactored from monolithic main.py into app/ package with 13 focused modules
+- Goal: automatic, silent memory across sessions — no user commands required.
 
 ## Tech Context
 - Plugin lives at plugin/ subdirectory; opencode.json must point there not repo root
-- Docker compose uses env_file to load .env — do not export keys in shell
+- Docker Compose uses env_file to load .env — do not export keys in shell
+- Backend uses voyage-code-3 embeddings; extraction via grok-4-1-fast-non-reasoning
+
+## Architecture
+- Backend refactored from monolithic main.py into app/ package with focused modules
+- Plugin → HTTP:8020 → Memory Server → LanceDB; Dashboard → HTTP:8020 → Memory Server
 
 ## Progress & Status
 - Memory server running at localhost:8020, dashboard at localhost:3030
+- Benchmark at 91.0% (182/200); cross-synthesis is primary remaining gap at 64%
+
+## Last Session
+- Raised retrieval K from 8 to 20; cross-synthesis improved 52% → 64% (+12pp)
+- Updated both READMEs to reflect k20-synthesis-fix results; changes not yet committed
+
+## User Preferences
+- Use bun not npm for all plugin builds and installs
+- Prefers concise responses; no emojis unless explicitly requested
 
 ## Relevant to Current Task
-- [94%] Use bun not npm for all plugin builds
-- [88%] LanceDB embedded in Python process — no separate database container needed
+- [94%, 2026-02-21] Backend extraction model is grok-4-1-fast-non-reasoning — fast, structured JSON, fractions of a cent per session
+- [88%, 2026-02-21] Contradiction detection marks superseded memories with superseded_by field; excluded from retrieval
 ```
 
 ### After every turn — auto-save
@@ -310,30 +322,32 @@ Pricing: **$0.18/M tokens** with a generous free tier.
 
 ## Benchmark
 
-Memory quality is measured by [DevMemBench](./benchmark/README.md) — a coding-assistant-specific benchmark built for this project. It ingests 10 synthetic sessions from a realistic FastAPI/PostgreSQL/Redis/Stripe project, then evaluates retrieval and answer quality across 40 questions in 8 categories.
+Memory quality is measured by [DevMemBench](./benchmark/README.md) — a coding-assistant-specific benchmark built for this project. It ingests 25 synthetic sessions from a realistic FastAPI/PostgreSQL/Redis/Stripe + Next.js project, then evaluates retrieval and answer quality across 200 questions in 8 categories using an LLM-as-judge pipeline.
 
-> Model: `claude-sonnet-4-6` (judge + answerer) · 40 questions · 10 sessions
+> Model: `claude-sonnet-4-6` (judge + answerer) · 200 questions · 25 sessions · K=20 retrieval
 
 ```
-tech-stack        ████████████████████ 100%  ✓  stable
-architecture      ████████████████████ 100%  ✓  stable
-preference        ████████████████████ 100%  ✓  stable
-error-solution    ████████████████████ 100%  ✓  stable
-knowledge-update  ████████████████████ 100%  ✓  stable
-abstention        ████████████████░░░░  80%
-session-cont.     ████████████░░░░░░░░  60%
-cross-synthesis   ████████████░░░░░░░░  60%
-─────────────────────────────────────────
-Overall           87.5%  (35/40)
+tech-stack        ████████████████████ 100%  (25/25)  ✓
+preference        ████████████████████ 100%  (25/25)  ✓
+error-solution    ███████████████████░  96%  (24/25)  ✓
+architecture      ██████████████████░░  92%  (23/25)  ✓
+session-cont.     ██████████████████░░  92%  (23/25)  ✓
+knowledge-update  ██████████████████░░  92%  (23/25)  ✓
+abstention        ██████████████████░░  92%  (23/25)  ✓
+cross-synthesis   ████████████░░░░░░░░  64%  (16/25)  ⚠  primary remaining gap
+──────────────────────────────────────────────────────
+Overall           91.0%  (182/200)
 ```
 
 Each technique improvement is tracked against the benchmark:
 
 | Technique | Benchmark impact |
 |---|---|
-| Hybrid search — source chunk storage (#19) | error-solution 0% → 100%, +32.5pp overall |
-| Relational versioning — supersede stale memories (#21) | knowledge-update 40% → 100% |
-| Temporal grounding — recency boost + date in context (#18) | session-continuity 20% → 60% |
+| Hybrid search — source chunk storage | error-solution 0% → 100%, +32.5pp overall |
+| Relational versioning — supersede stale memories | knowledge-update 40% → 100% |
+| Temporal grounding — recency boost + date in context | session-continuity 20% → 60% |
+| Natural question phrasing (v2-natural) | session-continuity 24% → 88% (+64pp) |
+| K=20 retrieval (k20-synthesis-fix) | cross-synthesis 52% → 64% (+12pp), overall 88% → 91% |
 
 See [`benchmark/README.md`](./benchmark/README.md) for full results history and how to run it yourself.
 
@@ -417,14 +431,15 @@ The plugin reads an optional config file at `~/.config/opencode/memory.jsonc`:
   // Memory server URL (default: http://localhost:8020)
   "memoryBaseUrl": "http://localhost:8020",
 
-  // Minimum similarity score for retrieval, 0–1 (default: 0.3)
-  "similarityThreshold": 0.3,
+  // Minimum similarity score for retrieval, 0–1 (default: 0.45)
+  // Higher values cut noise; lower values improve recall on broad queries
+  "similarityThreshold": 0.45,
 
-  // Max user-scoped memories injected per session (default: 5)
-  "maxMemories": 5,
-
-  // Max project memories listed on session start (default: 10)
-  "maxProjectMemories": 10,
+  // Max memories retrieved per scope per session (default: 10)
+  // Applied separately to user-scope and project-scope searches, so
+  // total semantic memories available = up to 2× this value.
+  // Benchmark runs at K=20 (project+user combined) — this matches that.
+  "maxMemories": 10,
 
   // Context fill ratio that triggers compaction hook (default: 0.80)
   "compactionThreshold": 0.80,

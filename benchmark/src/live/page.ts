@@ -140,7 +140,7 @@ export const HTML = /* html */ `<!DOCTYPE html>
       </div>
       <div id="cats"></div>
       <div id="retrieval-panel" style="display:none">
-        <div class="sidebar-title">Retrieval Quality (K=8)</div>
+        <div class="sidebar-title">Retrieval Quality (K=20)</div>
         <div id="retr-metrics"></div>
       </div>
       <div>

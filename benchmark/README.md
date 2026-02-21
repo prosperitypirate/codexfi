@@ -1,16 +1,72 @@
 # DevMemBench
 
+<div align="center">
+
+[![Score: 91%](https://img.shields.io/badge/Score-91%25-22C55E?style=flat)](https://github.com/prosperitypirate/opencode-memory)
+[![Questions: 200](https://img.shields.io/badge/Questions-200-3178C6?style=flat)](https://github.com/prosperitypirate/opencode-memory)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
+[![Claude Sonnet](https://img.shields.io/badge/Claude-Sonnet_4.6-D97706?style=flat)](https://anthropic.com)
+[![LanceDB](https://img.shields.io/badge/LanceDB-Vector_DB-CF3CFF?style=flat)](https://lancedb.com/)
+[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
+[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+
+</div>
+
 A coding-assistant memory benchmark for [opencode-memory](../README.md). Evaluates recall quality across 8 developer-specific categories using a 5-phase LLM-as-judge pipeline with retrieval quality metrics.
 
 Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around **coding assistant interactions**: architecture decisions, error fixes, tech stack, session continuity across days, and knowledge updates as a project evolves.
+
+![DevMemBench live dashboard — k20-synthesis-fix run, 91.0%](../.github/assets/benchmark-dashboard.png)
 
 ---
 
 ## Results
 
+### k20-synthesis-fix — 200 questions · 25 sessions · run `k20-synthesis-fix` ← current
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · K=20 retrieval
+
+```
+tech-stack        ████████████████████ 100%  (25/25)  ✓  perfect
+preference        ████████████████████ 100%  (25/25)  ✓  perfect
+error-solution    ███████████████████░  96%  (24/25)  ✓
+architecture      ██████████████████░░  92%  (23/25)  ✓
+session-cont.     ██████████████████░░  92%  (23/25)  ✓
+knowledge-update  ██████████████████░░  92%  (23/25)  ✓
+abstention        ██████████████████░░  92%  (23/25)  ✓
+cross-synthesis   ████████████░░░░░░░░  64%  (16/25)  ⚠  was 52% (+12pp)
+─────────────────────────────────────────────────────────────
+Overall           91.0%  (182/200)                    was 88.0% (+3pp)
+```
+
+#### Retrieval Quality (K=20)
+
+```
+Hit@20       ████████████████░░░░  84.0%
+Precision@20 ████░░░░░░░░░░░░░░░░  19.1%
+F1@20        █████░░░░░░░░░░░░░░░  29.6%
+MRR                               0.653
+NDCG                              0.693
+```
+
+> Precision@K drops as K rises — expected. More slots means more lower-scoring results get included. Hit@K is the meaningful signal: it tells you whether the right memory is *anywhere* in the retrieved set. Precision@K just measures how noisy the set is.
+
+#### Latency
+
+```
+Phase     min     mean   median    p95      p99
+search    132ms   169ms   158ms   249ms    503ms
+answer    724ms  4315ms  3451ms  9215ms  11059ms
+```
+
+**Cost of K=20 vs K=8:** Search latency is identical (~158ms median). Answer latency increases by ~260ms median because the LLM processes more context. The tradeoff is +12pp cross-synthesis at the cost of ~260ms per query — worth it.
+
+---
+
 ### v2-natural — 200 questions · 25 sessions · run `v2-natural`
 
-> Model: `claude-sonnet-4-6` (judge + answerer) · natural developer question phrasing
+> Model: `claude-sonnet-4-6` (judge + answerer) · natural developer question phrasing · K=8
 
 ```
 tech-stack        ████████████████████ 100%  (25/25)  ✓  perfect
@@ -47,19 +103,22 @@ answer    606ms  3848ms  3189ms  8076ms  10229ms
 
 ### Diagnosis & Findings
 
+#### What K=20 fixed (+12pp cross-synthesis)
+
+Cross-synthesis questions ask the model to enumerate facts spanning 4–10 sessions: "list all env vars", "what bugs were fixed across both projects", "describe all developer preferences". With K=8, retrieval covered a partial subset and the model returned incomplete answers without knowing it was missing anything.
+
+Raising K to 20 gives the retrieval enough slots to cover the full span of relevant sessions. Cross-synthesis went from **52% → 64%** — matching the issue #31 estimate of +10–15pp. The 9 remaining failures are likely the tail of very broad queries that still need K>20, or the 2 stale-memory-bleed failures and 2 abstention-boundary failures identified separately.
+
 #### What `v2-natural` confirmed
 
-The 24% session-continuity score in `v2-baseline` was entirely a **question-phrasing artifact**, not a memory system defect. Questions phrased as session metadata queries ("What was session S11 focused on?") had Hit@8 = 36% because the vector index cannot associate a session label with memories stored by topic. After rewriting all 21 affected questions to natural developer phrasing ("Can you remind me how the product catalog endpoints are structured?"), session-continuity went from **24% → 88%** and Hit@8 went from **36% → 88%** with zero backend changes.
+The 24% session-continuity score in `v2-baseline` was entirely a **question-phrasing artifact**, not a memory system defect. Questions phrased as session metadata queries ("What was session S11 focused on?") had Hit@8 = 36% because the vector index cannot associate a session label with memories stored by topic. After rewriting all 21 affected questions to natural developer phrasing ("Can you remind me how the product catalog endpoints are structured?"), session-continuity went from **24% → 88%** with zero backend changes.
 
-This validates the benchmark quality rule: measure real memory quality, not retrieval of session metadata that no real developer ever stores or queries.
+#### Remaining gap: cross-synthesis at 64%
 
-#### Remaining gap: cross-synthesis at 52%
-
-Retrieval is working (Hit@8 ~88% for synthesis questions) but answers are incomplete — the model receives relevant memories but fails to enumerate all required facts across multiple sessions. This is a **reasoning/synthesis problem**, not retrieval. Likely causes: context window pressure with 8 retrieved chunks, and synthesis questions requiring information that spans 4–6 sessions.
-
-#### knowledge-update recovered to 92%
-
-The `v2-baseline` score of 52% was partly caused by knowledge-update questions being contaminated by session-label phrasing in the surrounding question set, affecting retrieval ranking across the board. With natural phrasing throughout, knowledge-update improved to 92%.
+9 synthesis failures remain. Likely split:
+- ~5 questions requiring K>20 (very broad enumeration spanning all 25 sessions)
+- ~2 stale-memory bleed (superseded ORM/migration memories surfacing in broad queries)
+- ~2 abstention boundary (model answers adjacent question instead of abstaining)
 
 ---
 
@@ -88,53 +147,60 @@ bun run bench run -r config-b
 
 ---
 
-### v2-natural vs v2-baseline vs v1 Comparison
+### Run Comparison
 
-| Factor | v1 (40q) | v2-baseline | v2-natural |
-|---|---|---|---|
-| Questions | 40 | 200 | 200 |
-| Sessions | 10 | 25 | 25 |
-| Retrieval metrics | none | Hit@8, Prec@8, MRR, NDCG | same |
-| Session-continuity | 60% (3/5) | 24% (6/25) | **88% (22/25)** |
-| Cross-synthesis | 60% (3/5) | 44% (11/25) | 52% (13/25) |
-| **Overall** | **87.5%** | **74.0%** | **88.0%** |
+| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix |
+|---|---|---|---|---|
+| Questions | 40 | 200 | 200 | 200 |
+| Sessions | 10 | 25 | 25 | 25 |
+| Retrieval K | 8 | 8 | 8 | **20** |
+| Retrieval metrics | none | Hit@8, Prec@8, MRR, NDCG | same | same (K=20) |
+| Session-continuity | 60% (3/5) | 24% (6/25) | 88% (22/25) | **92% (23/25)** |
+| Cross-synthesis | 60% (3/5) | 44% (11/25) | 52% (13/25) | **64% (16/25)** |
+| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** |
 
-The `v2-baseline` session-continuity collapse (24%) was caused by session-label questions ("What was session S11 focused on?") that no real developer types. Rewriting 21 questions to natural developer phrasing — without any backend changes — restored session-continuity to 88% and lifted overall score to 88.0%, surpassing v1 on a 5× harder dataset.
+The cross-synthesis improvement from K=8 to K=20 confirms the root cause: these questions require facts from 5–10 different sessions, and K=8 simply didn't retrieve enough of them. Doubling K to 20 gave the LLM access to the missing facts and lifted cross-synthesis by +12pp.
 
 ---
 
-### Improvement Roadmap (v2-natural)
+### Improvement Roadmap (post k20-synthesis-fix)
 
-Sequenced by impact based on the v2-natural retrieval diagnosis.
+Sequenced by impact. Cross-synthesis is still the primary remaining gap at 64%.
 
-#### Priority 1 — Cross-synthesis answer completeness (estimated +15–20pp)
+#### Priority 1 — Cross-synthesis tail (estimated +8–12pp)
 
-**Problem:** Hit@8 is ~88% for synthesis questions but accuracy is only 52%. Retrieval is working — the model receives relevant memories but fails to enumerate all required facts across 4–6 sessions. This is a reasoning/context problem, not retrieval.
-
-**Fix options:**
-- Increase retrieved context from K=8 to K=12 or K=16 for synthesis question types
-- Reranking pass after semantic search: score top-16, return top-8 — more signal density per context slot
-- Structured synthesis prompt: ask model to enumerate all facts per retrieved memory before composing answer
-
-#### Priority 2 — Abstention boundary tuning (estimated +5pp)
-
-**Problem:** 2 abstention failures (Q194, Q195) — system provided details about Docker/REST when the question asked about Kubernetes/GraphQL. Correct memories were retrieved but the model inferred an incorrect answer from adjacent context.
+**Problem:** 9 synthesis failures remain at K=20. Very broad enumeration queries ("list every env var across all sessions") may need K=30+ to span all relevant sessions. The model still returns incomplete answers when facts live in sessions ranked 21+.
 
 **Fix options:**
-- Tighten the "I don't know" instruction: distinguish "info not stored" from "adjacent info retrieved"
-- Confidence threshold: if top retrieval score < X%, default to abstention
+- Query-type routing: detect enumeration keywords ("list all", "every", "complete") and use K=30 only for those queries
+- Reranking: retrieve K=40, rerank by relevance, inject top 20 — better signal density
+- Structured synthesis prompt: ask model to explicitly enumerate all facts per retrieved memory before composing final answer
 
-#### Priority 3 — Q14 project disambiguation (estimated +1pp)
+#### Priority 2 — Stale memory bleed (estimated +2pp)
 
-**Problem:** "Can you remind me the commands to run locally?" retrieved dashboard-app commands instead of ecommerce-api commands. The question lacks project scoping — ambiguous when 2 projects exist.
+**Problem:** 2 synthesis failures traced to superseded ORM memories (SQLAlchemy/Alembic) surfacing in broad queries alongside current Tortoise/Aerich memories. Contradiction detection marked these superseded — but broad queries pull them back in.
 
-**Fix:** Either scope the question ("...for the ecommerce-api?") or implement context-based project inference at query time.
+**Fix options:**
+- Verify superseded_by filter is applied at all K values (confirm no off-by-one in LanceDB query)
+- Add post-retrieval filter step: drop any result with a non-empty superseded_by field client-side
+
+#### Priority 3 — Abstention boundary (estimated +2pp)
+
+**Problem:** 2 abstention failures — system provided details about Docker Compose when asked about Kubernetes, REST API when asked about GraphQL. Correct memories were retrieved but the model inferred an answer from adjacent context.
+
+**Fix options:**
+- Tighten abstention instruction: "If retrieved memories do not directly address the specific technology asked, respond I don't know — do not infer from related context"
+- Hard abstention if top score < 40% similarity
 
 ---
 
 ## Version History
 
-### v2-natural (run `v2-natural`) — **88.0%** ← current
+### k20-synthesis-fix (run `k20-synthesis-fix`) — **91.0%** ← current
+
+200 questions, 25 sessions. Raised retrieval K from 8 to 20. Cross-synthesis 52% → 64% (+12pp). Overall 88.0% → 91.0% (+3pp). Cost: ~8ms added to search latency (negligible), ~260ms added to answer latency.
+
+### v2-natural (run `v2-natural`) — **88.0%**
 
 200 questions, 25 sessions. Rewrote 21 session-continuity questions from session-label metadata phrasing to natural developer queries. Session-continuity 24% → 88% (+64pp) with zero backend changes.
 
@@ -184,16 +250,16 @@ error-solution 0% → 100% after source chunk injection into answer context.
 
 ### Categories
 
-| Category | Tests | v2-natural |
-|---|---|---|
-| `tech-stack` | Language, framework, infra choices | 100% |
-| `architecture` | System design, component relationships, API contracts | 92% |
-| `session-continuity` | Recall of prior decisions and work by natural developer queries | 88% |
-| `preference` | Developer style, tool preferences, conventions | 96% |
-| `error-solution` | Specific bugs fixed with exact details | 96% |
-| `knowledge-update` | Updated facts superseding older ones | 92% |
-| `cross-session-synthesis` | Patterns spanning multiple sessions | 52% |
-| `abstention` | Correctly declining when info was never stored | 88% |
+| Category | Tests | v2-natural (K=8) | k20-synthesis-fix (K=20) |
+|---|---|---|---|
+| `tech-stack` | Language, framework, infra choices | 100% | 100% |
+| `preference` | Developer style, tool preferences, conventions | 96% | **100%** |
+| `error-solution` | Specific bugs fixed with exact details | 96% | 96% |
+| `architecture` | System design, component relationships, API contracts | 92% | 92% |
+| `session-continuity` | Recall of prior decisions and work by natural developer queries | 88% | **92%** |
+| `knowledge-update` | Updated facts superseding older ones | 92% | 92% |
+| `abstention` | Correctly declining when info was never stored | 88% | **92%** |
+| `cross-session-synthesis` | Facts spanning multiple sessions — complete enumeration | 52% | **64%** |
 
 ---
 
@@ -248,7 +314,7 @@ bun run bench list                  # list all past runs with scores
 
 ```
 ingest    → POST sessions to backend (isolated by runTag)
-search    → semantic search per question, saves top-8 results
+search    → semantic search per question, saves top-20 results
 answer    → LLM generates answer from retrieved context only
 evaluate  → LLM-as-judge: correct (1) or incorrect (0) + retrieval relevance scoring
 report    → aggregate by category, latency stats, retrieval metrics, save report.json

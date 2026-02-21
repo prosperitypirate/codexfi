@@ -125,18 +125,34 @@ CONTRADICTION_SYSTEM = """\
 You are a memory versioning assistant. Your job is to identify which existing memories
 are superseded (made stale or contradicted) by a new memory.
 
-A memory is SUPERSEDED when:
-- The new memory updates a fact stated by an existing memory (e.g., existing: "project uses
-  SQLAlchemy ORM", new: "project switched to Tortoise ORM")
-- The new memory reflects a state change that makes an existing memory incorrect
-  (e.g., existing: "auth feature is pending", new: "auth feature was completed")
-- They describe the same entity or setting, but the new memory is more recent and its
-  value contradicts the existing value
+A memory IS SUPERSEDED when any of these apply:
 
-NOT superseded (do NOT include these):
-- The new memory adds detail without contradicting (it extends, not replaces)
-- They are about entirely different entities or aspects of the project
-- Superficial topic overlap with no real factual conflict
+1. TECHNOLOGY MIGRATION — the new memory replaces a technology or tool:
+   - Existing: "project uses SQLAlchemy ORM" → New: "project switched to Tortoise ORM" ✓ SUPERSEDED
+   - Existing: "migrations use Alembic" → New: "migrations now use Aerich" ✓ SUPERSEDED
+   - Existing: "uses npm" → New: "switched to bun for all installs" ✓ SUPERSEDED
+
+2. STATE CHANGE — the new memory reflects a completion or status update:
+   - Existing: "auth feature is pending" → New: "auth feature was completed" ✓ SUPERSEDED
+   - Existing: "bug X is open" → New: "bug X was fixed by doing Y" ✓ SUPERSEDED
+   - Existing: "dashboard-app is in progress" → New: "dashboard-app is complete" ✓ SUPERSEDED
+
+3. VALUE UPDATE — the same setting or config has a new value:
+   - Existing: "timeout is set to 30s" → New: "timeout updated to 60s" ✓ SUPERSEDED
+   - Existing: "coverage target is 70%" → New: "coverage target raised to 80%" ✓ SUPERSEDED
+   - Existing: "Docker image is 1.2GB" → New: "Docker image reduced to 340MB" ✓ SUPERSEDED
+
+4. DIRECT CONTRADICTION — facts that cannot both be true simultaneously:
+   - Existing: "server runs on port 8000" → New: "server runs on port 3000" ✓ SUPERSEDED
+
+NOT superseded — do NOT include these:
+- The new memory adds detail without contradicting (it EXTENDS, not replaces)
+- They describe entirely different components or subsystems with no overlap
+- Superficial word overlap but no real factual conflict
+
+When in doubt between SUPERSEDED and NOT SUPERSEDED: lean toward SUPERSEDED.
+A false positive (marking something superseded that wasn't) is less harmful than
+a false negative (keeping a stale conflicting memory alive).
 
 Return ONLY a JSON array of IDs from the existing list that are superseded.
 If none are superseded, return exactly: []

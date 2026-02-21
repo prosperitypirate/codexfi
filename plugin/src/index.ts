@@ -272,11 +272,11 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 
           const [profileResult, userMemoriesResult, projectMemoriesListResult, projectSearchResult] = await Promise.all([
             memoryClient.getProfile(tags.user, userMessage),
-            memoryClient.searchMemories(userMessage, tags.user),
+            memoryClient.searchMemories(userMessage, tags.user, 0.1),
             memoryClient.listMemories(tags.project, CONFIG.maxStructuredMemories),
-            // Semantic search on project scope so scored results (with chunks) reach
-            // the "Relevant to Current Task" section for high-confidence hits.
-            memoryClient.searchMemories(userMessage, tags.project),
+            // Semantic search on project scope — recency weight gently prefers newer
+            // memories when semantic scores are close, reducing stale-memory bleed.
+            memoryClient.searchMemories(userMessage, tags.project, 0.15),
           ]);
 
           const profile = profileResult.success ? profileResult : null;

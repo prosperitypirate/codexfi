@@ -105,7 +105,7 @@ chat.message fires
                - (user-scoped memories)
 
                ## Relevant to Current Task
-               - [72%] ... (semantic hits ≥ similarity threshold)
+               - [72%, 2026-02-21] ... (semantic hits ≥ similarity threshold)
 ```
 
 **On subsequent messages in the same session:** the hook still fires but skips steps 2–5 (tracked via `injectedSessions` Set). It only checks for memory keywords.
@@ -315,10 +315,11 @@ Memory saved ✓
   "memoryBaseUrl": "http://localhost:8020",
 
   // Similarity threshold for semantic search results shown in [MEMORY] block (0.0–1.0)
-  "similarityThreshold": 0.3,
+  "similarityThreshold": 0.45,
 
-  // Max memories shown in "Relevant to Current Task" section
-  "maxMemories": 5,
+  // Max memories retrieved per scope per session (user + project searched separately)
+  // Total semantic memories available = up to 2× this value
+  "maxMemories": 10,
 
   // Max memories listed per project (for structured sections)
   "maxStructuredMemories": 30,

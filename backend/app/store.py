@@ -18,6 +18,8 @@ from .config import (
     CONTRADICTION_CANDIDATE_LIMIT,
     DEDUP_DISTANCE,
     MAX_SESSION_SUMMARIES,
+    STRUCTURAL_CONTRADICTION_DISTANCE,
+    STRUCTURAL_TYPES,
     VERSIONING_SKIP_TYPES,
     validate_id,
 )
@@ -65,14 +67,23 @@ def find_contradiction_candidates(
     user_id: str,
     vector: list[float],
     new_id: str,
+    memory_type: str = "",
     limit: int = CONTRADICTION_CANDIDATE_LIMIT,
-    max_distance: float = CONTRADICTION_CANDIDATE_DISTANCE,
 ) -> list[dict]:
-    """Return non-superseded memories within *max_distance* that may contradict *new_id*.
+    """Return non-superseded memories within the distance threshold that may contradict *new_id*.
+
+    Structural types (tech-context, architecture, etc.) use a wider distance threshold
+    because they evolve across sessions (ORM migrations, infra changes) and phrasing can
+    differ significantly between the original and updated memory.
 
     Excludes the new memory itself and any already-superseded entries.
     Returns an empty list when the table is empty or the search fails.
     """
+    max_distance = (
+        STRUCTURAL_CONTRADICTION_DISTANCE
+        if memory_type in STRUCTURAL_TYPES
+        else CONTRADICTION_CANDIDATE_DISTANCE
+    )
     try:
         validate_id(user_id, "user_id")
         validate_id(new_id, "new_id")
@@ -126,7 +137,7 @@ def check_and_supersede(
     if memory_type in VERSIONING_SKIP_TYPES:
         return []
 
-    candidates = find_contradiction_candidates(user_id, vector, new_id)
+    candidates = find_contradiction_candidates(user_id, vector, new_id, memory_type)
     if not candidates:
         return []
 

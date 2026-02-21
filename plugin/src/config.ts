@@ -47,8 +47,8 @@ const DEFAULT_KEYWORD_PATTERNS = [
 const DEFAULTS: Required<
   Omit<MemoryConfig, "memoryBaseUrl" | "userContainerTag" | "projectContainerTag">
 > = {
-  similarityThreshold: 0.3,
-  maxMemories: 5,
+  similarityThreshold: 0.45,
+  maxMemories: 10,
   maxProjectMemories: 10,
   maxStructuredMemories: 30,
   maxProfileItems: 5,

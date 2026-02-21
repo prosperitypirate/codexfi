@@ -89,7 +89,7 @@ export class MemoryClient {
   }
 
   // Search memories — containerTag maps to user_id in the server
-  async searchMemories(query: string, containerTag: string) {
+  async searchMemories(query: string, containerTag: string, recencyWeight?: number) {
     log("searchMemories: start", { containerTag });
     try {
       const data = await withTimeout(
@@ -100,6 +100,9 @@ export class MemoryClient {
             user_id: containerTag,
             limit: CONFIG.maxMemories,
             threshold: CONFIG.similarityThreshold,
+            ...(recencyWeight !== undefined && recencyWeight > 0
+              ? { recency_weight: recencyWeight }
+              : {}),
           }),
         }),
         TIMEOUT_MS
