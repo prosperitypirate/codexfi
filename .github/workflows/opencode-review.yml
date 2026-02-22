@@ -14,12 +14,19 @@ on:
 jobs:
   review:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
-    # Skip draft PRs for auto-review; on-demand comments still work
-    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Rules:
+    #   pull_request  → skip drafts, always run otherwise
+    #   issue_comment / pull_request_review_comment → only OWNER, MEMBER, or
+    #   explicit COLLABORATOR may trigger; blocks random internet users
+    if: >-
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
+      (github.event_name != 'pull_request' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
 
     permissions:
-      id-token: write   # Required for OpenCode GitHub App token exchange
+      id-token: write    # Required for OpenCode GitHub App token exchange
+      contents: read     # Checkout
 
     steps:
       - uses: actions/checkout@v6
@@ -31,6 +38,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         with:
           model: anthropic/claude-sonnet-4-6
+          share: false
           prompt: |
             Review this pull request for the opencode-memory project (a self-hosted
             AI coding assistant memory system using LanceDB + Voyage AI embeddings).
