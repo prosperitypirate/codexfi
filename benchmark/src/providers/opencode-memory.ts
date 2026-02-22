@@ -18,6 +18,23 @@ import type {
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
 
+// Memory types included in hybrid enumeration retrieval.
+// When a query is detected as enumeration ("list all X", "every Y"), all memories of
+// these types are fetched and merged with semantic results — ensuring broad "list everything"
+// queries get complete coverage regardless of how many sessions produced the facts.
+//
+// Deliberately excludes session-summary, project-brief, progress, architecture:
+//   session-summary — long multi-project narratives caused Q177 to describe the WRONG
+//     project when session-summaries from project B were injected into a project A query.
+//   The remaining excluded types are low-value for enumeration (single-entry or too broad).
+const ENUMERATION_TYPES = [
+  "tech-context", "preference", "learned-pattern", "error-solution", "project-config",
+];
+
+// Detects enumeration intent: queries that enumerate facts across all sessions.
+// These cannot be answered by top-K semantic similarity alone when the corpus spans 25+ sessions.
+const ENUMERATION_REGEX = /\b(list\s+all|list\s+every|all\s+the\s+\w|every\s+(env|config|setting|preference|error|pattern|tool|developer|tech|project|decision|approach)|across\s+all(\s+sessions)?|complete\s+(list|history|tech\s+stack|stack)|entire\s+(history|list|project\s+history|tech\s+stack)|describe\s+all|enumerate\s+all|full\s+(list|history|tech\s+stack))\b/i;
+
 export class OpencodeMemoryProvider implements Provider {
   readonly name = "opencode-memory";
   private baseUrl: string;
@@ -97,10 +114,25 @@ export class OpencodeMemoryProvider implements Provider {
     };
     const recency_weight = RECENCY_WEIGHTS[questionType ?? ""] ?? 0.0;
 
+    // Hybrid enumeration retrieval: for cross-synthesis questions or queries that
+    // enumerate facts across all sessions, also fetch all memories of relevant types.
+    // This ensures "list all env vars / every preference / complete history" queries
+    // retrieve facts from every session, not just the top-K semantically similar ones.
+    const isEnumeration = ENUMERATION_REGEX.test(query);
+    const isWideSynthesis = questionType === "cross-session-synthesis";
+    const types = (isEnumeration || isWideSynthesis) ? ENUMERATION_TYPES : undefined;
+
     const res = await fetch(`${this.baseUrl}/memories/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ query, user_id: runTag, limit, threshold: 0.2, recency_weight }),
+      body: JSON.stringify({
+        query,
+        user_id: runTag,
+        limit,
+        threshold: 0.2,
+        recency_weight,
+        ...(types ? { types } : {}),
+      }),
     });
 
     if (!res.ok) {
