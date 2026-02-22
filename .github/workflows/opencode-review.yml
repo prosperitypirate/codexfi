@@ -5,24 +5,20 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-  # On-demand: comment "/opencode <task>" or "/oc <task>" on any PR or issue
-  issue_comment:
-    types: [created]
-  pull_request_review_comment:
-    types: [created]
+  # issue_comment / pull_request_review_comment triggers are disabled —
+  # the bot lacks write permission to post issue comments
+  # issue_comment:
+  #   types: [created]
+  # pull_request_review_comment:
+  #   types: [created]
 
 jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Rules:
-    #   pull_request  → skip drafts, always run otherwise
-    #   issue_comment / pull_request_review_comment → only OWNER, MEMBER, or
-    #   explicit COLLABORATOR may trigger; blocks random internet users
-    if: >-
-      (github.event_name == 'pull_request' && github.event.pull_request.draft == false) ||
-      (github.event_name != 'pull_request' && contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association))
+    # Only run on non-draft PRs
+    if: github.event.pull_request.draft == false
 
     permissions:
       id-token: write      # Required for OpenCode GitHub App token exchange

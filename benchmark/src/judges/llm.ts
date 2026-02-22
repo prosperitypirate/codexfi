@@ -60,6 +60,9 @@ export async function answer(prompt: string, config: Config): Promise<string> {
   const { text } = await generateText({
     model,
     prompt,
+    // 400 tokens: tight limit forces concise, comprehensive list-style answers.
+    // Increasing this causes the model to elaborate narrowly on a few items rather
+    // than broadly covering all retrieved facts — hurting enumeration coverage.
     maxOutputTokens: 400,
     temperature: 0,
   });

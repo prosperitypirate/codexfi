@@ -300,8 +300,27 @@ function handle(ev) {
   switch (ev.type) {
 
     case "run_start":
+      // Reset all accumulated state so a new run on the same page tab starts clean.
+      // Without this, catState / retrieval sums carry over from previous runs and
+      // the "By Category" sidebar shows cumulative totals instead of per-run scores.
+      Object.keys(catState).forEach(k => delete catState[k]);
+      totalCorrect = 0;
+      totalDone    = 0;
+      retrHitSum   = 0;
+      retrPrecSum  = 0;
+      retrMrrSum   = 0;
+      retrNdcgSum  = 0;
+      retrCount    = 0;
+      runDone      = false;
+      feed.innerHTML = "";
+      cats.innerHTML = '<div class="sidebar-title">By Category</div>';
+      scoreBig.textContent = "—";
+      scoreSub.textContent = "awaiting results";
+      if (retrievalPanel) retrievalPanel.style.display = "none";
       badgeRun.textContent = ev.runId;
       badgeRun.style.display = "";
+      badgeLive.textContent = "live";
+      badgeLive.className   = "badge blue";
       headerMeta.textContent =
         "provider: " + ev.provider +
         "  ·  judge: " + ev.judgeModel +

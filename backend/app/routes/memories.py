@@ -291,7 +291,11 @@ async def search_memories(req: SearchMemoryRequest):
 
             # Single table scan across all requested types — avoids N scans per query.
             # get_memories_by_types already filters superseded and sorts by created_at.
-            all_type_rows = await _in_thread(get_memories_by_types, req.user_id, req.types)
+            # Pass total_extras_limit so the store slices before returning, avoiding
+            # full-corpus materialisation when the user has many type-matching memories.
+            all_type_rows = await _in_thread(
+                get_memories_by_types, req.user_id, req.types, total_extras_limit
+            )
             for tr in all_type_rows:
                 if tr["id"] in seen_ids:
                     continue

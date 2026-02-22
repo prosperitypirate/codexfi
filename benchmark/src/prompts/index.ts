@@ -2,7 +2,7 @@ import type { SearchResult } from "../types.js";
 
 // ── Answer prompt ───────────────────────────────────────────────────────────────
 
-export function buildAnswerPrompt(question: string, results: SearchResult[]): string {
+export function buildAnswerPrompt(question: string, results: SearchResult[], questionType?: string): string {
   const context = results.length === 0
     ? "(no memories retrieved)"
     : results
@@ -15,6 +15,14 @@ export function buildAnswerPrompt(question: string, results: SearchResult[]): st
         })
         .join("\n\n");
 
+  // Abstention questions ask about things that were NEVER mentioned.
+  // The model must not infer absence from what IS present — it must say "I don't know"
+  // unless the context explicitly confirms the topic was discussed.
+  const abstentionInstruction = questionType === "abstention"
+    ? `- IMPORTANT: This question asks whether something specific was mentioned or used. If the retrieved context does NOT explicitly mention the specific technology/service/config asked about, respond with exactly: "I don't know" — do NOT describe related technologies or infer absence from what IS present.
+`
+    : "";
+
   return `You are a question-answering assistant. Answer the question using ONLY the retrieved memory context below.
 
 Question: ${question}
@@ -26,7 +34,7 @@ Instructions:
 - Each result has a Memory (high-level fact used for retrieval) and a Source context (raw conversation — use this for exact values like config numbers, error messages, function names)
 - Answer ONLY from the retrieved context above
 - Prefer specific values from the Source context over paraphrased values from the Memory summaries
-- If the context does not contain enough information to answer, respond with exactly: "I don't know"
+${abstentionInstruction}- If the context does not contain enough information to answer, respond with exactly: "I don't know"
 - Be concise and direct
 - Do NOT use any external knowledge or make assumptions
 

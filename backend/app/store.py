@@ -157,12 +157,21 @@ def get_memories_by_type(user_id: str, memory_type: str) -> list[dict]:
     return get_memories_by_types(user_id, [memory_type])
 
 
-def get_memories_by_types(user_id: str, memory_types: list[str]) -> list[dict]:
-    """Return all non-superseded memories matching any of *memory_types* for *user_id*.
+def get_memories_by_types(
+    user_id: str,
+    memory_types: list[str],
+    limit: Optional[int] = None,
+) -> list[dict]:
+    """Return non-superseded memories matching any of *memory_types* for *user_id*.
 
     Uses a single table scan regardless of how many types are requested — callers
     should prefer this over calling get_memories_by_type() in a loop.
     Sorted by created_at asc.
+
+    If *limit* is given, at most that many rows are returned — the slice is applied
+    after filtering so the result set is deterministic (oldest-first up to *limit*).
+    This avoids materialising the full corpus when the caller only needs a bounded
+    number of extras (e.g. the hybrid enumeration route).
     """
     try:
         if db.table.count_rows() == 0:
@@ -177,6 +186,8 @@ def get_memories_by_types(user_id: str, memory_types: list[str]) -> list[dict]:
             and not r.get("superseded_by")
         ]
         typed.sort(key=lambda r: r.get("created_at") or "")
+        if limit is not None:
+            typed = typed[:limit]
         return typed
     except Exception as e:
         logger.debug("get_memories_by_types error: %s", e)

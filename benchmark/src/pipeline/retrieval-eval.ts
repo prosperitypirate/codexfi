@@ -162,6 +162,12 @@ export async function calculateRetrievalMetrics(
   const relevantCount = relevanceScores.reduce((s, v) => s + v, 0);
   const hitAtK = relevantCount > 0 ? 1 : 0;
   const precisionAtK = topK.length > 0 ? relevantCount / topK.length : 0;
+  // f1AtK here is a proxy metric: F1(Precision@K, Hit@K).
+  // Hit@K acts as a binary recall signal (1 if ≥1 relevant result retrieved).
+  // True F1@K would require recall = relevantInResults / totalRelevantInCorpus,
+  // but we don't track total relevant docs per question in this benchmark.
+  // The proxy rewards both precision (how many retrieved are relevant) and
+  // coverage (whether anything relevant was retrieved at all).
   const f1AtK =
     precisionAtK + hitAtK > 0
       ? (2 * precisionAtK * hitAtK) / (precisionAtK + hitAtK)

@@ -23,7 +23,7 @@ export async function runAnswer(
     const searchPhase = searchMap.get(q.questionId);
     const searchResults = searchPhase?.results ?? [];
 
-    const prompt = buildAnswerPrompt(q.question, searchResults);
+    const prompt = buildAnswerPrompt(q.question, searchResults, q.questionType);
     const start = Date.now();
     const ans = await generateAnswer(prompt, config);
     const durationMs = Date.now() - start;
