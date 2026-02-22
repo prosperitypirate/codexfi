@@ -20,6 +20,10 @@ import { run as run03 } from "./scenarios/03-transcript-noise.js";
 import { run as run04 } from "./scenarios/04-project-brief-always.js";
 import { run as run05 } from "./scenarios/05-memory-aging.js";
 import { run as run06 } from "./scenarios/06-existing-codebase.js";
+import { run as run07 } from "./scenarios/07-enumeration-retrieval.js";
+import { run as run08 } from "./scenarios/08-cross-synthesis.js";
+import { run as run09 } from "./scenarios/09-max-memories.js";
+import { run as run10 } from "./scenarios/10-knowledge-update.js";
 
 const BOLD  = "\x1b[1m";
 const CYAN  = "\x1b[36m";
@@ -34,6 +38,10 @@ const ALL_SCENARIOS: Array<{ id: string; fn: () => Promise<ScenarioResult> }> = 
   { id: "04", fn: run04 },
   { id: "05", fn: run05 },
   { id: "06", fn: run06 },
+  { id: "07", fn: run07 },
+  { id: "08", fn: run08 },
+  { id: "09", fn: run09 },
+  { id: "10", fn: run10 },
 ];
 
 async function main() {

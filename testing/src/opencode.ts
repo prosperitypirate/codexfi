@@ -75,6 +75,20 @@ export function createTestDir(scenarioName: string): string {
 }
 
 /**
+ * Create N isolated temp directories for a multi-project scenario.
+ * Each directory gets a unique path (and thus a unique project memory namespace).
+ * Used by cross-synthesis tests that need facts from separate projects.
+ */
+export function createTestDirs(scenarioName: string, count: number): string[] {
+  const uid = randomUUID().slice(0, 8);
+  return Array.from({ length: count }, (_, i) => {
+    const dir = `/private/tmp/oc-test-${scenarioName}-${uid}-p${i + 1}`;
+    mkdirSync(dir, { recursive: true });
+    return dir;
+  });
+}
+
+/**
  * Run `opencode run <message>` in a given directory.
  * Returns structured output including all JSON events and the final text response.
  */

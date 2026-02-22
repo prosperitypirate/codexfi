@@ -35,7 +35,7 @@ cd plugin && bun run build
 ```bash
 cd testing
 bun install       # first time only
-bun run test      # runs all 6 scenarios
+bun run test      # runs all 10 scenarios
 ```
 
 Output is printed to stdout with ANSI colours. Each run is also saved to `results/` (gitignored).
@@ -64,6 +64,10 @@ This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anom
 | 04 | Project-Brief Always Present | Memories accumulate from conversation even without README; session 2 recalls project facts |
 | 05 | Memory Aging | Backend replaces older `progress` memories with newest; only 1 survives across 3 sessions |
 | 06 | Existing Codebase Auto-Init | `triggerSilentAutoInit` reads real project files (package.json, tsconfig, src/) on first open; memories are created without any conversation seeding |
+| 07 | Enumeration Hybrid Retrieval | `types[]` param fires for "list all preferences" queries; answer covers preferences seeded across multiple sessions, not just the most recent |
+| 08 | Cross-Synthesis (isWideSynthesis) | "across both projects" heuristic fires; answer synthesises facts from two separate project memory namespaces |
+| 09 | maxMemories=20 Under Load | With >10 memories stored, facts from early sessions still recalled — confirms K=20 retrieval depth |
+| 10 | Knowledge Update / Superseded | After ORM migration, agent answers with the new ORM (Tortoise), not the stale one (SQLAlchemy); backend reflects superseded state |
 
 ## Architecture
 
@@ -80,7 +84,11 @@ testing/
 │       ├── 03-transcript-noise.ts
 │       ├── 04-project-brief-always.ts
 │       ├── 05-memory-aging.ts
-│       └── 06-existing-codebase.ts
+│       ├── 06-existing-codebase.ts
+│       ├── 07-enumeration-retrieval.ts
+│       ├── 08-cross-synthesis.ts
+│       ├── 09-max-memories.ts
+│       └── 10-knowledge-update.ts
 ├── results/               — gitignored; JSON output of each run
 ├── package.json
 └── tsconfig.json

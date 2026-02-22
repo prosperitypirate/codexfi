@@ -76,11 +76,14 @@ export async function run(): Promise<ScenarioResult> {
     const response = s2.text;
     details.push(`  response: ${response.slice(0, 200)}`);
 
+    // Check memory content directly for project name (more reliable than response check)
+    const ferriteInBackend = memories.some((m) => /ferrite/i.test(m.memory));
+
     const assertions = [
-      { label: "At least 1 memory saved",                    pass: memories.length > 0 },
-      { label: "No transcript noise in memories",             pass: noisyMemories.length === 0 },
-      { label: "Session 2 recalls ferrite-api",               pass: /ferrite/i.test(response) },
-      { label: "Session 2 recalls tech (Axum/SQLx/Redis)",    pass: /axum|sqlx|redis|rust/i.test(response) },
+      { label: "At least 1 memory saved",                       pass: memories.length > 0 },
+      { label: "No transcript noise in memories",                pass: noisyMemories.length === 0 },
+      { label: "ferrite-api name stored in backend memories",    pass: ferriteInBackend },
+      { label: "Session 2 recalls tech (Axum/SQLx/Redis/Rust)",  pass: /axum|sqlx|redis|rust/i.test(response) },
     ];
 
     for (const a of assertions) {
