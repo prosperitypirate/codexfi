@@ -23,7 +23,7 @@ jobs:
     permissions:
       id-token: write      # Required for OpenCode GitHub App token exchange
       contents: read       # Checkout
-      pull-requests: read  # gh CLI can read PR diff, files, description
+      pull-requests: write  # Post review comments on PRs
       issues: read         # gh CLI can read issue context for /oc commands
 
     steps:
