@@ -16,9 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     # Skip draft PRs for auto-review; on-demand comments still work
-    if: |
-      github.event_name != 'pull_request' ||
-      github.event.pull_request.draft == false
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
 
     permissions:
       id-token: write   # Required for OpenCode GitHub App token exchange
