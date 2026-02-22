@@ -61,10 +61,16 @@ CONTRADICTION_CANDIDATE_DISTANCE: float = 0.5
 # Wider distance for structural types (tech-context, architecture, project-brief, etc.)
 # These types evolve across sessions (e.g. ORM migration, new infra component) and need
 # a wider net to catch supersession relationships even when wording differs significantly.
-STRUCTURAL_CONTRADICTION_DISTANCE: float = 0.65
+# Raised from 0.65 → 0.75: at 0.65, "uses Alembic" vs "switched to Aerich" (cosine dist
+# ~0.67-0.70) was outside the candidate window and never sent to the LLM for comparison,
+# causing stale Alembic memories to survive alongside the newer Aerich memory and bleed
+# into knowledge-update and cross-synthesis answers. 0.75 casts a wider net; the LLM
+# still makes the final call, so false-positive candidates are evaluated and discarded.
+STRUCTURAL_CONTRADICTION_DISTANCE: float = 0.75
 
 # Max candidate memories to send to the contradiction-detection LLM call per new memory.
-CONTRADICTION_CANDIDATE_LIMIT: int = 15
+# Raised from 15 → 25 to ensure more of the wider candidate window is actually evaluated.
+CONTRADICTION_CANDIDATE_LIMIT: int = 25
 
 # Memory types that skip contradiction detection (they have dedicated lifecycle rules).
 VERSIONING_SKIP_TYPES: frozenset[str] = frozenset({"session-summary", "progress"})

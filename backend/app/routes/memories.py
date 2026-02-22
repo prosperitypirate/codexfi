@@ -23,7 +23,7 @@ from ..config import DEDUP_DISTANCE, STRUCTURAL_DEDUP_DISTANCE, STRUCTURAL_TYPES
 from ..embedder import embed
 from ..extractor import extract_memories
 from ..models import AddMemoryRequest, SearchMemoryRequest
-from ..store import apply_aging_rules, check_and_supersede, find_duplicate
+from ..store import apply_aging_rules, check_and_supersede, find_duplicate, get_memories_by_type
 
 logger = logging.getLogger("memory-server")
 router = APIRouter()
@@ -274,6 +274,45 @@ async def search_memories(req: SearchMemoryRequest):
             key=lambda r: r["score"],
             reverse=True,
         )
+
+        # ── Hybrid enumeration retrieval ─────────────────────────────────────
+        # When the caller specifies `types`, fetch all non-superseded memories of
+        # those types and append any that are not already in the semantic results.
+        # This lets enumeration queries ("list all env vars", "every preference")
+        # retrieve facts from every session regardless of semantic rank, while
+        # normal queries are unaffected.
+        if req.types:
+            seen_ids = {r["id"] for r in results}
+            extra_limit = req.limit or 20  # cap type-filtered extras at same as semantic limit
+            type_extras: list[dict] = []
+
+            for mem_type in req.types:
+                type_rows = await _in_thread(get_memories_by_type, req.user_id, mem_type)
+                for tr in type_rows:
+                    # Skip: already in semantic results, superseded, or extra cap reached
+                    if tr["id"] in seen_ids:
+                        continue
+                    if tr.get("superseded_by"):
+                        continue
+                    meta = json.loads(tr.get("metadata_json") or "{}")
+                    d = _extract_date(tr)
+                    type_extras.append({
+                        "id":         tr["id"],
+                        "memory":     tr["memory"],
+                        "chunk":      tr.get("chunk") or "",
+                        "score":      0.25,  # base score — below any semantic hit
+                        "metadata":   meta,
+                        "created_at": tr.get("created_at"),
+                        "date":       d.isoformat() if d else None,
+                    })
+                    seen_ids.add(tr["id"])
+
+            # Sort extras by recency (most recent first) and cap before appending
+            type_extras.sort(key=lambda r: r.get("created_at") or "", reverse=True)
+            results = results + type_extras[:extra_limit]
+            # Final sort: semantic hits (score > 0.25) still precede type-filtered extras
+            results = sorted(results, key=lambda r: r["score"], reverse=True)
+
         logger.info(
             "search_memories user_id=%s query=%r found=%d",
             req.user_id, req.query[:60], len(results),

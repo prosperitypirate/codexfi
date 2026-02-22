@@ -47,6 +47,12 @@ class SearchMemoryRequest(BaseModel):
     # 0.0 = pure semantic (default); blend recency when > 0.
     # final_score = (1 - w) * semantic_score + w * recency_score
     recency_weight: Optional[float] = 0.0
+    # Optional list of memory types for hybrid enumeration retrieval.
+    # When provided, all non-superseded memories of those types are appended
+    # to the semantic results (after threshold filtering), giving exhaustive
+    # coverage for broad "list all X" queries that cannot be satisfied by
+    # top-K semantic similarity alone.
+    types: Optional[list[str]] = None
 
 
 class RegisterNameRequest(BaseModel):
