@@ -40,6 +40,44 @@ bun run test      # runs all 10 scenarios
 
 Output is printed to stdout with ANSI colours. Each run is also saved to `results/` (gitignored).
 
+After each scenario completes, the test harness **automatically deletes all memories it created** from the backend — keeping the memory store clean between runs.
+
+To run a single scenario:
+```bash
+bun run test:scenario 07       # single scenario
+bun run test:scenario 07,08    # multiple scenarios
+```
+
+## Latest run results (2026-02-22)
+
+Full run against plugin build from PR #36 + #39 (main branch):
+
+```
+PASS  01  Cross-Session Memory Continuity          12.7s
+PASS  02  README-Based Project-Brief Seeding       19.5s
+PASS  03  Transcript Noise Guard                   19.1s  ← assertion fixed: checks backend not LLM text
+PASS  04  Project Brief Always Present             17.9s  ⚠ project-brief type not extracted (diagnostic only)
+PASS  05  Memory Aging                             38.7s
+PASS  06  Existing Codebase Auto-Init              68.7s
+PASS  07  Enumeration Hybrid Retrieval             25.5s  ← new: all 5 prefs recalled across 2 sessions
+PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s  ← new: Vitest+Pytest, Zod+Pydantic, ESLint+Black recalled
+PASS  09  maxMemories=20 Under Load                96.3s  ← new: 18 memories, early+late sessions both recalled
+PASS  10  Knowledge Update / Superseded            65.5s  ← new: Tortoise ORM recalled, not stale SQLAlchemy
+
+10/10 PASS  —  Total: ~401s (~6.7 min)
+```
+
+### Observations and known issues
+
+**Scenario 04 — project-brief type not extracted without README**
+The `project-brief` memory type is never saved when there's no README. The agent extracts `tech-context` and `progress` instead. The scenario still passes because memory recall works — but the `project-brief` count assertion is diagnostic only (non-blocking). Root cause: `seedProjectBrief` likely only fires on `triggerSilentAutoInit` (README path), not on conversation-only sessions.
+
+**Scenario 03 — assertion updated (not a bug)**
+The original assertion checked `s2.text` for the project name "ferrite-api". The LLM responded correctly ("a Rust web service") without always naming it. Changed to check the backend memory content directly — more reliable.
+
+**Scenario 09 — memory count is non-deterministic**
+The xAI extractor consolidates facts differently each run — 6 short sessions produced 5 memories once, 18 another time. The scenario uses rich, detailed session messages (8 sessions) to ensure consistent ≥8 memory count. This mirrors the same ingest nondeterminism seen in the benchmark.
+
 ## Known issue: OpenCode Desktop app interference
 
 If the OpenCode desktop app is running, it sets `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, and `OPENCODE_CLIENT` in your shell environment. The `opencode run` CLI inherits these and its internal server then requires Basic Auth — but run-mode sends no auth headers, causing every CLI session to fail silently.

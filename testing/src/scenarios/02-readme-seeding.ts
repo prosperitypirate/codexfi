@@ -103,6 +103,7 @@ export async function run(): Promise<ScenarioResult> {
       durationMs: Date.now() - start,
       details,
       evidence: { briefCount, responsePreview: response.slice(0, 500) },
+      testDirs: [dir],
     };
 
   } catch (err) {

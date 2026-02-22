@@ -131,6 +131,7 @@ export async function run(): Promise<ScenarioResult> {
         memoriesB: memoriesB.length,
         responsePreview: response.slice(0, 500),
       },
+      testDirs: [dirA, dirB],
     };
 
   } catch (err) {

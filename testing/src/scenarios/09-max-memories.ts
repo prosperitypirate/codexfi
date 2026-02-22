@@ -180,6 +180,7 @@ export async function run(): Promise<ScenarioResult> {
       durationMs: Date.now() - start,
       details,
       evidence: { totalMemories: totalMemories.length, responsePreview: s7.text.slice(0, 600) },
+      testDirs: [dir],
     };
 
   } catch (err) {

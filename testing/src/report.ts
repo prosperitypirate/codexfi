@@ -15,6 +15,8 @@ export interface ScenarioResult {
   details: string[];
   evidence?: Record<string, unknown>;
   error?: string;
+  /** Test directories created by this scenario — runner uses these for cleanup */
+  testDirs?: string[];
 }
 
 const RESULTS_DIR = join(import.meta.dir, "../results");
@@ -75,10 +77,83 @@ export function printSummary(results: ScenarioResult[]): void {
   }
 }
 
+/**
+ * Print a detailed per-scenario timing and assertion breakdown at the end of the run.
+ * Shows a compact table plus individual assertion checklist for failed scenarios.
+ */
+export function printDetailedReport(results: ScenarioResult[]): void {
+  const totalMs = results.reduce((s, r) => s + r.durationMs, 0);
+
+  console.log(`${BOLD}━━━ Detailed Report ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}`);
+  console.log();
+
+  // ── Timing table ────────────────────────────────────────────────────────────
+  console.log(`${BOLD}  Scenario timings:${RESET}`);
+  for (const r of results) {
+    const icon  = r.status === "PASS" ? `${GREEN}✓${RESET}` : `${RED}✗${RESET}`;
+    const dur   = `${(r.durationMs / 1000).toFixed(1)}s`.padStart(7);
+    const pct   = `${Math.round((r.durationMs / totalMs) * 100)}%`.padStart(4);
+    const label = `[${r.id}] ${r.name}`;
+    console.log(`    ${icon}  ${label.padEnd(52)} ${DIM}${dur}  ${pct}${RESET}`);
+  }
+  console.log(`       ${"─".repeat(60)}`);
+  console.log(`       Total: ${(totalMs / 1000).toFixed(1)}s`);
+  console.log();
+
+  // ── Assertion checklist for failed/error scenarios ──────────────────────────
+  const badResults = results.filter((r) => r.status === "FAIL" || r.status === "ERROR");
+  if (badResults.length > 0) {
+    console.log(`${BOLD}  Failed scenario details:${RESET}`);
+    for (const r of badResults) {
+      console.log();
+      console.log(`  ${RED}${BOLD}[${r.id}] ${r.name}${RESET}`);
+      if (r.error) {
+        console.log(`    ${RED}Error: ${r.error}${RESET}`);
+      }
+      // Print assertion lines (lines with ✓/✗)
+      const assertionLines = r.details.filter((d) => d.includes("[✓]") || d.includes("[✗]"));
+      if (assertionLines.length > 0) {
+        console.log(`    Assertions:`);
+        for (const line of assertionLines) {
+          const colour = line.includes("[✓]") ? GREEN : RED;
+          console.log(`      ${colour}${line.trim()}${RESET}`);
+        }
+      }
+    }
+    console.log();
+  }
+
+  // ── Evidence summary for passing scenarios ──────────────────────────────────
+  const evidenceResults = results.filter((r) => r.status === "PASS" && r.evidence);
+  if (evidenceResults.length > 0) {
+    console.log(`${BOLD}  Evidence (passing scenarios):${RESET}`);
+    for (const r of evidenceResults) {
+      if (!r.evidence) continue;
+      const kv = Object.entries(r.evidence)
+        .filter(([k]) => k !== "responsePreview")
+        .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+        .join("  ");
+      if (kv) console.log(`    [${r.id}] ${DIM}${kv}${RESET}`);
+    }
+    console.log();
+  }
+}
+
 export function saveResults(results: ScenarioResult[]): void {
   mkdirSync(RESULTS_DIR, { recursive: true });
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const path = join(RESULTS_DIR, `run-${ts}.json`);
-  writeFileSync(path, JSON.stringify(results, null, 2), "utf-8");
+
+  // Include run metadata in saved output
+  const output = {
+    runAt: new Date().toISOString(),
+    totalDurationMs: results.reduce((s, r) => s + r.durationMs, 0),
+    passed: results.filter((r) => r.status === "PASS").length,
+    failed: results.filter((r) => r.status !== "PASS").length,
+    total: results.length,
+    scenarios: results,
+  };
+
+  writeFileSync(path, JSON.stringify(output, null, 2), "utf-8");
   console.log(`${DIM}  Results saved → ${path}${RESET}`);
 }

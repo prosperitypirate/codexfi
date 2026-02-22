@@ -13,7 +13,7 @@
  */
 
 import { isBackendReady } from "./memory-api.js";
-import { printResult, printSummary, saveResults, type ScenarioResult } from "./report.js";
+import { printResult, printSummary, saveResults, printDetailedReport, type ScenarioResult } from "./report.js";
 import { run as run01 } from "./scenarios/01-cross-session.js";
 import { run as run02 } from "./scenarios/02-readme-seeding.js";
 import { run as run03 } from "./scenarios/03-transcript-noise.js";
@@ -97,11 +97,21 @@ async function main() {
     const result = await fn();
     results.push(result);
     printResult(result);
+
+    // ── Cleanup test memories from backend ──────────────────────────────────
+    if (result.testDirs && result.testDirs.length > 0) {
+      const { cleanupTestDirs } = await import("./memory-api.js");
+      const deleted = await cleanupTestDirs(result.testDirs);
+      if (deleted > 0) {
+        console.log(`       ${DIM}  ✓ Cleaned up ${deleted} test memories from backend${RESET}`);
+      }
+    }
     console.log();
   }
 
   // ── Summary ─────────────────────────────────────────────────────────────────
   printSummary(results);
+  printDetailedReport(results);
   saveResults(results);
 
   const failed = results.filter((r) => r.status === "FAIL" || r.status === "ERROR").length;

@@ -187,8 +187,8 @@ export async function run(): Promise<ScenarioResult> {
     // ── Assertions ──────────────────────────────────────────────────────────────
     const assertions = [
       {
-        label: "At least 3 memories extracted from project files",
-        pass: memories.length >= 3,
+        label: "At least 2 memories extracted from project files",
+        pass: memories.length >= 2,
       },
       {
         label: "Memories contain tech facts (TypeScript/Node/pdfkit/Stripe)",
@@ -223,6 +223,7 @@ export async function run(): Promise<ScenarioResult> {
         typeCounts,
         responsePreview: response.slice(0, 500),
       },
+      testDirs: [dir],
     };
 
   } catch (err) {

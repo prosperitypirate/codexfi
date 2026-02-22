@@ -112,6 +112,7 @@ export async function run(): Promise<ScenarioResult> {
       durationMs: Date.now() - start,
       details,
       evidence: { memoriesCount: afterS2.length, responsePreview: s3.text.slice(0, 500) },
+      testDirs: [dir],
     };
 
   } catch (err) {

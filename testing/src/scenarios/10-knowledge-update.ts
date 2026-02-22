@@ -132,6 +132,7 @@ export async function run(): Promise<ScenarioResult> {
         sqlalchemyMemsRemaining: sqlalchemyMems.length,
         responsePreview: response.slice(0, 400),
       },
+      testDirs: [dir],
     };
 
   } catch (err) {

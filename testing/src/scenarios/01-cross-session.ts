@@ -97,6 +97,7 @@ export async function run(): Promise<ScenarioResult> {
       durationMs: Date.now() - start,
       details,
       evidence: { memoriesCount: memories.length, types, responsePreview: response.slice(0, 500) },
+      testDirs: [dir],
     };
 
   } catch (err) {

@@ -101,6 +101,7 @@ export async function run(): Promise<ScenarioResult> {
       durationMs: Date.now() - start,
       details,
       evidence: { progressCount, summaryCount, typeCounts, totalMemories: allMems.length },
+      testDirs: [dir],
     };
 
   } catch (err) {
