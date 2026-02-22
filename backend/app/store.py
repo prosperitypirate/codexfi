@@ -153,7 +153,7 @@ def check_and_supersede(
 
 
 def get_memories_by_type(user_id: str, memory_type: str) -> list[dict]:
-    """Return all memories of *memory_type* for *user_id*, sorted by created_at asc."""
+    """Return all non-superseded memories of *memory_type* for *user_id*, sorted by created_at asc."""
     try:
         if db.table.count_rows() == 0:
             return []
@@ -163,6 +163,7 @@ def get_memories_by_type(user_id: str, memory_type: str) -> list[dict]:
         typed = [
             r for r in rows
             if json.loads(r.get("metadata_json") or "{}").get("type") == memory_type
+            and not r.get("superseded_by")  # exclude superseded memories
         ]
         typed.sort(key=lambda r: r.get("created_at") or "")
         return typed
