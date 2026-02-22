@@ -36,7 +36,6 @@ jobs:
           persist-credentials: false
 
       - uses: anomalyco/opencode/github@latest
-        continue-on-error: true  # version-check curl uses pipefail; rate-limited responses cause grep exit 1
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
