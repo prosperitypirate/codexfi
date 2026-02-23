@@ -139,6 +139,10 @@ export const HTML = /* html */ `<!DOCTYPE html>
         <div class="score-sub" id="score-sub">awaiting results</div>
       </div>
       <div id="cats"></div>
+      <div id="ingest-panel" style="display:none">
+        <div class="sidebar-title">Ingest Speed</div>
+        <div id="ingest-metrics" style="font-size:12px;color:var(--text);"></div>
+      </div>
       <div id="retrieval-panel" style="display:none">
         <div class="sidebar-title">Retrieval Quality (K=20)</div>
         <div id="retr-metrics"></div>
@@ -170,6 +174,8 @@ const badgeRun  = document.getElementById("badge-run");
 const headerMeta= document.getElementById("header-meta");
 const retrievalPanel = document.getElementById("retrieval-panel");
 const retrMetrics    = document.getElementById("retr-metrics");
+const ingestPanel    = document.getElementById("ingest-panel");
+const ingestMetrics  = document.getElementById("ingest-metrics");
 
 // Live score state
 const catState = {};  // { type: { correct, total } }
@@ -177,6 +183,9 @@ let totalCorrect = 0, totalDone = 0;
 
 // Live retrieval state
 let retrHitSum = 0, retrPrecSum = 0, retrMrrSum = 0, retrNdcgSum = 0, retrCount = 0;
+
+// Live ingest timing state
+const ingestDurations = [];
 
 function updateRetrieval(rm) {
   if (!rm) return;
@@ -346,14 +355,32 @@ function handle(ev) {
       }
       break;
 
-    case "ingest_session":
+    case "ingest_session": {
+      const timing = ev.durationMs ? " <span style='color:var(--cyan)'>(" + (ev.durationMs / 1000).toFixed(1) + "s)</span>" : "";
       appendRow(
         "⬆",
         ev.sessionId,
-        "+" + ev.added + " added  " + (ev.updated ? "~" + ev.updated + " updated" : ""),
+        "+" + ev.added + " added  " + (ev.updated ? "~" + ev.updated + " updated" : "") + timing,
         ev.done + "/" + ev.total
       );
+      // Update ingest sidebar
+      if (ev.durationMs) {
+        ingestDurations.push(ev.durationMs);
+        ingestPanel.style.display = "";
+        const sorted = [...ingestDurations].sort((a, b) => a - b);
+        const mean = sorted.reduce((s, v) => s + v, 0) / sorted.length;
+        const total = sorted.reduce((s, v) => s + v, 0);
+        const min = sorted[0];
+        const max = sorted[sorted.length - 1];
+        ingestMetrics.innerHTML =
+          "<div>" + ev.done + "/" + ev.total + " sessions</div>" +
+          "<div style='margin-top:4px'>Total: <b>" + (total / 1000).toFixed(0) + "s</b></div>" +
+          "<div>Mean: <b>" + (mean / 1000).toFixed(1) + "s</b> / session</div>" +
+          "<div>Min: " + (min / 1000).toFixed(1) + "s · Max: " + (max / 1000).toFixed(1) + "s</div>" +
+          "<div style='margin-top:4px;color:var(--muted)'>ETA: ~" + Math.round((ev.total - ev.done) * mean / 1000) + "s remaining</div>";
+      }
       break;
+    }
 
     case "search_question":
       appendRow(
