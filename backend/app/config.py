@@ -30,12 +30,14 @@ def validate_id(value: str, field_name: str = "id") -> str:
 
 XAI_API_KEY: str = os.environ.get("XAI_API_KEY", "")
 GOOGLE_API_KEY: str = os.environ.get("GOOGLE_API_KEY", "")
+ANTHROPIC_API_KEY: str = os.environ.get("ANTHROPIC_API_KEY", "")
 VOYAGE_API_KEY: str = os.environ.get("VOYAGE_API_KEY", "")
 DATA_DIR: str = os.environ.get("DATA_DIR", "/data/memory")
 
 # ── Extraction provider ────────────────────────────────────────────────────────
-# "xai" (default) — Grok 4.1 Fast via api.x.ai
-# "google"        — Gemini 3 Flash via Google's OpenAI-compatible endpoint
+# "xai"       (default) — Grok 4.1 Fast via api.x.ai
+# "google"              — Gemini 3 Flash via native generateContent API
+# "anthropic"           — Claude Haiku 4.5 via Anthropic Messages API
 EXTRACTION_PROVIDER: str = os.environ.get("EXTRACTION_PROVIDER", "xai")
 
 # ── Model identifiers ──────────────────────────────────────────────────────────
@@ -46,8 +48,15 @@ XAI_EXTRACTION_MODEL = "grok-4-1-fast-non-reasoning"
 GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 GOOGLE_EXTRACTION_MODEL = "gemini-3-flash-preview"
 
+ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1"
+ANTHROPIC_EXTRACTION_MODEL = "claude-haiku-4-5-20251001"
+
 # Active model name — resolved from provider for telemetry/logging
-EXTRACTION_MODEL = GOOGLE_EXTRACTION_MODEL if EXTRACTION_PROVIDER == "google" else XAI_EXTRACTION_MODEL
+_MODEL_MAP = {
+    "google": GOOGLE_EXTRACTION_MODEL,
+    "anthropic": ANTHROPIC_EXTRACTION_MODEL,
+}
+EXTRACTION_MODEL = _MODEL_MAP.get(EXTRACTION_PROVIDER, XAI_EXTRACTION_MODEL)
 
 EMBEDDING_MODEL = "voyage-code-3"
 EMBEDDING_DIMS = 1024
@@ -105,6 +114,11 @@ XAI_PRICE_OUTPUT_PER_M = 0.50
 # Source: https://ai.google.dev/gemini-api/docs/models  (as of 2026-02)
 GOOGLE_PRICE_INPUT_PER_M  = 0.50
 GOOGLE_PRICE_OUTPUT_PER_M = 3.00
+
+# Anthropic — claude-haiku-4-5
+# Source: https://docs.anthropic.com/en/docs/about-claude/models  (as of 2026-02)
+ANTHROPIC_PRICE_INPUT_PER_M  = 1.00
+ANTHROPIC_PRICE_OUTPUT_PER_M = 5.00
 
 # Voyage AI — voyage-code-3
 # Source: https://docs.voyageai.com/docs/pricing  (as of 2026-02)

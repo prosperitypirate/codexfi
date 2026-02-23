@@ -19,6 +19,9 @@ from .config import (
     GOOGLE_EXTRACTION_MODEL,
     GOOGLE_PRICE_INPUT_PER_M,
     GOOGLE_PRICE_OUTPUT_PER_M,
+    ANTHROPIC_EXTRACTION_MODEL,
+    ANTHROPIC_PRICE_INPUT_PER_M,
+    ANTHROPIC_PRICE_OUTPUT_PER_M,
     VOYAGE_PRICE_PER_M,
 )
 
@@ -43,6 +46,12 @@ class CostLedger:
             "cost_usd": 0.0,
         },
         "google": {
+            "calls": 0,
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "cost_usd": 0.0,
+        },
+        "anthropic": {
             "calls": 0,
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -90,6 +99,7 @@ class CostLedger:
         self._data["total_cost_usd"] = round(
             self._data["xai"]["cost_usd"]
             + self._data.get("google", {}).get("cost_usd", 0.0)
+            + self._data.get("anthropic", {}).get("cost_usd", 0.0)
             + self._data["voyage"]["cost_usd"],
             8,
         )
@@ -125,6 +135,23 @@ class CostLedger:
             g["prompt_tokens"] += prompt_tokens
             g["completion_tokens"] += completion_tokens
             g["cost_usd"] = round(g["cost_usd"] + cost, 8)
+            self._update_total()
+            self._save()
+
+    def record_anthropic(self, prompt_tokens: int, completion_tokens: int) -> None:
+        cost = (
+            prompt_tokens * ANTHROPIC_PRICE_INPUT_PER_M / 1_000_000
+            + completion_tokens * ANTHROPIC_PRICE_OUTPUT_PER_M / 1_000_000
+        )
+        with self._lock:
+            # Backfill "anthropic" key for ledgers created before this provider existed
+            if "anthropic" not in self._data:
+                self._data["anthropic"] = {"calls": 0, "prompt_tokens": 0, "completion_tokens": 0, "cost_usd": 0.0}
+            a = self._data["anthropic"]
+            a["calls"] += 1
+            a["prompt_tokens"] += prompt_tokens
+            a["completion_tokens"] += completion_tokens
+            a["cost_usd"] = round(a["cost_usd"] + cost, 8)
             self._update_total()
             self._save()
 
@@ -202,6 +229,25 @@ class ActivityLog:
             "ts": datetime.now(timezone.utc).isoformat(),
             "api": "google",
             "model": GOOGLE_EXTRACTION_MODEL,
+            "operation": operation,
+            "prompt_tokens": prompt_tokens,
+            "cached_tokens": None,
+            "completion_tokens": completion_tokens,
+            "tokens": None,
+            "cost_usd": round(cost_usd, 8),
+        })
+
+    def record_anthropic(
+        self,
+        prompt_tokens: int,
+        completion_tokens: int,
+        cost_usd: float,
+        operation: str = "extraction",
+    ) -> None:
+        self._append({
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "api": "anthropic",
+            "model": ANTHROPIC_EXTRACTION_MODEL,
             "operation": operation,
             "prompt_tokens": prompt_tokens,
             "cached_tokens": None,

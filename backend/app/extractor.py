@@ -1,14 +1,15 @@
 """
 Multi-provider extraction layer — LLM calls, JSON parsing, and memory extraction logic.
 
-Supports xAI (Grok) and Google (Gemini) as extraction providers, configurable via
-EXTRACTION_PROVIDER env var. All callers use call_llm() which dispatches to the
-active provider.
+Supports xAI (Grok), Google (Gemini), and Anthropic (Claude) as extraction providers,
+configurable via EXTRACTION_PROVIDER env var. All callers use call_llm() which dispatches
+to the active provider.
 
 Responsibilities:
-  call_llm()                  — dispatch to active provider (xAI or Google)
+  call_llm()                  — dispatch to active provider (xAI, Google, or Anthropic)
   call_xai()                  — xAI chat completion, records telemetry
-  call_google()               — Gemini chat completion via OpenAI-compat endpoint
+  call_google()               — Gemini generateContent via native REST API
+  call_anthropic()            — Anthropic Messages API, records telemetry
   parse_json_array()          — robustly parse a JSON array from raw LLM output
   extract_memories()          — drive extraction using the right prompt mode
   condense_to_learned_pattern() — age an old session-summary into a learned-pattern
@@ -34,6 +35,11 @@ from .config import (
     GOOGLE_EXTRACTION_MODEL,
     GOOGLE_PRICE_INPUT_PER_M,
     GOOGLE_PRICE_OUTPUT_PER_M,
+    ANTHROPIC_API_KEY,
+    ANTHROPIC_BASE_URL,
+    ANTHROPIC_EXTRACTION_MODEL,
+    ANTHROPIC_PRICE_INPUT_PER_M,
+    ANTHROPIC_PRICE_OUTPUT_PER_M,
 )
 from .prompts import (
     CONDENSE_SYSTEM,
@@ -185,14 +191,84 @@ def call_google(system: str, user: str) -> str:
     return raw.strip()
 
 
+def call_anthropic(system: str, user: str) -> str:
+    """Make a single Anthropic Messages API call and return the raw content string.
+
+    Uses the Anthropic-native format (NOT OpenAI-compatible):
+    - POST /v1/messages
+    - Auth via x-api-key header + anthropic-version header
+    - system prompt is a top-level field (not in messages array)
+    - No native JSON mode — relies on system prompt instruction
+
+    Records token usage to the cost ledger and activity log.
+    Raises httpx.HTTPStatusError on non-2xx responses.
+    """
+    if not ANTHROPIC_API_KEY:
+        raise ValueError(
+            "EXTRACTION_PROVIDER is 'anthropic' but ANTHROPIC_API_KEY is not set. "
+            "Add ANTHROPIC_API_KEY to your .env file."
+        )
+
+    t0 = time.monotonic()
+    with httpx.Client(timeout=60.0) as client:
+        response = client.post(
+            f"{ANTHROPIC_BASE_URL}/messages",
+            headers={
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": ANTHROPIC_EXTRACTION_MODEL,
+                "max_tokens": 2000,
+                "temperature": 0,
+                "system": system,
+                "messages": [
+                    {"role": "user", "content": user},
+                ],
+            },
+        )
+        response.raise_for_status()
+        data = response.json()
+    elapsed_ms = (time.monotonic() - t0) * 1000
+
+    # Response format: content[0].text
+    raw: str = ""
+    try:
+        raw = data["content"][0]["text"]
+    except (KeyError, IndexError):
+        logger.warning("anthropic call: unexpected response structure: %r", str(data)[:300])
+
+    usage = data.get("usage", {})
+    prompt_tokens     = usage.get("input_tokens", 0)
+    completion_tokens = usage.get("output_tokens", 0)
+
+    logger.info("anthropic call model=%s elapsed=%.0fms tokens=%d/%d",
+                ANTHROPIC_EXTRACTION_MODEL, elapsed_ms, prompt_tokens, completion_tokens)
+
+    try:
+        cost = (
+            prompt_tokens     * ANTHROPIC_PRICE_INPUT_PER_M  / 1_000_000
+            + completion_tokens * ANTHROPIC_PRICE_OUTPUT_PER_M / 1_000_000
+        )
+        ledger.record_anthropic(prompt_tokens, completion_tokens)
+        activity_log.record_anthropic(prompt_tokens, completion_tokens, cost)
+    except Exception as e:
+        logger.debug("Telemetry record error (anthropic): %s", e)
+
+    return raw.strip()
+
+
 def call_llm(system: str, user: str) -> str:
     """Route to the configured extraction provider.
 
-    Dispatches to call_google() or call_xai() based on EXTRACTION_PROVIDER.
+    Dispatches to the appropriate provider function based on EXTRACTION_PROVIDER.
     All extraction callers should use this instead of provider-specific functions.
     """
     if EXTRACTION_PROVIDER == "google":
         return call_google(system, user)
+    if EXTRACTION_PROVIDER == "anthropic":
+        return call_anthropic(system, user)
     return call_xai(system, user)
 
 
