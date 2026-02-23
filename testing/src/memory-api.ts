@@ -94,6 +94,60 @@ export async function waitForMemories(
   return getMemoriesForDir(dir);
 }
 
+/**
+ * Directly add a memory to the backend, bypassing the plugin/agent.
+ * Used for deterministic test seeding — the backend extracts facts from
+ * the messages array via LLM, embeds them, and stores them.
+ */
+export async function addMemoryDirect(
+  dir: string,
+  content: string,
+  type?: MemoryType
+): Promise<{ id: string; memory: string; event: string }[]> {
+  const projectTag = projectTagForDir(dir);
+  const body: Record<string, unknown> = {
+    messages: [{ role: "user", content }],
+    user_id: projectTag,
+  };
+  if (type) body.metadata = { type };
+
+  const res = await fetch(`${BACKEND}/memories`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`addMemoryDirect ${res.status}: ${await res.text()}`);
+  const data = (await res.json()) as {
+    results: { id: string; memory: string; event: string }[];
+  };
+  return data.results ?? [];
+}
+
+/** Directly search memories via the backend semantic search endpoint */
+export async function searchMemories(
+  dir: string,
+  query: string,
+  limit = 10,
+  threshold = 0.3
+): Promise<{ id: string; memory: string; score: number; metadata: Record<string, unknown> }[]> {
+  const projectTag = projectTagForDir(dir);
+  const res = await fetch(`${BACKEND}/memories/search`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      query,
+      user_id: projectTag,
+      limit,
+      threshold,
+    }),
+  });
+  if (!res.ok) throw new Error(`searchMemories ${res.status}: ${await res.text()}`);
+  const data = (await res.json()) as {
+    results: { id: string; memory: string; score: number; metadata: Record<string, unknown> }[];
+  };
+  return data.results ?? [];
+}
+
 /** Health check */
 export async function isBackendReady(): Promise<boolean> {
   try {

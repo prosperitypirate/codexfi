@@ -11,6 +11,7 @@
 import { randomUUID } from "crypto";
 import { mkdirSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import type { Subprocess } from "bun";
 
 const OPENCODE_BIN = "opencode"; // installed via `bun install -g opencode-ai`
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-6";
@@ -180,4 +181,160 @@ export async function runOpencode(
     stderr: stderrBuf,
     durationMs,
   };
+}
+
+// ── Persistent server mode ────────────────────────────────────────────────────
+// Uses `opencode serve` to keep the plugin process alive across multiple
+// messages.  This allows testing turns 2+ within the same session (the
+// sessionCaches Map persists between requests).
+
+export interface ServerHandle {
+  url: string;
+  port: number;
+  proc: Subprocess;
+  dir: string;
+}
+
+/**
+ * Start `opencode serve` as a background process.
+ * Waits for the health endpoint to respond before returning.
+ */
+export async function startServer(
+  dir: string,
+  opts: { port?: number; timeoutMs?: number } = {}
+): Promise<ServerHandle> {
+  const port = opts.port ?? 10_000 + Math.floor(Math.random() * 50_000);
+  const timeoutMs = opts.timeoutMs ?? 30_000;
+
+  const proc = Bun.spawn(
+    [OPENCODE_BIN, "serve", "--port", String(port), "--hostname", "127.0.0.1"],
+    {
+      env: { ...cleanEnv(), OPENCODE_DISABLE_AUTOUPDATE: "true" },
+      cwd: dir,
+      stdout: "pipe",
+      stderr: "pipe",
+    }
+  );
+
+  const url = `http://127.0.0.1:${port}`;
+  const deadline = Date.now() + timeoutMs;
+
+  // Poll health endpoint until server is ready
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${url}/global/health`);
+      if (res.ok) {
+        return { url, port, proc, dir };
+      }
+    } catch {
+      // Server not ready yet
+    }
+    await Bun.sleep(500);
+  }
+
+  proc.kill();
+  throw new Error(`opencode serve failed to start within ${timeoutMs}ms on port ${port}`);
+}
+
+/** Stop a running server */
+export async function stopServer(handle: ServerHandle): Promise<void> {
+  try {
+    handle.proc.kill();
+    await handle.proc.exited;
+  } catch {
+    // already dead
+  }
+}
+
+export interface ServerMessageResult {
+  sessionID: string;
+  text: string;
+  durationMs: number;
+}
+
+/**
+ * Create a new session on a running server.
+ * Returns the session ID.
+ */
+export async function createSession(
+  server: ServerHandle,
+  title?: string
+): Promise<string> {
+  const body: Record<string, unknown> = {};
+  if (title) body.title = title;
+
+  const res = await fetch(`${server.url}/session`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) throw new Error(`createSession ${res.status}: ${await res.text()}`);
+  const data = (await res.json()) as { id: string };
+  return data.id;
+}
+
+/**
+ * Send a message to an existing session on a running server.
+ * Uses POST /session/:id/message which waits for the full response.
+ */
+export async function sendServerMessage(
+  server: ServerHandle,
+  sessionID: string,
+  message: string,
+  opts: { model?: string; agent?: string; timeoutMs?: number } = {}
+): Promise<ServerMessageResult> {
+  const { model = DEFAULT_MODEL, agent = "build", timeoutMs = 120_000 } = opts;
+
+  const start = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    // model is "provider/modelName" — split into object form for the API
+    const [providerID, ...modelParts] = model.split("/");
+    const modelID = modelParts.join("/");
+
+    const res = await fetch(`${server.url}/session/${sessionID}/message`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        parts: [{ type: "text", text: message }],
+        model: { providerID, modelID },
+        agent,
+      }),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeout);
+
+    if (!res.ok) throw new Error(`sendServerMessage ${res.status}: ${await res.text()}`);
+
+    const data = (await res.json()) as {
+      info: { id: string; sessionID: string };
+      parts: Array<{ type: string; text?: string }>;
+    };
+
+    const text = data.parts
+      .filter((p) => p.type === "text" && p.text)
+      .map((p) => p.text!)
+      .join("");
+
+    return {
+      sessionID,
+      text,
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
+  }
+}
+
+/** Delete a session on the server */
+export async function deleteSession(
+  server: ServerHandle,
+  sessionID: string
+): Promise<void> {
+  await fetch(`${server.url}/session/${sessionID}`, { method: "DELETE" }).catch(() => {});
 }
