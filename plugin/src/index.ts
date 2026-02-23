@@ -284,6 +284,9 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           log("system.transform: [MEMORY] injected", {
             length: memoryContext.length,
             sessionID,
+            ...(cache.needsStructuredRefresh
+              ? { warning: "structured sections stale — refresh pending on next user message" }
+              : {}),
           });
         }
       } catch (error) {
@@ -432,9 +435,21 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           try {
             // ── Post-compaction: full structured refresh ─────────────────────
             if (cache?.needsStructuredRefresh) {
+              const prevStructuredTypes = Object.keys(cache.structuredSections);
+              const prevMemoryCount = prevStructuredTypes.reduce(
+                (sum, key) => sum + (cache.structuredSections[key]?.length ?? 0), 0
+              );
+              const prevSemanticCount = cache.semanticResults.results?.length ?? 0;
+              const prevProfilePresent = !!cache.profile;
+
               log("chat.message: post-compaction structured refresh starting", {
                 sessionID: input.sessionID,
-                previousTypeCount: Object.keys(cache.structuredSections).length,
+                before: {
+                  types: prevStructuredTypes.length,
+                  memories: prevMemoryCount,
+                  semanticHits: prevSemanticCount,
+                  hasProfile: prevProfilePresent,
+                },
               });
 
               const refreshStart = Date.now();
@@ -465,15 +480,25 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
                 cache.structuredSections = byType;
 
                 log("chat.message: post-compaction structured sections refreshed", {
-                  typeCount: Object.keys(byType).length,
-                  memoryCount: allProjectMemories.length,
+                  before: { types: prevStructuredTypes.length, memories: prevMemoryCount },
+                  after: { types: Object.keys(byType).length, memories: allProjectMemories.length },
+                });
+              } else {
+                log("chat.message: post-compaction structured sections fetch FAILED — keeping stale cache", {
+                  error: (freshList as { error?: string }).error ?? "unknown",
                 });
               }
 
               // Update profile
               if (freshProfile.success) {
                 cache.profile = freshProfile;
-                log("chat.message: post-compaction profile refreshed");
+                log("chat.message: post-compaction profile refreshed", {
+                  hadProfileBefore: prevProfilePresent,
+                });
+              } else {
+                log("chat.message: post-compaction profile fetch FAILED — keeping stale cache", {
+                  error: (freshProfile as { error?: string }).error ?? "unknown",
+                });
               }
 
               // Update semantic results
@@ -484,6 +509,14 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
                     memory: r.memory,
                   })),
                 };
+                log("chat.message: post-compaction semantic results refreshed", {
+                  before: prevSemanticCount,
+                  after: freshSearch.results?.length ?? 0,
+                });
+              } else {
+                log("chat.message: post-compaction semantic search FAILED — keeping stale results", {
+                  error: (freshSearch as { error?: string }).error ?? "unknown",
+                });
               }
 
               cache.needsStructuredRefresh = false;
@@ -492,9 +525,11 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
               const refreshDuration = Date.now() - refreshStart;
               log("chat.message: post-compaction full refresh complete", {
                 duration: refreshDuration,
-                structuredTypes: Object.keys(cache.structuredSections).length,
-                semanticCount: cache.semanticResults.results?.length ?? 0,
-                profilePresent: !!cache.profile,
+                after: {
+                  types: Object.keys(cache.structuredSections).length,
+                  semanticHits: cache.semanticResults.results?.length ?? 0,
+                  hasProfile: !!cache.profile,
+                },
               });
             } else {
               // ── Normal turn: semantic-only refresh ───────────────────────────
@@ -520,10 +555,14 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
               }
             }
           } catch (error) {
-            // Non-fatal: cache retains previous results
+            // Non-fatal: cache retains previous results.
+            // If this was a post-compaction refresh, the flag stays true
+            // so it retries on the next user message.
+            const wasPostCompaction = cache?.needsStructuredRefresh ?? false;
             log("chat.message: refresh failed (non-fatal)", {
               error: String(error),
-              wasPostCompaction: cache?.needsStructuredRefresh ?? false,
+              wasPostCompaction,
+              ...(wasPostCompaction ? { willRetry: "flag stays set, retrying next turn" } : {}),
             });
           }
         }
