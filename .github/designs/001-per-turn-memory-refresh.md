@@ -526,7 +526,7 @@ cd plugin && bun run build && cd ../testing && bun run test
 **Status**: ✅ DONE (commit `0ba891f`)
 
 **Deliverables:**
-- [ ] `testing/src/scenarios/11-mid-session-retrieval.ts` — New scenario (100+ lines)
+- [ ] `testing/src/scenarios/11-system-prompt-injection.ts` — New scenario (100+ lines)
 - [ ] `testing/src/runner.ts` — Register scenario 11
 
 **Scenario Design:**
@@ -790,7 +790,7 @@ git push origin main
 - `plugin/src/index.ts` — All implementation happens here
 - `plugin/src/services/context.ts:44-138` — formatContextForPrompt (no changes)
 - `plugin/src/config.ts` — Configuration (may add ENABLE_PER_TURN_REFRESH)
-- `testing/src/scenarios/11-mid-session-retrieval.ts` — New E2E test
+- `testing/src/scenarios/11-system-prompt-injection.ts` — New E2E test
 
 ### Next Session Protocol
 

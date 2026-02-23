@@ -15,7 +15,7 @@
  */
 
 import { createTestDir, runOpencode } from "../opencode.js";
-import { waitForMemories, getMemoriesForDir } from "../memory-api.js";
+import { waitForMemories } from "../memory-api.js";
 import type { ScenarioResult } from "../report.js";
 
 export async function run(): Promise<ScenarioResult> {

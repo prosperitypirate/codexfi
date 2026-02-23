@@ -242,8 +242,9 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
     },
 
     // ── System prompt injection ──────────────────────────────────────────────
-    // Fires before every LLM call.  Rebuilds the [MEMORY] block from the
-    // session cache and appends it to the system prompt.
+    // Fires AFTER chat.message populates/refreshes the session cache, but
+    // BEFORE the LLM call.  Rebuilds the [MEMORY] block from the session
+    // cache and appends it to the system prompt.
     //
     // Why system prompt instead of synthetic message part?
     //  1. Zero token accumulation — system prompt is rebuilt each call, not appended.
@@ -262,7 +263,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
       try {
         const memoryContext = formatContextForPrompt(
           cache.profile,
-          { results: [] },
+          { results: [] },  // user memories — included in semanticResults from turn 1; turns 2+ refresh project-only (user prefs are stable within a session)
           cache.semanticResults,
           cache.structuredSections
         );
@@ -410,8 +411,10 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           });
         } else {
           // ── Turns 2+: Lightweight per-turn semantic refresh ───────────────
-          // Only re-run semantic search to update the "Relevant to Current Task"
-          // section. Structured sections and profile are stable within a session.
+          // Only re-run semantic search (project scope) to update "Relevant to
+          // Current Task".  User-scope search is skipped — user preferences are
+          // stable within a session and already captured in turn-1 results.
+          // Structured sections and profile are also stable within a session.
           try {
             const freshSearch = await memoryClient.searchMemories(
               userMessage,
