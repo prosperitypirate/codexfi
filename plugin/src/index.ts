@@ -179,7 +179,12 @@ function detectMemoryKeyword(text: string): boolean {
 interface SessionMemoryCache {
   structuredSections: Record<string, StructuredMemory[]>;
   profile: ProfileResult | null;
-  semanticResults: MemoriesResponseMinimal;
+  /** User-scoped semantic hits from turn 1.  Stable within a session —
+   *  user preferences don't change mid-conversation.  Stored separately
+   *  so per-turn project refresh doesn't overwrite them. */
+  userSemanticResults: MemoriesResponseMinimal;
+  /** Project-scoped semantic hits, refreshed per turn (turns 2+). */
+  projectSemanticResults: MemoriesResponseMinimal;
   initialized: boolean;
   lastRefreshAt: number;
   needsStructuredRefresh?: boolean;
@@ -274,8 +279,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
       try {
         const memoryContext = formatContextForPrompt(
           cache.profile,
-          { results: [] },  // user memories — included in semanticResults from turn 1; turns 2+ refresh project-only (user prefs are stable within a session)
-          cache.semanticResults,
+          cache.userSemanticResults,     // user-scoped hits (stable, from turn 1)
+          cache.projectSemanticResults,  // project-scoped hits (refreshed per turn)
           cache.structuredSections
         );
 
@@ -397,13 +402,16 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
             );
           }
 
-          // ── Merge semantic results (user + project) ───────────────────────
-          const userResults = userMemoriesResult.success ? userMemoriesResult : { results: [] };
-          const semanticResults: MemoriesResponseMinimal = {
-            results: [
-              ...(userResults.results || []),
-              ...(projectSearch.results || []),
-            ].map((r) => ({ ...r, memory: r.memory })),
+          // ── Separate user + project semantic results ────────────────────
+          // Stored separately so per-turn project refresh (turns 2+) doesn't
+          // overwrite user-scoped hits (preferences, cross-project patterns).
+          const userResults: MemoriesResponseMinimal = {
+            results: (userMemoriesResult.success ? userMemoriesResult.results || [] : [])
+              .map((r) => ({ ...r, memory: r.memory })),
+          };
+          const projectResults: MemoriesResponseMinimal = {
+            results: (projectSearch.results || [])
+              .map((r) => ({ ...r, memory: r.memory })),
           };
 
           // ── Populate session cache ────────────────────────────────────────
@@ -412,7 +420,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           sessionCaches.set(input.sessionID, {
             structuredSections: byType,
             profile,
-            semanticResults,
+            userSemanticResults: userResults,
+            projectSemanticResults: projectResults,
             initialized: true,
             lastRefreshAt: Date.now(),
           });
@@ -421,7 +430,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           log("chat.message: session cache populated (turn 1)", {
             duration,
             typeCount: Object.keys(byType).length,
-            semanticCount: semanticResults.results?.length ?? 0,
+            userSemanticCount: userResults.results?.length ?? 0,
+            projectSemanticCount: projectResults.results?.length ?? 0,
           });
         } else {
           // ── Turns 2+: Per-turn refresh ────────────────────────────────────
@@ -439,7 +449,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
               const prevMemoryCount = prevStructuredTypes.reduce(
                 (sum, key) => sum + (cache.structuredSections[key]?.length ?? 0), 0
               );
-              const prevSemanticCount = cache.semanticResults.results?.length ?? 0;
+              const prevSemanticCount = cache.projectSemanticResults.results?.length ?? 0;
               const prevProfilePresent = !!cache.profile;
 
               log("chat.message: post-compaction structured refresh starting", {
@@ -501,9 +511,9 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
                 });
               }
 
-              // Update semantic results
+              // Update project semantic results (user results stay from turn 1)
               if (freshSearch.success) {
-                cache.semanticResults = {
+                cache.projectSemanticResults = {
                   results: (freshSearch.results || []).map((r) => ({
                     ...r,
                     memory: r.memory,
@@ -527,7 +537,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
                 duration: refreshDuration,
                 after: {
                   types: Object.keys(cache.structuredSections).length,
-                  semanticHits: cache.semanticResults.results?.length ?? 0,
+                  semanticHits: cache.projectSemanticResults.results?.length ?? 0,
                   hasProfile: !!cache.profile,
                 },
               });
@@ -540,7 +550,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
               );
 
               if (freshSearch.success && cache) {
-                cache.semanticResults = {
+                cache.projectSemanticResults = {
                   results: (freshSearch.results || []).map((r) => ({
                     ...r,
                     memory: r.memory,
