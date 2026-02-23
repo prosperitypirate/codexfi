@@ -21,6 +21,84 @@ Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around
 
 ---
 
+## Extraction Provider Comparison
+
+The benchmark can run with different extraction providers to compare memory quality and ingest speed. All runs use the same 25 sessions, 200 questions, and `claude-sonnet-4-6` judge.
+
+### Per-Call Latency (extraction prompt, 3-call average)
+
+```
+Provider       Call 1    Call 2    Call 3    Avg
+xai            1262ms     841ms     873ms    992ms
+anthropic      1460ms    1436ms    1571ms   1489ms
+google         3446ms    3681ms    3688ms   3605ms
+```
+
+### Full Benchmark Results by Provider
+
+| Metric | xAI (Grok) | Anthropic (Haiku) | Google (Gemini) |
+|---|---|---|---|
+| **Best score** | 94.5% (189/200) | 92.0% (184/200) | — |
+| **Score range** | 78.5–94.5% | 92.0%* | — |
+| **Ingest/session** | ~4.9s mean | ~14.2s mean | ~20.6s mean |
+| **Ingest total (25 sessions)** | ~2 min | ~6 min | ~8–10 min |
+| **Cost (in/out per MTok)** | $0.20 / $0.50 | $1.00 / $5.00 | $0.50 / $3.00 |
+| **Consistency** | High variance | Stable | — |
+
+\* Single run — additional runs planned to confirm consistency.
+
+> **Key finding:** xAI Grok is 3x faster and 5x cheaper but has significant run-to-run variance (78.5–94.5%) due to provider-side nondeterminism at temperature=0. Anthropic Haiku is slower but produced a stable 92.0% on first run. Ingest is a one-time cost per conversation, not on the hot path.
+
+To run with a specific provider:
+
+```bash
+# Edit .env to set EXTRACTION_PROVIDER=anthropic (or xai, google)
+# Then restart the backend and run the benchmark
+docker compose up -d
+bun run bench run -r haiku-run1
+```
+
+---
+
+### haiku-run1 — 200 questions · 25 sessions · extractor `claude-haiku-4-5` · run `haiku-run1`
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval
+
+```
+error         ████████████████████ 100%  (25/25)  ✓  perfect
+tech          ███████████████████░  96%  (24/25)  ✓
+arch          ███████████████████░  96%  (24/25)  ✓
+continuity    ███████████████████░  96%  (24/25)  ✓
+abstain       ███████████████████░  96%  (24/25)  ✓
+pref          ██████████████████░░  92%  (23/25)  ✓
+update        ██████████████████░░  92%  (23/25)  ✓
+synthesis     ██████████████░░░░░░  68%  (17/25)  ⚠  weakest category
+─────────────────────────────────────────────────────────────
+Overall       92.0%  (184/200)
+```
+
+#### Retrieval Quality (K=20)
+
+```
+Hit@20       █████████████████░░░  83.0%
+Precision@20 ██░░░░░░░░░░░░░░░░░░   8.8%
+MRR                               0.677
+NDCG                              0.692
+```
+
+#### Latency
+
+```
+Phase              min     mean   median    p95      p99
+ingest/session    5485   14189    15123   18960    20331
+search             139     202      158     392      601
+answer             718    4137     3453    9007    10386
+```
+
+Ingest total: 367.3s (25 sessions) · ~14.7s/session mean
+
+---
+
 ## Results
 
 ### causal-chain-synthesis-arch — 200 questions · 25 sessions · run `causal-chain-synthesis-arch` ← current
@@ -260,19 +338,20 @@ bun run bench run -r config-b
 
 ### Run Comparison
 
-| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch |
-|---|---|---|---|---|---|---|---|
-| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 |
-| Sessions | 10 | 25 | 25 | 25 | 25 | 25 | 25 |
-| Retrieval K | 8 | 8 | 8 | **20** | **20** | **20** | **20** |
-| Hybrid enum routing | — | — | — | — | **yes** | **yes** | **yes** |
-| Superseded hardening | — | — | — | — | **yes** | **yes** | **yes** |
-| Abstention-aware prompt | — | — | — | — | — | **yes** | **yes** |
-| Causal-chain extraction | — | — | — | — | — | — | **yes** |
-| Architecture in synthesis | — | — | — | — | — | — | **yes** |
-| Abstention | — | — | 88% | 92% | 92% | **100%** | 92% |
-| Cross-synthesis | 60% (3/5) | 44% (11/25) | 52% (13/25) | 64% (16/25) | 76% (19/25) | 76% (19/25) | **80% (20/25)** |
-| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** |
+| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch | haiku-run1 |
+|---|---|---|---|---|---|---|---|---|
+| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+| Sessions | 10 | 25 | 25 | 25 | 25 | 25 | 25 | 25 |
+| Extractor | xAI | xAI | xAI | xAI | xAI | xAI | xAI | **Anthropic** |
+| Retrieval K | 8 | 8 | 8 | **20** | **20** | **20** | **20** | **20** |
+| Hybrid enum routing | — | — | — | — | **yes** | **yes** | **yes** | **yes** |
+| Superseded hardening | — | — | — | — | **yes** | **yes** | **yes** | **yes** |
+| Abstention-aware prompt | — | — | — | — | — | **yes** | **yes** | **yes** |
+| Causal-chain extraction | — | — | — | — | — | — | **yes** | **yes** |
+| Architecture in synthesis | — | — | — | — | — | — | **yes** | **yes** |
+| Abstention | — | — | 88% | 92% | 92% | **100%** | 92% | **96%** |
+| Cross-synthesis | 60% (3/5) | 44% (11/25) | 52% (13/25) | 64% (16/25) | 76% (19/25) | 76% (19/25) | **80% (20/25)** | 68% (17/25) |
+| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** | **92.0%** |
 
 > **Note:** Abstention dropped 100% → 92% between `abstention-fix-v2` and `causal-chain-synthesis-arch`.
 > This is **ingest nondeterminism**, not a regression from code changes — the xAI extractor (temperature=0)
@@ -311,13 +390,17 @@ Q194 and Q198 pass with the abstention-aware answer prompt.
 
 #### Remaining: Ingest nondeterminism (~±3 question noise floor)
 
-xAI extractor at temperature=0 produces 70–81 unique memories per run. Variance creates a noise floor of ~±3 questions per run — explaining the abstention fluctuation between 92–100% across runs.
+xAI extractor at temperature=0 produces 70–81 unique memories per run. Variance creates a noise floor of ~±3 questions per run — explaining the abstention fluctuation between 92–100% across runs. Anthropic Haiku is expected to have lower variance (needs 2+ additional runs to confirm).
 
 ---
 
 ## Version History
 
-### causal-chain-synthesis-arch (run `causal-chain-synthesis-arch`) — **94.5%** ← current
+### haiku-run1 (run `haiku-run1`) — **92.0%** · extractor: Anthropic Haiku 4.5
+
+200 questions, 25 sessions. First benchmark with Anthropic `claude-haiku-4-5` as extraction provider (replacing xAI Grok). Identical backend code and retrieval settings as `causal-chain-synthesis-arch`. Scored 92.0% (184/200) — consistent with the middle of Grok's variance range (78.5–94.5%), but with expected lower variance across runs. Error-solution 100%, tech/arch/continuity/abstain all 96%, synthesis 68% (weakest). Ingest total 367s (~14.7s/session mean) — ~3x slower than Grok (~5s/session) but ~2x faster than Gemini (~21s/session).
+
+### causal-chain-synthesis-arch (run `causal-chain-synthesis-arch`) — **94.5%** ← current xAI baseline
 
 200 questions, 25 sessions. Two changes: (1) extraction prompt now preserves causal chains for error-solution memories instead of compressing to 1-2 sentences — genuine backend improvement to extraction quality. (2) `SYNTHESIS_TYPES` introduced: cross-synthesis queries now include `architecture`-type memories in hybrid retrieval while pure enumeration stays narrow. Architecture 92% → 100%, error-solution 92% → 100%, cross-synthesis 76% → 80%. Overall 92.0% → 94.5% (+2.5pp, +5 questions).
 
