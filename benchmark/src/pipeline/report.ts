@@ -35,16 +35,20 @@ export function runReport(cp: Checkpoint): BenchmarkReport {
   }
 
   // ── Latency stats ──────────────────────────────────────────────────────────
+  const ingestMs  = cp.ingestResult?.sessionDurations ?? [];
   const searchMs  = evals.map((e) => e.searchDurationMs).filter(Boolean);
   const answerMs  = evals.map((e) => e.answerDurationMs).filter(Boolean);
   // evaluate latency not tracked per-question yet; use 0 as placeholder
   const evalMs    = new Array(evals.length).fill(0) as number[];
 
   const latency = {
+    ingest:   calcLatencyStats(ingestMs),
     search:   calcLatencyStats(searchMs),
     answer:   calcLatencyStats(answerMs),
     evaluate: calcLatencyStats(evalMs),
   };
+
+  const ingestTotalMs = cp.ingestResult?.totalDurationMs;
 
   // ── Retrieval metrics ──────────────────────────────────────────────────────
   const evalsWithRetrieval = evals.filter((e) => e.retrievalMetrics != null);
@@ -70,6 +74,7 @@ export function runReport(cp: Checkpoint): BenchmarkReport {
     byQuestionType,
     evaluations:    evals,
     latency,
+    ingestTotalMs,
     retrieval,
     retrievalByType: Object.keys(retrievalByType).length > 0 ? retrievalByType : undefined,
   };
@@ -104,10 +109,14 @@ export function runReport(cp: Checkpoint): BenchmarkReport {
   }
 
   // ── Latency summary ────────────────────────────────────────────────────────
-  if (searchMs.length > 0) {
+  if (searchMs.length > 0 || ingestMs.length > 0) {
     console.log(`\n  Latency (ms)          min   mean  median   p95    p99`);
+    if (ingestMs.length > 0) printLatency("ingest/session", latency.ingest);
     printLatency("search", latency.search);
     printLatency("answer", latency.answer);
+    if (ingestTotalMs) {
+      console.log(`\n  Ingest total: ${(ingestTotalMs / 1000).toFixed(1)}s (${ingestMs.length} sessions)`);
+    }
   }
 
   console.log(`\n  Report saved to: ${path}`);

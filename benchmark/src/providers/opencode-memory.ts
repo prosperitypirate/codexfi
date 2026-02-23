@@ -64,7 +64,10 @@ export class OpencodeMemoryProvider implements Provider {
     let memoriesAdded = 0;
     let memoriesUpdated = 0;
     const sessionIds: string[] = [];
+    const sessionDurations: number[] = [];
     let done = 0;
+
+    const phaseStart = Date.now();
 
     for (const session of sessions) {
       log.dim(`  Ingesting ${session.sessionId} (${session.messages.length} messages)`);
@@ -75,11 +78,13 @@ export class OpencodeMemoryProvider implements Provider {
         metadata: { session_id: session.sessionId, ...session.metadata },
       };
 
+      const t0 = Date.now();
       const res = await fetch(`${this.baseUrl}/memories`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      const durationMs = Date.now() - t0;
 
       if (!res.ok) {
         const text = await res.text();
@@ -93,14 +98,16 @@ export class OpencodeMemoryProvider implements Provider {
         else if (r.event === "UPDATE") { memoriesUpdated++; sessionUpdated++; }
       }
       sessionIds.push(session.sessionId);
+      sessionDurations.push(durationMs);
       done++;
-      onProgress?.(session.sessionId, sessionAdded, sessionUpdated, done);
+      onProgress?.(session.sessionId, sessionAdded, sessionUpdated, done, durationMs);
 
       // Small delay to avoid hammering the LLM extractor
       await sleep(500);
     }
 
-    return { memoriesAdded, memoriesUpdated, sessionIds };
+    const totalDurationMs = Date.now() - phaseStart;
+    return { memoriesAdded, memoriesUpdated, sessionIds, sessionDurations, totalDurationMs };
   }
 
   /**

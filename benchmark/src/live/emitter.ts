@@ -8,7 +8,7 @@
 export type BenchEvent =
   | { type: "run_start";          runId: string; provider: string; judgeModel: string; sessions: number; questions: number }
   | { type: "phase_start";        phase: "ingest" | "search" | "answer" | "evaluate" | "cleanup" | "done" }
-  | { type: "ingest_session";     sessionId: string; added: number; updated: number; done: number; total: number }
+  | { type: "ingest_session";     sessionId: string; added: number; updated: number; done: number; total: number; durationMs?: number }
   | { type: "search_question";    questionId: string; questionType: string; resultCount: number; topScore: number; done: number; total: number }
   | { type: "answer_question";    questionId: string; preview: string; done: number; total: number }
   | { type: "evaluate_question";  questionId: string; questionType: string; correct: boolean; explanation: string; done: number; total: number; runningCorrect: number; retrievalMetrics?: { hitAtK: number; precisionAtK: number; f1AtK: number; mrr: number; ndcg: number; k: number } }

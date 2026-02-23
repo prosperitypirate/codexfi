@@ -16,6 +16,7 @@ Responsibilities:
 
 import json
 import logging
+import time
 from typing import Optional
 
 import httpx
@@ -64,6 +65,7 @@ def call_xai(system: str, user: str) -> str:
     Records token usage to the cost ledger and activity log.
     Raises httpx.HTTPStatusError on non-2xx responses.
     """
+    t0 = time.monotonic()
     with httpx.Client(timeout=60.0) as client:
         response = client.post(
             f"{XAI_BASE_URL}/chat/completions",
@@ -83,9 +85,13 @@ def call_xai(system: str, user: str) -> str:
         )
         response.raise_for_status()
         data = response.json()
+    elapsed_ms = (time.monotonic() - t0) * 1000
 
     raw: str = data["choices"][0]["message"].get("content") or ""
-    logger.debug("xai call model=%s raw=%r", XAI_EXTRACTION_MODEL, raw[:300])
+    logger.info("xai call model=%s elapsed=%.0fms tokens=%d/%d",
+                XAI_EXTRACTION_MODEL, elapsed_ms,
+                data.get("usage", {}).get("prompt_tokens", 0),
+                data.get("usage", {}).get("completion_tokens", 0))
 
     try:
         usage = data.get("usage", {})
@@ -122,6 +128,7 @@ def call_google(system: str, user: str) -> str:
             "Add GOOGLE_API_KEY to your .env file."
         )
 
+    t0 = time.monotonic()
     with httpx.Client(timeout=60.0) as client:
         response = client.post(
             f"{GOOGLE_BASE_URL}/chat/completions",
@@ -142,9 +149,13 @@ def call_google(system: str, user: str) -> str:
         )
         response.raise_for_status()
         data = response.json()
+    elapsed_ms = (time.monotonic() - t0) * 1000
 
     raw: str = data["choices"][0]["message"].get("content") or ""
-    logger.debug("google call model=%s raw=%r", GOOGLE_EXTRACTION_MODEL, raw[:300])
+    logger.info("google call model=%s elapsed=%.0fms tokens=%d/%d",
+                GOOGLE_EXTRACTION_MODEL, elapsed_ms,
+                data.get("usage", {}).get("prompt_tokens", 0),
+                data.get("usage", {}).get("completion_tokens", 0))
 
     try:
         usage = data.get("usage", {})
