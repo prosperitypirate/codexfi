@@ -47,11 +47,11 @@ Both tags are computed at plugin init and passed into every memory API call.
 
 ---
 
-## Hook 1: `chat.message` — memory injection on first message
+## Hook 1: `chat.message` — session cache population + per-turn refresh
 
-**When it fires:** Before the first user message is shown to the LLM, for every message in the session.
+**When it fires:** Before every user message is shown to the LLM.
 
-**What it actually does (first message only):**
+**Turn 1 (first message in session):**
 
 ```
 User sends first message
@@ -61,9 +61,8 @@ chat.message fires
          │
          ├─ 1. Detect memory keywords in user text
          │      If matched → append synthetic [MEMORY TRIGGER DETECTED] part
-         │      to inject a nudge telling the agent to call the memory tool
          │
-         ├─ 2. Fetch in parallel:
+         ├─ 2. Fetch in parallel (populate SessionMemoryCache):
          │      a. User profile (recent user-scoped memories)
          │      b. Semantic search on user scope (query = first message text)
          │      c. List all project-scoped memories (structured, by type)
@@ -75,42 +74,81 @@ chat.message fires
          │        AWAITED so it completes before opencode run exits.
          │
          ├─ 4. If project memories exist but NO project-brief type among them:
-         │      → seedProjectBrief() — reads first substantive README paragraph,
-         │        POSTs it with type=project-brief as a fallback.
+         │      → seedProjectBrief() — reads first substantive README paragraph.
          │        AWAITED for same reason.
          │
-         └─ 5. Build [MEMORY] block and prepend as synthetic text part:
-
-               [MEMORY]
-
-               ## Project Brief
-               - ...
-
-               ## Architecture
-               - ...
-
-               ## Tech Context
-               - ...
-
-               ## Product Context
-               - ...
-
-               ## Progress & Status
-               - ...
-
-               ## Last Session
-               - (most recent session-summary)
-
-               ## User Preferences
-               - (user-scoped memories)
-
-               ## Relevant to Current Task
-               - [72%, 2026-02-21] ... (semantic hits ≥ similarity threshold)
+         └─ 5. Store results in sessionCaches Map (NO injection here —
+               system.transform handles injection on the next step)
 ```
 
-**On subsequent messages in the same session:** the hook still fires but skips steps 2–5 (tracked via `injectedSessions` Set). It only checks for memory keywords.
+**Turns 2+ (subsequent messages in same session):**
+
+```
+User sends message (new topic)
+         │
+         ▼
+chat.message fires
+         │
+         ├─ 1. Detect memory keywords (same as turn 1)
+         │
+         └─ 2. Per-turn semantic refresh (~300ms):
+              ├─ 1 semantic search call (project scope, query = current message)
+              └─ Update cache.semanticResults with fresh topic-relevant results
+                 (system.transform will read these on the next LLM call)
+```
 
 **Why await auto-init:** In `opencode run` mode the process exits immediately after the response. Fire-and-forget HTTP calls were silently lost. Awaiting them blocks until the server confirms extraction.
+
+---
+
+## Hook 1.5: `experimental.chat.system.transform` — system prompt injection
+
+**When it fires:** Before **every** LLM call — including tool continuations within a turn. Fires AFTER `chat.message` has populated/refreshed the session cache.
+
+**What it does:**
+
+```
+system.transform fires (before LLM call)
+         │
+         ├─ Read SessionMemoryCache for this session
+         │
+         ├─ formatContextForPrompt(profile, semanticResults, structuredSections)
+         │
+         └─ output.system.push("[MEMORY]...")
+              → [MEMORY] block appended to system prompt
+```
+
+The `[MEMORY]` block in the system prompt looks like:
+
+```
+[MEMORY]
+
+## Project Brief
+- ...
+
+## Architecture
+- ...
+
+## Tech Context
+- ...
+
+## Progress & Status
+- ...
+
+## Last Session
+- (most recent session-summary)
+
+## User Preferences
+- (user-scoped memories)
+
+## Relevant to Current Task
+- [72%, 2026-02-21] ... (semantic hits, refreshed per turn)
+```
+
+**Why system prompt instead of synthetic message part:**
+1. **Zero token accumulation** — system prompt is rebuilt each call, not appended to history
+2. **Survives compaction** — system prompt is never summarized away
+3. **Always fresh** — "Relevant to Current Task" reflects the current message topic
 
 ---
 
@@ -267,11 +305,16 @@ User types message → presses Enter
 │   ├─ check keywords
 │   ├─ fetch user profile + user search + project list + project search (parallel)
 │   ├─ if 0 project memories → triggerSilentAutoInit (awaited)
-│   ├─ build [MEMORY] block → prepend as synthetic part
-│   └─ return (user message now has [MEMORY] prepended)
+│   ├─ store results in sessionCaches Map
+│   └─ return (no injection — system.transform handles that)
+│
+├─ experimental.chat.system.transform fires (BEFORE LLM call)
+│   ├─ read SessionMemoryCache
+│   ├─ formatContextForPrompt(profile, semanticResults, structuredSections)
+│   └─ output.system.push("[MEMORY]...") → system prompt now has [MEMORY]
 │
 ├─ experimental.chat.messages.transform fires
-│   └─ cachedMessages = [user_message_with_memory_block]   count=1
+│   └─ cachedMessages = [user_message]   count=1
 │
 LLM begins generating response
 │
@@ -412,4 +455,4 @@ The transform cache always reflects the state **before** the current LLM call. W
 `triggerSilentAutoInit` reads and POSTs project files synchronously on the first message. This can take 2–5 seconds for the memory server to extract and respond. It is awaited deliberately — fire-and-forget causes silent failures in `opencode run` mode where the process exits immediately.
 
 **First session in a new folder does not inject [MEMORY] into that same session**
-Auto-init and auto-save both write memories to the server during session 1. But the `chat.message` injection already ran at the start of that turn, before the memories existed. The [MEMORY] block appears from session 2 onward.
+Auto-init and auto-save both write memories to the server during session 1. But the `chat.message` cache population already ran at the start of that turn, before the memories existed. The [MEMORY] block appears from session 2 onward.

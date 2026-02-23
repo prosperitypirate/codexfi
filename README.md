@@ -72,6 +72,9 @@ The goal is not a better memory bank.
 
 - **Fully automatic** — memories save after every assistant turn with zero user action
 - **100% local** — LanceDB runs embedded in-process; all data lives in a Docker volume on your machine
+- **Always-fresh context** — the `[MEMORY]` block is injected into the system prompt on every LLM call via `system.transform` hook, not as a one-time message part — zero token accumulation, rebuilt fresh each turn
+- **Per-turn semantic refresh** — on every user message, a semantic search updates the "Relevant to Current Task" section to match the current conversation topic — the agent always sees context aligned to what you're asking about right now
+- **Compaction-proof** — memory lives in the system prompt, which is never compacted — long sessions never lose project context, no matter how many turns
 - **Code-optimised embeddings** — Voyage `voyage-code-3` is purpose-built for code and technical content
 - **Typed memory system** — memories are classified (`architecture`, `error-solution`, `preference`, `progress`, etc.) and injected in structured blocks
 - **Hybrid search** — semantic search on atomic memory facts for retrieval, raw source chunk injected into context for exact values (config numbers, error strings, function names)
@@ -81,7 +84,6 @@ The goal is not a better memory bank.
 - **Temporal grounding** — search results carry their session date; recency blending can optionally boost recent memories for time-sensitive queries
 - **Project + user scope** — separate namespaces for project-specific knowledge vs. cross-project personal preferences
 - **Explicit save support** — say "remember this" and the agent immediately stores it
-- **Compaction-aware** — when the context window fills, memories survive through OpenCode's compaction hook
 - **Web dashboard** — live activity feed, cost tracking, per-project memory browser at `http://localhost:3030`
 - **Privacy filter** — wrap content in `<private>...</private>` tags to exclude it from extraction
 
@@ -99,7 +101,9 @@ The goal is not a better memory bank.
 | **Code-optimised embeddings** | ✅ | ❌ | ❌ | ❌ |
 | **Fully automatic saves** | ✅ Every turn | ❌ Manual | ❌ Keyword-only | ❌ Keyword-only |
 | **Semantic retrieval** | ✅ | ❌ Full file dump | ✅ | ✅ |
-| **Session token overhead** | ~3K tokens | Up to 50K tokens | Varies | Varies |
+| **Session token overhead** | ~3K tokens (system prompt, zero accumulation) | Up to 50K tokens | Varies | Varies |
+| **Survives compaction** | ✅ System prompt injection | ❌ | ❌ | ❌ |
+| **Per-turn refresh** | ✅ Semantic refresh every turn | ❌ | ❌ | ❌ |
 
 ---
 
@@ -214,15 +218,20 @@ Open any project in OpenCode. On your first message, you'll see a `[MEMORY]` blo
 
 ## How It Works
 
-### Session start — context injection
+### Every LLM call — system prompt injection
 
-On the first user message of every session, the plugin:
+The `[MEMORY]` block lives in the **system prompt**, not in message history. It is rebuilt fresh on every LLM call via the `experimental.chat.system.transform` hook:
 
-1. Runs parallel semantic searches across both project and user scopes (top 10 each)
-2. Filters hits to those scoring ≥ 45% similarity, truncated to 400 chars each
-3. Formats everything into a `[MEMORY]` block prepended to your message
+- **Turn 1**: 4 parallel API calls fetch profile, user memories, project memories, and semantic search results. All cached in a per-session `SessionMemoryCache`.
+- **Turns 2+**: A single semantic search call (~300ms) refreshes the "Relevant to Current Task" section with results matching the current message topic.
+- **Every LLM call** (including tool continuations): `system.transform` reads the cache, rebuilds the `[MEMORY]` block, and pushes it into the system prompt.
 
-The agent sees this before generating any response:
+This means:
+- **Zero token accumulation** — the system prompt is rebuilt each call, not appended to history
+- **Survives compaction** — the system prompt is never summarized away
+- **Always fresh** — topic switches within a session cause different memories to surface
+
+The agent sees this in its system prompt:
 
 ```
 [MEMORY]
@@ -296,7 +305,7 @@ Say "remember this", "don't forget", or "memorize" and the agent immediately sto
 
 ### Compaction survival
 
-When the context window approaches capacity, OpenCode summarises the conversation. The plugin intercepts this hook and injects all current project memories into the compaction context so they survive the truncation.
+When the context window approaches capacity, OpenCode summarises the conversation and removes old messages. Because the `[MEMORY]` block lives in the system prompt (not in message history), it is never affected by compaction — the agent retains full project context even after truncation. The plugin also intercepts the compaction hook to inject memories into the compaction context for richer summaries.
 
 ---
 
@@ -380,7 +389,8 @@ opencode-memory/
 ```mermaid
 flowchart TD
     subgraph PLUGIN["🔌 OpenCode Plugin — Bun · TypeScript"]
-        H1["chat.message — injects MEMORY block on session start, detects save keywords"]
+        H1["chat.message — turn 1: populates session cache; turns 2+: semantic refresh"]
+        H5["system.transform — rebuilds and injects MEMORY into system prompt every LLM call"]
         H2["messages.transform — caches full conversation before every LLM call"]
         H3["event: message.updated — auto-saves atomic facts after every completed turn"]
         H4["compaction hook — preserves memories through context window truncation"]
@@ -415,7 +425,7 @@ flowchart TD
     classDef db   fill:#1e1b4b,stroke:#a78bfa,color:#ddd6fe
     classDef ui   fill:#2d1b4e,stroke:#c084fc,color:#f3e8ff
 
-    class H1,H2,H3,H4 hook
+    class H1,H2,H3,H4,H5 hook
     class W1,W2,W3,F1,F2 ai
     class REST rest
     class VOL db

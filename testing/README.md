@@ -35,7 +35,7 @@ cd plugin && bun run build
 ```bash
 cd testing
 bun install       # first time only
-bun run test      # runs all 10 scenarios
+bun run test      # runs all 12 scenarios
 ```
 
 Output is printed to stdout with ANSI colours. Each run is also saved to `results/` (gitignored).
@@ -50,7 +50,7 @@ bun run test:scenario 07,08    # multiple scenarios
 
 ## Latest run results (2026-02-22)
 
-Full run against plugin build from PR #36 + #39 (main branch):
+Full run against plugin build from PR #44 (`feature/mid-session-retrieval` branch):
 
 ```
 PASS  01  Cross-Session Memory Continuity          12.7s
@@ -59,12 +59,14 @@ PASS  03  Transcript Noise Guard                   19.1s  ← assertion fixed: c
 PASS  04  Project Brief Always Present             17.9s  ⚠ project-brief type not extracted (diagnostic only)
 PASS  05  Memory Aging                             38.7s
 PASS  06  Existing Codebase Auto-Init              68.7s
-PASS  07  Enumeration Hybrid Retrieval             25.5s  ← new: all 5 prefs recalled across 2 sessions
-PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s  ← new: Vitest+Pytest, Zod+Pydantic, ESLint+Black recalled
-PASS  09  maxMemories=20 Under Load                96.3s  ← new: 18 memories, early+late sessions both recalled
-PASS  10  Knowledge Update / Superseded            65.5s  ← new: Tortoise ORM recalled, not stale SQLAlchemy
+PASS  07  Enumeration Hybrid Retrieval             25.5s  ← all 5 prefs recalled across 2 sessions
+PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s  ← Vitest+Pytest, Zod+Pydantic, ESLint+Black recalled
+PASS  09  maxMemories=20 Under Load                96.3s  ← 18 memories, early+late sessions both recalled
+PASS  10  Knowledge Update / Superseded            65.5s  ← Tortoise ORM recalled, not stale SQLAlchemy
+PASS  11  System Prompt Memory Injection           18.2s  ← validates system.transform [MEMORY] injection
+PASS  12  Multi-Turn Per-Turn Refresh              45.3s  ← 6-turn server session, 9/9 assertions pass
 
-10/10 PASS  —  Total: ~401s (~6.7 min)
+12/12 PASS  —  Total: ~465s (~7.8 min)
 ```
 
 ### Observations and known issues
@@ -106,6 +108,8 @@ This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anom
 | 08 | Cross-Synthesis (isWideSynthesis) | "across both projects" heuristic fires; answer synthesises facts from two separate project memory namespaces |
 | 09 | maxMemories=20 Under Load | With >10 memories stored, facts from early sessions still recalled — confirms K=20 retrieval depth |
 | 10 | Knowledge Update / Superseded | After ORM migration, agent answers with the new ORM (Tortoise), not the stale one (SQLAlchemy); backend reflects superseded state |
+| 11 | System Prompt Memory Injection | [MEMORY] block is injected via `system.transform` into the system prompt (not as a synthetic message part); agent references seeded facts |
+| 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories as the user switches topics mid-session |
 
 ## Architecture
 
@@ -113,8 +117,8 @@ This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anom
 testing/
 ├── src/
 │   ├── runner.ts          — entry point, runs all scenarios sequentially
-│   ├── opencode.ts        — spawns opencode run, parses JSON events, cleanEnv()
-│   ├── memory-api.ts      — queries localhost:8020, computes project tags
+│   ├── opencode.ts        — spawns opencode run/serve, parses JSON events, cleanEnv()
+│   ├── memory-api.ts      — queries localhost:8020, computes project tags, direct seeding
 │   ├── report.ts          — ANSI result formatting
 │   └── scenarios/
 │       ├── 01-cross-session.ts
@@ -126,7 +130,9 @@ testing/
 │       ├── 07-enumeration-retrieval.ts
 │       ├── 08-cross-synthesis.ts
 │       ├── 09-max-memories.ts
-│       └── 10-knowledge-update.ts
+│       ├── 10-knowledge-update.ts
+│       ├── 11-system-prompt-injection.ts
+│       └── 12-multi-turn-refresh.ts
 ├── results/               — gitignored; JSON output of each run
 ├── package.json
 └── tsconfig.json
@@ -134,7 +140,7 @@ testing/
 
 ## How `opencode run` is used
 
-Each scenario calls:
+Most scenarios use **single-shot mode** via `opencode run`:
 ```bash
 opencode run "<message>" --dir <isolated-tmp-dir> -m anthropic/claude-sonnet-4-6 --format json
 ```
@@ -145,6 +151,25 @@ opencode run "<message>" --dir <isolated-tmp-dir> -m anthropic/claude-sonnet-4-6
 - Exit code and timing
 
 Each scenario gets its own isolated `createTestDir()` directory under `/private/tmp/oc-test-<name>-<uuid>`, so tests never share state.
+
+### Persistent server mode (`opencode serve`)
+
+Scenario 12 uses **persistent server mode** for true multi-turn testing. Each `opencode run` invocation is a separate process — the plugin's in-memory session caches reset between runs, making it impossible to test per-turn refresh (turns 2+). `opencode serve` keeps a single plugin process alive across turns.
+
+The test harness provides helpers in `opencode.ts`:
+- `startServer(dir)` — spawns `opencode serve --dir <dir>`, waits for the HTTP API to become ready
+- `createSession(port, model)` — `POST /session` to create a new session
+- `sendServerMessage(port, sessionId, message)` — `POST /session/:id/message` to send a user message and collect the streamed response
+- `deleteSession(port, sessionId)` — `DELETE /session/:id` to clean up
+- `stopServer(handle)` — kills the server process
+
+The `model` field in the server API must be an object `{ providerID, modelID }`, not a string like `"anthropic/claude-sonnet-4-6"`.
+
+### Direct backend seeding
+
+For deterministic test setup, `memory-api.ts` provides:
+- `addMemoryDirect(projectTag, content, type?)` — `POST /memories` to seed a specific memory directly into the backend (bypasses the LLM extractor by providing pre-formed content)
+- `searchMemories(projectTag, query, limit?)` — `POST /memories/search` to verify semantic search results
 
 ## Memory tag computation
 
