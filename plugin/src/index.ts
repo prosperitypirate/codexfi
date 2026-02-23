@@ -5,7 +5,12 @@ import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { memoryClient } from "./services/client.js";
-import { formatContextForPrompt, type StructuredMemory } from "./services/context.js";
+import {
+  formatContextForPrompt,
+  type StructuredMemory,
+  type ProfileResult,
+  type MemoriesResponseMinimal,
+} from "./services/context.js";
 import { getTags, getDisplayNames } from "./services/tags.js";
 import { stripPrivateContent, isFullyPrivate } from "./services/privacy.js";
 import { createCompactionHook, type CompactionContext } from "./services/compaction.js";
@@ -164,11 +169,23 @@ function detectMemoryKeyword(text: string): boolean {
   return MEMORY_KEYWORD_PATTERN.test(textWithoutCode);
 }
 
+// ── Per-session memory cache ─────────────────────────────────────────────────
+// Stores structured + semantic results so system.transform can rebuild the
+// [MEMORY] block on every LLM call without additional API requests.
+// Semantic results are refreshed on each user message (turns 2+).
+interface SessionMemoryCache {
+  structuredSections: Record<string, StructuredMemory[]>;
+  profile: ProfileResult | null;
+  semanticResults: MemoriesResponseMinimal;
+  initialized: boolean;
+  lastRefreshAt: number;
+}
+
 export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
   const { directory } = ctx;
   const tags = getTags(directory);
   const displayNames = getDisplayNames(directory);
-  const injectedSessions = new Set<string>();
+  const sessionCaches = new Map<string, SessionMemoryCache>();
   log("Plugin init", { directory, tags, displayNames, configured: isConfigured() });
 
   if (!isConfigured()) {
@@ -224,6 +241,44 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
       updateMessageCache(output.messages);
     },
 
+    // ── System prompt injection ──────────────────────────────────────────────
+    // Fires before every LLM call.  Rebuilds the [MEMORY] block from the
+    // session cache and appends it to the system prompt.
+    //
+    // Why system prompt instead of synthetic message part?
+    //  1. Zero token accumulation — system prompt is rebuilt each call, not appended.
+    //  2. Survives compaction — system prompt is never summarized away.
+    //  3. Always fresh — "Relevant to Current Task" section reflects the latest
+    //     user message because chat.message refreshes the cache before this fires.
+    "experimental.chat.system.transform": async (input, output) => {
+      if (!isConfigured()) return;
+
+      const sessionID = input.sessionID;
+      if (!sessionID) return;
+
+      const cache = sessionCaches.get(sessionID);
+      if (!cache?.initialized) return;
+
+      try {
+        const memoryContext = formatContextForPrompt(
+          cache.profile,
+          { results: [] },
+          cache.semanticResults,
+          cache.structuredSections
+        );
+
+        if (memoryContext) {
+          output.system.push(memoryContext);
+          log("system.transform: [MEMORY] injected", {
+            length: memoryContext.length,
+            sessionID,
+          });
+        }
+      } catch (error) {
+        log("system.transform: ERROR", { error: String(error) });
+      }
+    },
+
     "chat.message": async (input, output) => {
       if (!isConfigured()) return;
 
@@ -265,11 +320,11 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           output.parts.push(nudgePart);
         }
 
-        const isFirstMessage = !injectedSessions.has(input.sessionID);
+        const cache = sessionCaches.get(input.sessionID);
+        const isFirstMessage = !cache?.initialized;
 
         if (isFirstMessage) {
-          injectedSessions.add(input.sessionID);
-
+          // ── Turn 1: Full memory fetch + cache population ──────────────────
           const [profileResult, userMemoriesResult, projectMemoriesListResult, projectSearchResult] = await Promise.all([
             memoryClient.getProfile(tags.user, userMessage),
             memoryClient.searchMemories(userMessage, tags.user, 0.1),
@@ -280,7 +335,6 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           ]);
 
           const profile = profileResult.success ? profileResult : null;
-          const userMemories = userMemoriesResult.success ? userMemoriesResult : { results: [] };
           const projectMemoriesList = projectMemoriesListResult.success
             ? projectMemoriesListResult
             : { memories: [] };
@@ -322,53 +376,67 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
           }
 
           // ── Project-brief fallback seeding ────────────────────────────────
-          // If there are existing memories but still no project-brief (e.g. auto-init
-          // ran in a previous session but extraction never emitted type=project-brief),
-          // seed one from the README in the background.  The backend dedup logic
-          // prevents duplicate briefs from accumulating.
-          // Awaited so the request reaches the memory server before opencode run exits.
           if (allProjectMemories.length > 0 && !byType["project-brief"]) {
             await seedProjectBrief(directory, tags).catch(
               (err) => log("seed-brief: failed", { error: String(err) })
             );
           }
 
-          // ── "Relevant to Current Task" — genuine semantic hits only ──
-          // The structured sections (Architecture, Tech Context, Progress, etc.)
-          // already give comprehensive project context regardless of query.
-          // This section only adds value when the query genuinely matches
-          // something — showing it otherwise just duplicates what's above.
-          const semanticResults = {
+          // ── Merge semantic results (user + project) ───────────────────────
+          const userResults = userMemoriesResult.success ? userMemoriesResult : { results: [] };
+          const semanticResults: MemoriesResponseMinimal = {
             results: [
-              ...(userMemoriesResult.results || []),
+              ...(userResults.results || []),
               ...(projectSearch.results || []),
             ].map((r) => ({ ...r, memory: r.memory })),
           };
 
-          const memoryContext = formatContextForPrompt(
+          // ── Populate session cache ────────────────────────────────────────
+          // system.transform reads from this cache on every subsequent LLM call
+          // to inject the [MEMORY] block into the system prompt.
+          sessionCaches.set(input.sessionID, {
+            structuredSections: byType,
             profile,
-            { results: [] },   // user profile handled separately inside formatContextForPrompt
             semanticResults,
-            byType
-          );
+            initialized: true,
+            lastRefreshAt: Date.now(),
+          });
 
-          if (memoryContext) {
-            const contextPart: Part = {
-              id: `memory-context-${Date.now()}`,
-              sessionID: input.sessionID,
-              messageID: output.message.id,
-              type: "text",
-              text: memoryContext,
-              synthetic: true,
-            };
+          const duration = Date.now() - start;
+          log("chat.message: session cache populated (turn 1)", {
+            duration,
+            typeCount: Object.keys(byType).length,
+            semanticCount: semanticResults.results?.length ?? 0,
+          });
+        } else {
+          // ── Turns 2+: Lightweight per-turn semantic refresh ───────────────
+          // Only re-run semantic search to update the "Relevant to Current Task"
+          // section. Structured sections and profile are stable within a session.
+          try {
+            const freshSearch = await memoryClient.searchMemories(
+              userMessage,
+              tags.project,
+              0.15
+            );
 
-            output.parts.unshift(contextPart);
+            if (freshSearch.success && cache) {
+              cache.semanticResults = {
+                results: (freshSearch.results || []).map((r) => ({
+                  ...r,
+                  memory: r.memory,
+                })),
+              };
+              cache.lastRefreshAt = Date.now();
 
-            const duration = Date.now() - start;
-            log("chat.message: context injected", {
-              duration,
-              contextLength: memoryContext.length,
-              typeCount: Object.keys(byType).length,
+              log("chat.message: semantic refresh (turn 2+)", {
+                resultCount: freshSearch.results?.length ?? 0,
+                duration: Date.now() - start,
+              });
+            }
+          } catch (error) {
+            // Non-fatal: cache retains previous results
+            log("chat.message: semantic refresh failed (non-fatal)", {
+              error: String(error),
             });
           }
         }
@@ -588,6 +656,16 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
       // Run compaction check
       if (compactionHook) {
         await compactionHook.event(input);
+      }
+
+      // Clean up session cache on session deletion to prevent memory leaks
+      if (input.event.type === "session.deleted") {
+        const props = input.event.properties as Record<string, unknown> | undefined;
+        const sessionInfo = props?.info as { id?: string } | undefined;
+        if (sessionInfo?.id) {
+          sessionCaches.delete(sessionInfo.id);
+          log("event: session cache cleaned up", { sessionID: sessionInfo.id });
+        }
       }
 
       if (!isConfigured()) return;

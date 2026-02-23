@@ -10,21 +10,21 @@ export interface StructuredMemory {
   createdAt?: string;
 }
 
-interface ProfileResult {
+export interface ProfileResult {
   profile: {
     static: string[];
     dynamic: string[];
   } | null;
 }
 
-interface MemoryResultMinimal {
+export interface MemoryResultMinimal {
   similarity: number;
   memory?: string;
   chunk?: string;
   date?: string;
 }
 
-interface MemoriesResponseMinimal {
+export interface MemoriesResponseMinimal {
   results?: MemoryResultMinimal[];
 }
 
