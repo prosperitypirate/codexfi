@@ -40,10 +40,11 @@ plugin-v2/src/
 	extractor.ts    ~200 lines  fetch() → Haiku/Grok/Gemini + JSON parsing
 	prompts.ts      ~200 lines  Template literals (copy from backend prompts.py)
 	config.ts       ~130 lines  Env vars, thresholds, pricing (port from backend)
+	telemetry.ts    ~250 lines  CostLedger + ActivityLog (port from backend)
 	index.ts        ~900 lines  OpenCode hooks (swap client.* for store.*)
 	services/       ~1100 lines auto-save, compaction, context, tags, etc. (mostly unchanged)
 	cli/index.ts    ~100 lines  Terminal inspection commands
-	dashboard/      ~200 lines  Optional Hono + static SPA
+	dashboard/      ~200 lines  On-demand Hono server (started via memory tool)
 ```
 
 **Zero Docker. Zero Python. Zero separate processes.** The plugin opens a local LanceDB database at `~/.opencode-memory/`, makes `fetch()` calls to Voyage AI and extraction providers, and runs everything in the same Bun process that OpenCode already uses for plugins.
@@ -290,6 +291,87 @@ const results = await table
 // results[0]._distance → 0.0834 (cosine distance)
 ```
 
+### LanceDB Advanced Features (from Context7 research)
+
+The LanceDB Node SDK supports several advanced features that improve search quality and data management:
+
+**Full-Text Search (FTS) Index:**
+
+```typescript
+// Create FTS index on memory content for keyword matching
+await table.createIndex("memory", {
+	config: lancedb.Index.fts({
+		withPosition: true,
+		stem: true,
+		removeStopWords: true,
+	}),
+});
+
+// Pure FTS query (no vectors needed)
+const ftsResults = await table.search("jwt authentication", "fts").limit(10).toArray();
+```
+
+**Hybrid Search (Vector + FTS with reranking):**
+
+```typescript
+// Combine vector similarity + keyword relevance using Reciprocal Rank Fusion
+const hybridResults = await table
+	.search(queryVector)
+	.where("user_id = 'project::myproject'")
+	.limit(20)
+	.rerank(lancedb.Reranker.rrf())  // or LinearCombination, Cohere
+	.toArray();
+```
+
+This is relevant for the enumeration search path (listing all memories of a type) and session-continuity queries where keyword matching ("last session", "previously") complements vector similarity.
+
+**Merge Insert (Upsert):**
+
+```typescript
+// Atomic upsert — update if exists, insert if new
+await table
+	.mergeInsert("id")
+	.whenMatchedUpdateAll()
+	.whenNotMatchedInsertAll()
+	.execute(newRecords);
+```
+
+Useful for contradiction resolution: instead of separate delete + insert, use `mergeInsert` to atomically supersede old memories.
+
+**Vector Index (for scale):**
+
+```typescript
+// IVF-PQ index for faster search at >50K rows
+await table.createIndex("vector", {
+	config: lancedb.Index.ivfPq({
+		distanceType: "cosine",
+		numPartitions: 256,
+		numSubVectors: 96,
+	}),
+});
+
+// HNSW-SQ for better recall (recommended for our use case)
+await table.createIndex("vector", {
+	config: lancedb.Index.hnswSq({
+		distanceType: "cosine",
+	}),
+});
+```
+
+Not needed at our scale (<10K memories) but available when needed — LanceDB scans linearly without index and only benefits from indexing at higher row counts.
+
+**Scalar Filtering Index:**
+
+```typescript
+// BTree index on user_id for fast filtering
+await table.createIndex("user_id", { config: lancedb.Index.btree() });
+
+// Bitmap index on type (low cardinality — ~10 distinct values)
+await table.createIndex("type", { config: lancedb.Index.bitmap() });
+```
+
+**Implementation plan**: Start without indexes (Phase 2). Add FTS index in Phase 5 if benchmark shows keyword queries underperforming. Add vector indexes only if database exceeds ~50K rows.
+
 ### Embedder (fetch-based)
 
 ```typescript
@@ -356,26 +438,197 @@ export async function callLlm(system: string, user: string): Promise<string> {
 }
 ```
 
-### Dashboard (Optional — Hono + Static SPA)
+### Bun Native APIs
+
+Prefer Bun-native APIs over Node.js equivalents throughout the codebase:
+
+| Operation | Node.js | Bun Native | Where Used |
+|-----------|---------|------------|------------|
+| Read file | `fs.readFileSync()` | `Bun.file(path).text()` | Config loading, JSONC parsing |
+| Write file | `fs.writeFileSync()` | `Bun.write(path, data)` | Telemetry ledger, session cache |
+| JSONC parse | Custom parser | `Bun.JSONC.parse(text)` | Config loading (replaces `services/jsonc.ts`) |
+| HTTP server | Express / Hono standalone | `Bun.serve({ fetch })` | Dashboard server |
+| Shell commands | `child_process` / `execa` | `Bun.$` | CLI installer |
+| File existence | `fs.existsSync()` | `await Bun.file(path).exists()` | Config, DB directory checks |
+
+**Key implication**: `Bun.JSONC.parse()` is built into the runtime and can replace our custom `services/jsonc.ts` (85 lines) entirely. This reduces the codebase by one file.
+
+### Telemetry — CostLedger + ActivityLog (Required)
+
+Telemetry is a **core module**, not optional. Every API call (Voyage AI embeddings, LLM extraction) records tokens and cost to a local file so the memory tool can report stats/costs/activity on demand.
 
 ```typescript
-// dashboard/server.ts — ~100 lines
+// telemetry.ts — ~250 lines (port from backend/app/telemetry.py, 280 lines)
+
+interface CostEntry {
+	timestamp: string;
+	provider: string;
+	model: string;
+	input_tokens: number;
+	output_tokens: number;
+	cost: number;
+	operation: "embed" | "extract" | "condense" | "contradict";
+}
+
+const LEDGER_PATH = `${process.env.HOME}/.opencode-memory/costs.jsonl`;
+
+export async function recordCost(entry: CostEntry): Promise<void> {
+	const line = JSON.stringify(entry) + "\n";
+	await Bun.write(LEDGER_PATH, line, { append: true });
+}
+
+export async function getCosts(since?: string): Promise<CostEntry[]> {
+	const file = Bun.file(LEDGER_PATH);
+	if (!await file.exists()) return [];
+	const text = await file.text();
+	return text.trim().split("\n")
+		.map(line => JSON.parse(line))
+		.filter(e => !since || e.timestamp >= since);
+}
+
+export async function getActivity(limit: number = 50): Promise<ActivityEntry[]> {
+	// Similar JSONL append + read pattern
+}
+```
+
+**Memory tool modes** for telemetry data:
+
+| Mode | Description | Data Source |
+|------|-------------|------------|
+| `stats` | Memory count by type, project, storage size | LanceDB `countRows()` + `du -sh` |
+| `costs` | API costs by provider/model, totals | `costs.jsonl` ledger |
+| `activity` | Recent API calls, latencies, error rates | `activity.jsonl` log |
+
+### OpenCode Plugin Integration Features
+
+Research into the OpenCode plugin SDK revealed several features to use:
+
+**Custom tool with Zod schema** (already used for memory tool, but can expand):
+
+```typescript
+import { tool } from "@opencode-ai/plugin";
+import { z } from "zod";
+
+// The memory tool already exists — extend with new modes
+tools: [tool({
+	name: "memory",
+	description: "Persistent memory system...",
+	args: z.object({
+		mode: z.enum(["search", "add", "list", "forget", "profile", "stats", "costs", "activity", "dashboard", "help"]),
+		query: z.string().optional(),
+		content: z.string().optional(),
+		scope: z.enum(["user", "project"]).optional(),
+		type: z.enum(["project-brief", "architecture", ...]).optional(),
+		memoryId: z.string().optional(),
+		limit: z.number().optional(),
+	}),
+	execute: async (args, context) => {
+		// context provides: { agent, sessionID, messageID, directory, worktree }
+	},
+})]
+```
+
+**TUI integration** for user notifications:
+
+```typescript
+// Show toast when memories are saved (non-blocking notification)
+client.tui.showToast("Saved 3 new memories");
+
+// Show toast when dashboard starts
+client.tui.showToast("Dashboard running at http://localhost:3030");
+```
+
+**Structured logging** via OpenCode SDK:
+
+```typescript
+// Replace console.log / custom logger with SDK logging
+client.app.log("debug", "Extracted 5 memories from conversation");
+client.app.log("warn", "Voyage API rate limit approaching");
+client.app.log("error", `LanceDB write failed: ${error.message}`);
+```
+
+**Compaction hook** (already implemented, but document the API):
+
+```typescript
+// experimental.session.compacting — inject memory context into compaction
+"experimental.session.compacting": async (input, output) => {
+	// output.context.push() adds text to compaction summary
+	output.context.push("[MEMORY]\n" + memoryBlock);
+	// output.prompt can replace entire compaction prompt (rarely needed)
+}
+```
+
+**Event subscriptions** available for future features:
+
+| Event | Potential Use |
+|-------|--------------|
+| `session.created` | Auto-initialize project memories |
+| `session.idle` | Trigger background dedup/aging |
+| `session.error` | Log errors to activity ledger |
+| `file.edited` | Track which files the agent modifies |
+| `tool.execute.before/after` | Measure tool execution latency |
+
+### Dashboard — Hybrid Model (Agent Inline + On-Demand Hono)
+
+The dashboard follows a **hybrid approach** rather than always-running server:
+
+**Primary path — Agent inline queries** (via memory tool modes):
+
+```
+User: "How much has memory cost me?"
+Agent: memory({ mode: "costs" })
+→ Returns formatted table in chat, no server needed
+```
+
+The memory tool handles `stats`, `costs`, and `activity` modes by reading local files (JSONL ledger, LanceDB) and returning formatted text directly to the agent.
+
+**Secondary path — On-demand Hono server** (for rich visual exploration):
+
+```
+User: "Show me the dashboard"
+Agent: memory({ mode: "dashboard" })
+→ Starts Hono server on port 3030
+→ Returns "Dashboard running at http://localhost:3030"
+→ User opens browser
+```
+
+```typescript
+// dashboard/server.ts — ~200 lines
 import { Hono } from "hono";
 import { serveStatic } from "hono/bun";
 
 const app = new Hono();
 
 // API routes reading from same LanceDB
-app.get("/api/memories", async (c) => { ... });
+app.get("/api/memories", async (c) => {
+	const memories = await store.list(c.req.query("userId") || "default", {
+		limit: parseInt(c.req.query("limit") || "100"),
+	});
+	return c.json(memories);
+});
+app.get("/api/stats", async (c) => { ... });
+app.get("/api/costs", async (c) => { ... });
+app.get("/api/activity", async (c) => { ... });
 app.get("/api/health", (c) => c.json({ status: "ok" }));
 
 // Static SPA assets
 app.use("/*", serveStatic({ root: "./dashboard/public" }));
 
-export function startDashboard(port: number = 3030): void {
-	Bun.serve({ fetch: app.fetch, port });
+let server: ReturnType<typeof Bun.serve> | null = null;
+
+export function startDashboard(port: number = 3030): string {
+	if (server) return `Dashboard already running at http://localhost:${port}`;
+	server = Bun.serve({ fetch: app.fetch, port });
+	return `Dashboard running at http://localhost:${port}`;
+}
+
+export function stopDashboard(): void {
+	server?.stop();
+	server = null;
 }
 ```
+
+**Lifecycle**: Server starts on `memory({ mode: "dashboard" })`, stops on `memory({ mode: "dashboard", content: "stop" })` or when OpenCode session ends (cleanup in `session.deleted` event). The dashboard is NOT always running — it starts only when requested.
 
 ---
 
@@ -470,6 +723,7 @@ console.log("✓ All LanceDB operations work in Bun");
 - [ ] `plugin-v2/src/extractor.ts` — multi-provider LLM calls (Haiku, Grok, Gemini)
 - [ ] `plugin-v2/src/prompts.ts` — extraction prompt templates (copy from `backend/app/prompts.py`)
 - [ ] `plugin-v2/src/store.ts` — CRUD, dedup, aging, contradiction detection
+- [ ] `plugin-v2/src/telemetry.ts` — CostLedger + ActivityLog (port from `backend/app/telemetry.py`)
 - [ ] `plugin-v2/src/types.ts` — Zod schemas for memory records and API responses
 
 **Port mapping:**
@@ -479,10 +733,11 @@ console.log("✓ All LanceDB operations work in Bun");
 | `backend/app/config.py` (125 lines) | `config.ts` (~130 lines) | 1:1 | `os.environ.get()` → `process.env` |
 | `backend/app/db.py` (15 lines) | `db.ts` (~50 lines) | 3x | Add connect + schema + table management |
 | `backend/app/embedder.py` (32 lines) | `embedder.ts` (~30 lines) | 1:1 | `voyageai.Client` → `fetch()` |
-| `backend/app/extractor.py` (443 lines) | `extractor.ts` (~200 lines) | 0.45x | `httpx` → `fetch()`, remove telemetry |
+| `backend/app/extractor.py` (443 lines) | `extractor.ts` (~200 lines) | 0.45x | `httpx` → `fetch()`, telemetry calls to `telemetry.ts` |
 | `backend/app/prompts.py` (202 lines) | `prompts.ts` (~200 lines) | 1:1 | Template literals, zero logic |
 | `backend/app/store.py` (266 lines) | `store.ts` (~250 lines) | 0.95x | Sync Python → async TypeScript |
 | `backend/app/models.py` (60 lines) | `types.ts` (~80 lines) | 1.3x | PyArrow schema → Zod + TS types |
+| `backend/app/telemetry.py` (280 lines) | `telemetry.ts` (~250 lines) | 0.9x | CostLedger + ActivityLog; `Bun.write()` for JSONL append |
 
 **Validation approach:**
 ```bash
@@ -497,7 +752,8 @@ bun test plugin-v2/src/store.test.ts
 1. **Zod for runtime validation** — all memory records validated at store boundary
 2. **Parameterized queries** — LanceDB `where()` uses string filters; validate all user inputs with `validateId()` before interpolation (same pattern as `backend/app/config.py:16-27`)
 3. **Explicit async return types** — every async function annotated per coding standards
-4. **No telemetry initially** — strip CostLedger and ActivityLog from port; add back in Phase 5 if needed
+4. **Telemetry from day one** — CostLedger and ActivityLog port as core module; every `fetch()` to Voyage AI or extraction LLMs records tokens/cost to `~/.opencode-memory/costs.jsonl`
+5. **Bun native APIs** — use `Bun.file()` / `Bun.write()` for file I/O, `Bun.JSONC.parse()` for config loading (replaces custom JSONC parser)
 
 **Success Criteria:**
 - All modules compile (`bun build`)
@@ -628,6 +884,35 @@ switch (command) {
 - `bunx opencode-memory install` copies plugin config correctly
 - Works without Docker running
 
+**Distribution via bunx:**
+
+The CLI is published as an npm package with a `bin` field:
+
+```jsonc
+// package.json
+{
+	"name": "opencode-memory",
+	"bin": {
+		"opencode-memory": "./dist/cli.js"
+	},
+	// ...
+}
+```
+
+- `bunx opencode-memory <command>` auto-installs from npm to global cache and executes
+- `bunx --bun opencode-memory` forces Bun runtime (in case package has Node shebang)
+- Version pinning: `bunx opencode-memory@1.2.3 install`
+
+**Future option — standalone binary via `bun build --compile`:**
+
+```bash
+# Creates a single executable bundling Bun runtime + all deps
+bun build ./src/cli/index.ts --compile --outfile opencode-memory
+# Result: ~/bin/opencode-memory (no Bun installation required to run)
+```
+
+This is a stretch goal for distribution — useful for users who don't have Bun installed but want the CLI. The compiled binary includes the Bun runtime, so it's self-contained (~50MB). Not needed for initial release since OpenCode already requires Bun.
+
 ---
 
 ### PHASE 5: E2E Validation & Benchmark
@@ -738,8 +1023,7 @@ bunx opencode-memory install
 
 | Edge Case | Why It's Acceptable |
 |-----------|---------------------|
-| No web dashboard initially | CLI provides inspection; dashboard is Phase 4 stretch goal |
-| No telemetry/cost tracking | Can add later; extraction cost is ~$0.03/session regardless |
+| No web dashboard initially | CLI + agent inline queries provide inspection; on-demand Hono dashboard is Phase 4 stretch goal |
 | No migration from Docker data | Fresh start is simpler; memories rebuild in 2-3 sessions |
 
 ---
@@ -756,6 +1040,15 @@ bunx opencode-memory install
 | Schema validation | Zod at store boundary | Catches malformed data before LanceDB write; aligns with project preference |
 | Query safety | `validateId()` before `where()` interpolation | LanceDB doesn't support parameterized where clauses; input validation is the mitigation |
 | Dashboard framework | Hono (if built) | Lightweight, Bun-native, serves static files; no React SSR needed |
+| Dashboard lifecycle | On-demand (not always running) | Started via `memory({ mode: "dashboard" })`, stopped on session end; avoids wasting resources |
+| Dashboard data access | Hybrid: agent inline queries + on-demand Hono server | Agent handles `stats`/`costs`/`activity` directly; Hono provides rich visual exploration when needed |
+| Telemetry | Required core module (CostLedger + ActivityLog) | User actively uses cost tracking; every API call must record tokens/cost to JSONL file |
+| File I/O | Bun native APIs (`Bun.file()`, `Bun.write()`) | Faster than Node.js `fs`; native to runtime; reduces dependencies |
+| JSONC parsing | `Bun.JSONC.parse()` (built-in) | Eliminates custom `services/jsonc.ts` (85 lines); built into Bun runtime |
+| Logging | `client.app.log()` via OpenCode SDK | Integrates with OpenCode's log viewer; replaces custom `logger.ts` |
+| User notifications | `client.tui.showToast()` | Non-blocking toast for "saved N memories", "dashboard started", etc. |
+| Search indexing | Start without; add FTS/vector indexes if needed | LanceDB linear scan is fast enough at <10K rows; indexes add complexity |
+| Upsert pattern | `mergeInsert()` for contradiction superseding | Atomic replace instead of separate delete + insert; safer for data integrity |
 | Package manager | pnpm for plugin-v2 | User preference; consistent with project standards |
 | Indentation | Tabs | User preference; enforced across all new files |
 | DB location | `~/.opencode-memory/lancedb/` | Follows XDG-like convention; outside project directory; shared across projects |
@@ -767,16 +1060,20 @@ bunx opencode-memory install
 
 | Area | Score | Notes |
 |------|-------|-------|
-| LanceDB Node SDK API | 7/10 | Context7 docs confirm API shape; spike needed to validate Bun runtime compat |
+| LanceDB Node SDK API | 8/10 | Context7 docs confirm full API (search, FTS, hybrid, upsert, indexing); spike needed for Bun runtime compat only |
 | Voyage AI fetch replacement | 10/10 | Trivial HTTP POST; well-documented endpoint; already tested conceptually |
 | Extraction provider fetch | 9/10 | All three providers use OpenAI-compat or simple REST; backend code is the reference |
 | Store logic port (dedup/aging) | 9/10 | Direct port from Python; logic is well-understood from analysis session |
-| Plugin hook integration | 9/10 | Current hooks are well-documented in design doc 001; swap is mechanical |
+| Plugin hook integration | 10/10 | Full plugin SDK documented (tool() helper, events, TUI, compaction hooks); swap is mechanical |
 | Compaction survival | 10/10 | Already implemented in current plugin via system.transform (design doc 001) |
-| CLI tooling | 9/10 | Simple `parseArgs` + store calls; no complex UI |
+| Telemetry port | 9/10 | Direct port from Python telemetry.py; JSONL append with `Bun.write()` is trivial |
+| CLI tooling | 9/10 | Simple `parseArgs` + store calls; bunx distribution well-documented |
+| Dashboard (hybrid) | 9/10 | Agent inline queries are just formatted store reads; Hono on-demand server is ~100 lines |
 | E2E/Benchmark validation | 9/10 | Existing test infrastructure; just point to new plugin |
+| Bun native API usage | 10/10 | `Bun.file()`, `Bun.write()`, `Bun.JSONC.parse()`, `Bun.serve()` all well-documented and stable |
+| OpenCode SDK integration | 9/10 | Full docs fetched (custom tools, TUI, events, logging); SDK types available |
 
-**Overall: 9/10** — Only area below 8 is LanceDB Bun compatibility, which Phase 1 spike resolves before any other work begins.
+**Overall: 9.3/10** — LanceDB score improved from 7 to 8 after Context7 deep research confirmed full API surface (FTS, hybrid search, upsert). Only remaining unknown is Bun runtime NAPI compat, which Phase 1 spike resolves before any other work begins.
 
 ---
 
@@ -788,8 +1085,8 @@ bunx opencode-memory install
 | Memory operation latency | Logging timestamps | ~5-15ms (HTTP round-trip) | <1ms (direct function call) |
 | E2E scenario pass rate | `bun run test` | 11/11 | 11/11 |
 | Benchmark score | `bun run bench run` | ~93.5% (latest) | ≥90% (no regression) |
-| Lines of code (total) | `wc -l` | 2,920 (plugin) + 1,590 (backend) = 4,510 | ~2,200 (plugin-v2 only) |
-| Dependencies | Package count | Python + Node + Docker | Bun + @lancedb/lancedb only |
+| Lines of code (total) | `wc -l` | 2,920 (plugin) + 1,590 (backend) = 4,510 | ~2,450 (plugin-v2 only, includes telemetry) |
+| Dependencies | Package count | Python + Node + Docker | Bun + @lancedb/lancedb + hono |
 | Disk footprint | `du -sh` | ~200MB (Docker images) | ~20MB (NAPI binary + DB files) |
 | Resource usage | Activity Monitor | ~200MB RAM (two containers) | ~20MB RAM (in-process) |
 | Processes required | `ps aux | grep` | 3 (Docker, backend, frontend) | 0 additional |
@@ -898,11 +1195,14 @@ AFTER (embedded):
 
 ### Research Completed
 
-- LanceDB Node SDK API: `connect()`, `createTable()`, `openTable()`, `search()`, `where()`, `limit()`, `toArray()` — documented via Context7
-- Voyage AI API: `POST /v1/embeddings`, model `voyage-code-3`, 1024 dimensions, `fetch()` compatible
-- Backend Python code: All 11 files analyzed (1,590 lines), every function mapped to TypeScript equivalent
-- Plugin code: All 13 files analyzed (2,920 lines), `client.ts` identified as only file needing replacement
-- Hono: `serveStatic` from `hono/bun`, lightweight API routes — documented via Context7
+- **LanceDB Node SDK API** (Context7, deep): `connect()`, `createTable()`, `openTable()`, `search()`, `where()`, `limit()`, `toArray()`, plus advanced: FTS indexing (`Index.fts()`), hybrid search with reranking (`Reranker.rrf()`), `mergeInsert()` for upserts, IVF-PQ/HNSW-SQ vector indexes, BTree/Bitmap scalar indexes, `countRows()`, `update()`, `delete()`
+- **Voyage AI API**: `POST /v1/embeddings`, model `voyage-code-3`, 1024 dimensions, `fetch()` compatible, $0.22/1M tokens, 2000 RPM
+- **Backend Python code**: All 11 files analyzed (1,590 lines), every function mapped to TypeScript equivalent
+- **Plugin code**: All 13 files analyzed (2,920 lines), `client.ts` identified as only file needing replacement
+- **Hono** (Context7): `serveStatic` from `hono/bun`, lightweight API routes, `Bun.serve({ fetch: app.fetch })`
+- **Bun v1.3.9** (Perplexity, Feb 2026): `Bun.file()` / `Bun.write()`, `Bun.JSONC.parse()`, `Bun.serve()`, `Bun.$`, `bun build --compile`, NAPI support confirmed mature (bcrypt, argon2 working), `bunx --bun` flag, version pinning
+- **OpenCode Plugin SDK** (official docs): `tool()` helper with Zod args, `client.tui.showToast()`, `client.app.log()`, `experimental.session.compacting` hook, event subscriptions (`session.created/idle/error`, `tool.execute.before/after`, `file.edited`), plugin dependency loading via `.opencode/package.json`
+- **OpenCode SDK** (official docs): `createOpencode()` client, `session.create/list/get/prompt`, `find.text/files/symbols`, `file.read/status`, `event.subscribe()` SSE, structured output with `format: { type: "json_schema" }`
 
 ### Next Session Protocol
 
