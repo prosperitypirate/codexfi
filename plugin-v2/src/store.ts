@@ -396,6 +396,22 @@ export async function search(
 	userId: string,
 	options: SearchOptions = {},
 ): Promise<SearchResult[]> {
+	const queryVector = await embed(query, "query");
+	return searchByVector(queryVector, userId, options);
+}
+
+/**
+ * Vector-based search — accepts a pre-computed embedding vector.
+ *
+ * This is the core search implementation. Use this when you already have
+ * a query vector (e.g. dashboard cross-project search where the same query
+ * is searched across multiple user scopes — embed once, search N times).
+ */
+export async function searchByVector(
+	queryVector: number[],
+	userId: string,
+	options: SearchOptions = {},
+): Promise<SearchResult[]> {
 	const safeUserId = validateId(userId, "user_id");
 	const table = getTable();
 	const count = await table.countRows();
@@ -405,7 +421,6 @@ export async function search(
 	const threshold = options.threshold ?? 0.3;
 	const w = options.recencyWeight ?? 0.0;
 
-	const queryVector = await embed(query, "query");
 	// LanceDB JS SDK prefilters by default (.where() filters BEFORE ANN search).
 	// Use .postfilter() to opt out.
 	const rows = await withRetry(

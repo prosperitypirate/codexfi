@@ -34,7 +34,7 @@ export interface ParsedArgs {
  */
 export function parseArgs(
 	argv: string[] = process.argv.slice(2),
-	knownBooleans: Set<string> = new Set(["help", "verbose", "json", "user", "all", "no-color"]),
+	knownBooleans: Set<string> = new Set(["help", "verbose", "json", "user", "all", "no-color", "no-open", "version"]),
 ): ParsedArgs {
 	const result: ParsedArgs = {
 		command: "",

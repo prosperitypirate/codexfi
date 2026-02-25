@@ -13,6 +13,7 @@
  *   status               Health check — verify DB, API keys, plugin registration
  *   export               Export memories to JSON or CSV
  *   forget <id>          Delete a memory by ID (or short prefix)
+ *   dashboard            Launch the on-demand web dashboard
  *   help                 Show this help message
  *
  * Global flags:
@@ -20,6 +21,39 @@
  *   --help, -h           Show help for the current command
  *   --version            Print version and exit
  */
+
+// Load .env before any config imports — config.ts reads VOYAGE_API_KEY etc. at module level.
+// Bun auto-loads .env from CWD, but the CLI may run from a different directory.
+// Walk up from CWD to find the nearest .env file.
+import { existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+
+function loadEnvFile(): void {
+	let dir = process.cwd();
+	// Walk up from CWD to filesystem root, looking for .env
+	for (let i = 0; i < 20; i++) {
+		const envPath = resolve(dir, ".env");
+		if (existsSync(envPath)) {
+			try {
+				const text = require("node:fs").readFileSync(envPath, "utf-8") as string;
+				for (const line of text.split("\n")) {
+					const trimmed = line.trim();
+					if (!trimmed || trimmed.startsWith("#")) continue;
+					const eq = trimmed.indexOf("=");
+					if (eq === -1) continue;
+					const key = trimmed.slice(0, eq).trim();
+					const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+					if (!process.env[key]) process.env[key] = val;
+				}
+			} catch { /* non-fatal */ }
+			break;
+		}
+		const parent = dirname(dir);
+		if (parent === dir) break; // reached filesystem root
+		dir = parent;
+	}
+}
+loadEnvFile();
 
 import { parseArgs } from "./args.js";
 import * as fmt from "./fmt.js";
@@ -73,6 +107,11 @@ const COMMANDS: Record<string, {
 		description: "Delete a memory by ID",
 		usage: "opencode-memory forget <id>",
 		load: () => import("./commands/forget.js"),
+	},
+	dashboard: {
+		description: "Launch the web dashboard (Ctrl+C to stop)",
+		usage: "opencode-memory dashboard [--port <N>] [--no-open]",
+		load: () => import("./commands/dashboard.js"),
 	},
 };
 

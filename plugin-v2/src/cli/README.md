@@ -8,7 +8,7 @@ Browse, search, export, and inspect — everything the plugin does, accessible f
 
 <br/>
 
-[![7 Commands](https://img.shields.io/badge/Commands-7-22C55E?style=flat)](https://github.com/prosperitypirate/opencode-memory)
+[![8 Commands](https://img.shields.io/badge/Commands-8-22C55E?style=flat)](https://github.com/prosperitypirate/opencode-memory)
 [![Zero Dependencies](https://img.shields.io/badge/Zero-Dependencies-CF3CFF?style=flat)](https://github.com/prosperitypirate/opencode-memory)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
@@ -221,6 +221,29 @@ opencode-memory export --json | jq '.[] | select(.metadata.type == "architecture
 
 ---
 
+### `dashboard` — Web dashboard
+
+Launch the on-demand web dashboard. Starts a local HTTP server and opens the browser.
+
+```
+$ opencode-memory dashboard
+
+  ✓ Initializing database
+  ✓ Dashboard running at http://localhost:9120
+  - Press Ctrl+C to stop
+```
+
+The dashboard shows real-time stats, API costs, activity feed, memory type distribution,
+recent memories, project/scope breakdown, and semantic search — all in a single self-contained
+HTML page with no external dependencies.
+
+```bash
+opencode-memory dashboard --port 3000   # custom port
+opencode-memory dashboard --no-open     # don't auto-open browser
+```
+
+---
+
 ### `forget` — Delete a memory
 
 Delete by full UUID or short prefix. Ambiguous prefixes are rejected with a list of matches.
@@ -274,7 +297,12 @@ src/cli/
     ├── stats.ts            — DB stats, type distribution, API costs
     ├── status.ts           — health check (6 verifications)
     ├── export.ts           — JSON/CSV export with RFC 4180 quoting
-    └── forget.ts           — delete by ID with prefix resolution
+    ├── forget.ts           — delete by ID with prefix resolution
+    └── dashboard.ts        — web dashboard launcher
+
+src/dashboard/
+├── server.ts               — Bun.serve() HTTP server + JSON API endpoints
+└── html.ts                 — self-contained HTML dashboard (single string)
 ```
 
 **Design principles:**
