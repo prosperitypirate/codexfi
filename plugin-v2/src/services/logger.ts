@@ -1,13 +1,15 @@
 /**
- * Async logger — replaces appendFileSync with Bun.write (non-blocking).
- * See design doc §13.
+ * Async file logger — replaces the original sync appendFileSync with
+ * non-blocking appendFile from node:fs/promises. See design doc §13.
+ *
+ * Fire-and-forget pattern: logging never blocks plugin execution.
  */
 
 import { appendFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const LOG_FILE = join(homedir(), ".opencode-memory-v2.log");
+const LOG_FILE = join(homedir(), ".opencode-memory.log");
 
 // Write session header (fire-and-forget)
 appendFile(LOG_FILE, `\n--- Session started: ${new Date().toISOString()} ---\n`)

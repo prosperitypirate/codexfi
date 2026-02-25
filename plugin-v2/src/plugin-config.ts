@@ -5,6 +5,7 @@
  * Replaces plugin/src/config.ts — no memoryBaseUrl (no HTTP backend).
  */
 
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -80,8 +81,8 @@ function validateCompactionThreshold(value: number | undefined): number {
 function loadConfig(): MemoryConfig {
 	for (const path of CONFIG_FILES) {
 		try {
-			// Use synchronous text read since this runs at module init
-			const text = require("node:fs").readFileSync(path, "utf-8") as string;
+			// Synchronous read at module init — ESM-safe import (no require())
+			const text = readFileSync(path, "utf-8");
 			return Bun.JSONC.parse(text) as MemoryConfig;
 		} catch {
 			// File doesn't exist or invalid — try next

@@ -116,7 +116,7 @@ async function main() {
       await Bun.sleep(2_000);
       await refreshTable();
       const deleted = await cleanupTestDirs(result.testDirs);
-      console.log(`       ${DIM}  ✓ Cleaned up ${deleted} test memories from backend${RESET}`);
+      console.log(`       ${DIM}  ✓ Cleaned up ${deleted} test memories from embedded store${RESET}`);
     }
     console.log();
   }

@@ -8,6 +8,7 @@
 import { createHash, randomUUID } from "node:crypto";
 
 import {
+	EMBEDDING_DIMS,
 	CHUNK_TRUNCATION,
 	CONTRADICTION_CANDIDATE_DISTANCE,
 	CONTRADICTION_CANDIDATE_LIMIT,
@@ -176,11 +177,11 @@ async function getMemoriesByTypes(
 
 		const safeUserId = validateId(userId, "user_id");
 		// WORKAROUND: LanceDB JS SDK requires a vector for every query — there is no
-		// pure-filter query mode. We pass a zero-vector (1024 floats) to get filtering
-		// without meaningful similarity ranking. Results are then filtered/sorted in JS.
-		// This is a known SDK limitation; upstream feature request would be welcome.
+		// pure-filter query mode. We pass a zero-vector to get filtering without
+		// meaningful similarity ranking. Results are then filtered/sorted in JS.
+		// Uses EMBEDDING_DIMS to stay in sync if the embedding model changes.
 		const results = await table
-			.search(new Array(1024).fill(0))
+			.search(new Array(EMBEDDING_DIMS).fill(0))
 			.where(`user_id = '${safeUserId}' AND superseded_by = ''`)
 			.limit(10_000) // generous cap — single-user system
 			.toArray();
@@ -549,13 +550,14 @@ export async function list(
 
 	const limit = options.limit ?? 20;
 
-	// WORKAROUND: zero-vector for non-semantic query (see getMemoriesByTypes comment)
+	// WORKAROUND: zero-vector for non-semantic query (see getMemoriesByTypes comment).
+	// Uses EMBEDDING_DIMS constant to stay in sync with embedding model.
 	const whereClause = options.includeSuperseded
 		? `user_id = '${safeUserId}'`
 		: `user_id = '${safeUserId}' AND superseded_by = ''`;
 
 	const rows = await table
-		.search(new Array(1024).fill(0))
+		.search(new Array(EMBEDDING_DIMS).fill(0))
 		.where(whereClause)
 		.limit(10_000)
 		.toArray();

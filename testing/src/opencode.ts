@@ -107,6 +107,17 @@ export const AUTO_SAVE_WAIT_MS = 15_000;
 // Per-directory server cache — avoids starting a new server per runOpencode call
 const serverCache = new Map<string, ServerHandle>();
 
+// Cleanup handler — stop all cached servers on process exit/interrupt
+function cleanupAllServers(): void {
+  for (const [dir, handle] of serverCache) {
+    try { handle.process?.kill(); } catch { /* ignore */ }
+    serverCache.delete(dir);
+  }
+}
+process.on("exit", cleanupAllServers);
+process.on("SIGINT", () => { cleanupAllServers(); process.exit(130); });
+process.on("SIGTERM", () => { cleanupAllServers(); process.exit(143); });
+
 async function getOrCreateServer(dir: string): Promise<ServerHandle> {
   let handle = serverCache.get(dir);
   if (handle) return handle;

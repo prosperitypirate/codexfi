@@ -3,6 +3,8 @@
  * All other modules import constants from here; nothing is defined twice.
  */
 
+import { homedir } from "node:os";
+
 // ── Input validation ────────────────────────────────────────────────────────────
 
 /** Allowed characters for identifiers used in LanceDB where-clause interpolation. */
@@ -45,19 +47,29 @@ export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 export const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY ?? "";
 
 /** Data directory — default follows XDG convention outside project directory. */
-export const DATA_DIR = process.env.OPENCODE_MEMORY_DIR ?? `${process.env.HOME}/.opencode-memory`;
+export const DATA_DIR = process.env.OPENCODE_MEMORY_DIR ?? `${homedir()}/.opencode-memory`;
 
 // ── Extraction provider ─────────────────────────────────────────────────────────
 
 export type ExtractionProvider = "anthropic" | "xai" | "google";
+
+const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
 
 /**
  * "anthropic" (default) — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
  * "xai"                 — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
  * "google"              — Gemini 3 Flash via native generateContent API
  */
+const envProvider = process.env.EXTRACTION_PROVIDER;
 export const EXTRACTION_PROVIDER: ExtractionProvider =
-	(process.env.EXTRACTION_PROVIDER as ExtractionProvider) ?? "anthropic";
+	envProvider && VALID_PROVIDERS.has(envProvider)
+		? (envProvider as ExtractionProvider)
+		: (() => {
+			if (envProvider) {
+				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "anthropic".`);
+			}
+			return "anthropic" as ExtractionProvider;
+		})();
 
 // ── Model identifiers ───────────────────────────────────────────────────────────
 

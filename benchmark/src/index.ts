@@ -35,9 +35,11 @@ if (existsSync(localEnvPath)) {
 		const hadPrevious = key in process.env && process.env[key] !== value;
 		// .env.local OVERRIDES root .env — this is standard .env.local semantics
 		process.env[key] = value;
-		const masked = value.length <= 8
-			? value
-			: `${value.slice(0, 4)}...${value.slice(-4)}`;
+		// Log presence and length only — no substrings of secrets in CI logs
+		const isSecret = /key|token|secret/i.test(key);
+		const masked = isSecret
+			? `[${value.length} chars]`
+			: (value.length <= 8 ? value : `${value.slice(0, 4)}...${value.slice(-4)}`);
 		loadedFromLocal.push({ key, masked, overrode: hadPrevious });
 	}
 }
