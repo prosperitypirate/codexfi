@@ -2,7 +2,7 @@
 
 <div align="center">
 
-[![Score: 95.0%](https://img.shields.io/badge/Score-95.0%25-22C55E?style=flat)](https://github.com/prosperitypirate/opencode-memory)
+[![Score: 94.5%](https://img.shields.io/badge/Score-94.5%25-22C55E?style=flat)](https://github.com/prosperitypirate/opencode-memory)
 [![Questions: 200](https://img.shields.io/badge/Questions-200-3178C6?style=flat)](https://github.com/prosperitypirate/opencode-memory)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
@@ -202,7 +202,62 @@ Ingest total: 353.8s (25 sessions) · ~13.6s/session mean · Total run time: 30m
 
 ## Results
 
-### causal-chain-synthesis-arch — 200 questions · 25 sessions · run `causal-chain-synthesis-arch` ← current
+### embedded-v4 — 200 questions · 25 sessions · run `embedded-v4` ← current (plugin-v2 embedded rewrite)
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **Embedded LanceDB** (no Docker backend)
+>
+> This is the first benchmark run on the plugin-v2 embedded rewrite — LanceDB, extraction, and
+> embeddings run directly in the Bun plugin process. Zero Docker, zero Python, zero HTTP.
+
+```
+tech-stack        ████████████████████ 100%  (25/25)  ✓  perfect
+preference        ████████████████████ 100%  (25/25)  ✓  perfect
+architecture      ████████████████████ 100%  (25/25)  ✓  perfect
+abstention        ████████████████████ 100%  (25/25)  ✓  perfect
+session-cont.     ███████████████████░  96%  (24/25)  ✓
+knowledge-update  ███████████████████░  96%  (24/25)  ✓
+error-solution    ██████████████████░░  92%  (23/25)  ✓
+cross-synthesis   ██████████████░░░░░░  72%  (18/25)  ⚠  weakest category
+─────────────────────────────────────────────────────────────
+Overall           94.5%  (189/200)                    +2.5pp vs haiku-run1 baseline
+```
+
+#### Comparison: embedded-v4 vs Docker baseline (haiku-run1)
+
+| Category | embedded-v4 | haiku-run1 | Delta |
+|---|---|---|---|
+| **Overall** | **94.5%** | 92.0% | **+2.5%** |
+| tech-stack | 100% | 96% | +4% |
+| architecture | 100% | 96% | +4% |
+| session-continuity | 96% | 96% | 0% |
+| preference | 100% | 92% | +8% |
+| error-solution | 92% | 100% | -8% (LLM variance) |
+| knowledge-update | 96% | 92% | +4% |
+| cross-session-synthesis | 72% | 68% | +4% |
+| abstention | 100% | 96% | +4% |
+
+#### Benchmark progression during embedded rewrite
+
+| Run | Score | Issue | Fix |
+|---|---|---|---|
+| embedded-v1 | 68% | LanceDB JS defaults to L2, not cosine | `.distanceType("cosine")` on all search calls |
+| embedded-v2 | 85% | Cosine fix applied | — |
+| embedded-v3 | 85% | Benchmark used `claude-sonnet-4-5` as judge (`.env.local` not loaded from project root) | Explicit `.env.local` loader in `benchmark/src/index.ts`; default model updated to `claude-sonnet-4-6` |
+| **embedded-v4** | **94.5%** | Chunk truncation (400 vs 8000 chars) + extraction timeout (30s vs 60s) | `CHUNK_TRUNCATION=8000`; removed `timeoutMs` from `EXTRACT_RETRY` |
+
+#### Critical lessons learned
+
+1. **CHUNK_TRUNCATION was the #1 cause of the regression.** The Python backend stores the full 8,000-char chunk; the initial port truncated to 400 chars. This silently discarded 95% of source context the answering LLM needs for detail queries.
+
+2. **Double timeouts are invisible bugs.** The retry wrapper added a 30s `timeoutMs` on top of the provider's 60s `AbortSignal.timeout`. Effective timeout was 30s, killing extraction calls that would have succeeded.
+
+3. **Bun only loads `.env` from CWD.** Running the benchmark from project root missed `benchmark/.env.local`. The `.env.local` loader with startup verification log prevents this class of bug.
+
+4. **Line-by-line comparison is essential for rewrites.** All prompts were byte-for-byte identical, but implementation details (chunk size, timeouts, distance metrics) had silent mismatches that only showed up in benchmarks.
+
+---
+
+### causal-chain-synthesis-arch — 200 questions · 25 sessions · run `causal-chain-synthesis-arch` ← previous best (Docker backend)
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · K=20 retrieval · hybrid enumeration routing · architecture in synthesis types · causal-chain extraction
 
@@ -439,16 +494,33 @@ bun run bench run -r config-b
 
 ### Run Comparison
 
-| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch | haiku-run1 | haiku-run2 | haiku-run3 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
-| Sessions | 10 | 25 | 25 | 25 | 25 | 25 | 25 | 25 | 25 | 25 |
-| Extractor | xAI | xAI | xAI | xAI | xAI | xAI | xAI | **Anthropic** | **Anthropic** | **Anthropic** |
-| Retrieval K | 8 | 8 | 8 | **20** | **20** | **20** | **20** | **20** | **20** | **20** |
-| Total run time | — | — | — | — | — | — | — | — | 28m 19s | **30m 14s** |
-| Abstention | — | — | 88% | 92% | 92% | **100%** | 92% | 96% | 100% | 96% |
-| Cross-synthesis | 60% (3/5) | 44% (11/25) | 52% (13/25) | 64% (16/25) | 76% (19/25) | 76% (19/25) | **80% (20/25)** | 68% (17/25) | 76% (19/25) | 68% (17/25) |
-| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** | **92.0%** | **95.0%** | **93.5%** |
+| Factor | haiku-run1 | haiku-run2 | haiku-run3 | causal-chain | embedded-v4 |
+|---|---|---|---|---|---|
+| **Backend** | Docker | Docker | Docker | Docker | **Embedded LanceDB** |
+| Questions | 200 | 200 | 200 | 200 | 200 |
+| Extractor | Anthropic | Anthropic | Anthropic | xAI | **Anthropic** |
+| Judge/Answer | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 |
+| Retrieval K | 20 | 20 | 20 | 20 | 20 |
+| tech-stack | 96% | 100% | 100% | 100% | **100%** |
+| architecture | 96% | 100% | 100% | 100% | **100%** |
+| preference | 92% | 100% | 100% | 100% | **100%** |
+| abstention | 96% | 100% | 96% | 92% | **100%** |
+| session-cont. | 96% | 96% | 96% | 92% | 96% |
+| error-solution | 100% | 92% | 96% | 100% | 92% |
+| knowledge-update | 92% | 96% | 92% | 92% | **96%** |
+| cross-synthesis | 68% | 76% | 68% | 80% | 72% |
+| **Overall** | **92.0%** | **95.0%** | **93.5%** | **94.5%** | **94.5%** |
+
+#### Full historical comparison (all runs)
+
+| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch | haiku-run1 | haiku-run2 | haiku-run3 | embedded-v4 |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Backend | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | **Embedded** |
+| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+| Extractor | xAI | xAI | xAI | xAI | xAI | xAI | xAI | Anthropic | Anthropic | Anthropic | Anthropic |
+| Retrieval K | 8 | 8 | 8 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 |
+| Cross-synthesis | 60% | 44% | 52% | 64% | 76% | 76% | 80% | 68% | 76% | 68% | 72% |
+| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** | **92.0%** | **95.0%** | **93.5%** | **94.5%** |
 
 > **Note:** Abstention dropped 100% → 92% between `abstention-fix-v2` and `causal-chain-synthesis-arch`.
 > This is **ingest nondeterminism**, not a regression from code changes — the xAI extractor (temperature=0)
@@ -492,6 +564,10 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 ---
 
 ## Version History
+
+### embedded-v4 (run `embedded-v4`) — **94.5%** · Embedded LanceDB · extractor: Anthropic Haiku 4.5
+
+200 questions, 25 sessions. First successful benchmark on the plugin-v2 embedded rewrite (no Docker backend). 4 categories at 100% (tech, arch, pref, abstain), session-continuity and knowledge-update at 96%, error at 92%, synthesis at 72%. Matches haiku-run1 baseline (92%) with +2.5pp improvement. Key fixes applied: `CHUNK_TRUNCATION` 400→8000 (95% more source context), removed double timeout on extraction (30s→60s effective), `.distanceType("cosine")` on all LanceDB searches (L2→cosine), explicit `.env.local` loader for benchmark config.
 
 ### haiku-run3 (run `haiku-run3`) — **93.5%** · extractor: Anthropic Haiku 4.5 · 30m 14s
 
@@ -588,30 +664,37 @@ error-solution 0% → 100% after source chunk injection into answer context.
 
 ### Prerequisites
 
-- [Bun](https://bun.sh) ≥ 1.0
-- opencode-memory backend running (see root README)
-- An Anthropic API key
+- [Bun](https://bun.sh) ≥ 1.2.19
+- `ANTHROPIC_API_KEY` — for extraction (Haiku 4.5) and judge/answering (Sonnet 4.6)
+- `VOYAGE_API_KEY` — for embeddings (voyage-code-3)
+
+> **No Docker required.** The benchmark uses the embedded LanceDB store from `plugin-v2/` directly.
+> The Docker backend is no longer needed.
 
 ### First-time setup
 
 ```bash
-# 1. Start the backend (from repo root)
-docker compose up -d
+# 1. Build plugin-v2 (benchmark imports store.ts and db.ts directly)
+cd plugin-v2 && bun install && bun run build && cd ..
 
 # 2. Install benchmark dependencies
-cd benchmark
-bun install
+cd benchmark && bun install && cd ..
 
 # 3. Configure environment
-cp .env.example .env.local
-# Edit .env.local: set ANTHROPIC_API_KEY=sk-ant-...
+cp benchmark/.env.example benchmark/.env.local
+# Edit benchmark/.env.local: set ANTHROPIC_API_KEY, VOYAGE_API_KEY, JUDGE_MODEL, ANSWERING_MODEL
 ```
 
 ### Running the benchmark
 
 ```bash
-bun run bench run
+# Run from project root — benchmark/.env.local is loaded automatically
+bun run benchmark/src/index.ts run
 ```
+
+> **Important:** Always run from the project root, not from `benchmark/`. The `.env.local` loader
+> in `benchmark/src/index.ts` resolves the file relative to `import.meta.url`, so CWD doesn't
+> matter. But root `.env` provides `VOYAGE_API_KEY` which Bun auto-loads from CWD.
 
 Every run automatically:
 1. Opens the live dashboard at `http://localhost:4242`
@@ -634,8 +717,8 @@ bun run bench list                  # list all past runs with scores
 ### Pipeline
 
 ```
-ingest    → POST sessions to backend (isolated by runTag)
-search    → semantic search per question, saves top-20 results
+ingest    → extract memories via LLM + embed via Voyage AI + store in embedded LanceDB (isolated by runTag)
+search    → semantic vector search per question, saves top-20 results
 answer    → LLM generates answer from retrieved context only
 evaluate  → LLM-as-judge: correct (1) or incorrect (0) + retrieval relevance scoring
 report    → aggregate by category, latency stats, retrieval metrics, total run time, save report.json
@@ -646,12 +729,18 @@ Checkpointed after each phase — resume any interrupted run with `-r <id>`. Tot
 
 ### Environment variables
 
+Set these in `benchmark/.env.local` (loaded automatically with override semantics):
+
 | Variable | Default | Description |
 |---|---|---|
-| `MEMORY_BACKEND_URL` | `http://localhost:8020` | Backend URL |
-| `ANTHROPIC_API_KEY` | — | Required (Claude judge + answerer) |
-| `OPENAI_API_KEY` | — | Alternative if using OpenAI models |
+| `ANTHROPIC_API_KEY` | — | Required (Claude judge + answerer + extraction) |
+| `VOYAGE_API_KEY` | — | Required (voyage-code-3 embeddings) |
 | `JUDGE_MODEL` | `claude-sonnet-4-6` | Override judge model |
 | `ANSWERING_MODEL` | `claude-sonnet-4-6` | Override answering model |
+| `EXTRACTION_PROVIDER` | `anthropic` | Extraction LLM provider (`anthropic`, `xai`, `google`) |
+| `XAI_API_KEY` | — | Required if `EXTRACTION_PROVIDER=xai` |
+
+> **Startup verification:** Every benchmark run prints a table showing what was loaded from
+> `benchmark/.env.local`, which keys overrode root `.env`, and warns if the file is missing.
 
 Run output is saved to `data/runs/<run-id>/` (gitignored).

@@ -8,8 +8,9 @@
  *
  * Prerequisites:
  *   - opencode installed: bun install -g opencode-ai
- *   - memory backend running: http://localhost:8020
- *   - Anthropic API key configured in opencode
+ *   - VOYAGE_API_KEY set (for embeddings)
+ *   - ANTHROPIC_API_KEY or XAI_API_KEY set (for extraction)
+ *   - plugin-v2 built: cd plugin-v2 && bun run build
  */
 
 import { isBackendReady } from "./memory-api.js";
@@ -59,11 +60,11 @@ async function main() {
 
   const backendReady = await isBackendReady();
   if (!backendReady) {
-    console.error(`${RED}✗ Memory backend not reachable at http://localhost:8020${RESET}`);
-    console.error("  Start it with: docker-compose up -d backend");
+    console.error(`${RED}✗ Embedded memory store failed to initialize${RESET}`);
+    console.error("  Check that VOYAGE_API_KEY is set and LanceDB is working");
     process.exit(1);
   }
-  console.log("  ✓ Memory backend ready");
+  console.log("  ✓ Embedded memory store ready (LanceDB)");
 
   // Verify opencode CLI is available
   const probe = Bun.spawn(["opencode", "--version"], {
@@ -102,16 +103,19 @@ async function main() {
     results.push(result);
     printResult(result);
 
-    // ── Cleanup test memories from backend ──────────────────────────────────
-    // Auto-save fires asynchronously after opencode exits — wait for it to
-    // settle before deleting, then do a second pass to catch late writes.
+    // ── Shutdown server + cleanup test memories ─────────────────────────────
     if (result.testDirs && result.testDirs.length > 0) {
+      const { shutdownServer } = await import("./opencode.js");
       const { cleanupTestDirs } = await import("./memory-api.js");
-      // First pass — catch memories already written
-      let deleted = await cleanupTestDirs(result.testDirs);
-      // Wait for auto-save to settle then second pass
-      await Bun.sleep(15_000);
-      deleted += await cleanupTestDirs(result.testDirs);
+      const { refresh: refreshTable } = await import("../../plugin-v2/src/db.js");
+      // Shut down any cached servers for this scenario's directories
+      for (const dir of result.testDirs) {
+        await shutdownServer(dir);
+      }
+      // Wait for file locks to release, refresh table handle, then clean up
+      await Bun.sleep(2_000);
+      await refreshTable();
+      const deleted = await cleanupTestDirs(result.testDirs);
       console.log(`       ${DIM}  ✓ Cleaned up ${deleted} test memories from backend${RESET}`);
     }
     console.log();

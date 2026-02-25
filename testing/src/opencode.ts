@@ -90,9 +90,40 @@ export function createTestDirs(scenarioName: string, count: number): string[] {
 }
 
 /**
- * Run `opencode run <message>` in a given directory.
- * Returns structured output including all JSON events and the final text response.
+ * Run a message against OpenCode using a persistent server per directory.
+ *
+ * Uses `opencode serve` instead of `opencode run` so the plugin process stays
+ * alive long enough for async event handlers (auto-save extraction) to complete.
+ * The server is started once per directory and reused for subsequent calls —
+ * callers should call `shutdownServer(dir)` when done (or it's cleaned up on
+ * process exit).
+ *
+ * Returns the same RunResult shape — callers don't need to change.
  */
+
+/** How long to sleep after the LAST message in a scenario to let auto-save finish. */
+export const AUTO_SAVE_WAIT_MS = 15_000;
+
+// Per-directory server cache — avoids starting a new server per runOpencode call
+const serverCache = new Map<string, ServerHandle>();
+
+async function getOrCreateServer(dir: string): Promise<ServerHandle> {
+  let handle = serverCache.get(dir);
+  if (handle) return handle;
+  handle = await startServer(dir, { timeoutMs: 30_000 });
+  serverCache.set(dir, handle);
+  return handle;
+}
+
+/** Shut down the cached server for a directory. Call after the scenario finishes. */
+export async function shutdownServer(dir: string): Promise<void> {
+  const handle = serverCache.get(dir);
+  if (handle) {
+    await stopServer(handle);
+    serverCache.delete(dir);
+  }
+}
+
 export async function runOpencode(
   message: string,
   dir: string,
@@ -100,9 +131,8 @@ export async function runOpencode(
 ): Promise<RunResult> {
   const {
     model = DEFAULT_MODEL,
-    variant,
     agent = "build",
-    sessionID,
+    sessionID: existingSessionID,
     readme,
     files,
     timeoutMs = 120_000,
@@ -116,71 +146,37 @@ export async function runOpencode(
     }
   }
 
-  const args = [
-    OPENCODE_BIN,
-    "run",
-    message,
-    "--dir", dir,
-    "-m", model,
-    "--agent", agent,
-    "--format", "json",
-  ];
-
-  if (variant) args.push("--variant", variant);
-  if (sessionID) args.push("--session", sessionID);
-
   const start = Date.now();
-  const proc = Bun.spawn(args, {
-    env: cleanEnv(),
-    stdout: "pipe",
-    stderr: "pipe",
-  });
 
-  // Race the process against a timeout
-  const timeoutHandle = setTimeout(() => {
-    proc.kill();
-  }, timeoutMs);
+  try {
+    const server = await getOrCreateServer(dir);
 
-  const [stdoutBuf, stderrBuf] = await Promise.all([
-    new Response(proc.stdout).text(),
-    new Response(proc.stderr).text(),
-  ]);
+    const sessionID = existingSessionID ?? await createSession(server, message.slice(0, 60));
 
-  await proc.exited;
-  clearTimeout(timeoutHandle);
+    const result = await sendServerMessage(server, sessionID, message, {
+      model,
+      agent,
+      timeoutMs,
+    });
 
-  const durationMs = Date.now() - start;
-  const exitCode = proc.exitCode ?? -1;
-
-  // Parse JSON event lines
-  const events: RunEvent[] = [];
-  for (const line of stdoutBuf.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    try {
-      events.push(JSON.parse(trimmed) as RunEvent);
-    } catch {
-      // ignore non-JSON lines (can appear in default format mode)
-    }
+    return {
+      sessionID: result.sessionID,
+      text: result.text,
+      events: [],    // server mode doesn't produce JSON events
+      exitCode: 0,
+      stderr: "",
+      durationMs: Date.now() - start,
+    };
+  } catch (err) {
+    return {
+      sessionID: null,
+      text: "",
+      events: [],
+      exitCode: 1,
+      stderr: err instanceof Error ? err.message : String(err),
+      durationMs: Date.now() - start,
+    };
   }
-
-  // Concatenate all text parts
-  const text = events
-    .filter((e) => e.type === "text" && e.part?.text)
-    .map((e) => e.part!.text!)
-    .join("");
-
-  const detectedSessionID =
-    events.length > 0 ? events[0].sessionID : null;
-
-  return {
-    sessionID: detectedSessionID,
-    text,
-    events,
-    exitCode,
-    stderr: stderrBuf,
-    durationMs,
-  };
 }
 
 // ── Persistent server mode ────────────────────────────────────────────────────

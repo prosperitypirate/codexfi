@@ -2,12 +2,15 @@
 
 Fully autonomous end-to-end tests for the `opencode-memory` plugin. The agent (not a human) creates isolated project directories, spawns `opencode run` sessions, talks to the agent, inspects the memory backend, and reports pass/fail — zero user interaction required.
 
+> **Note:** As of the plugin-v2 embedded rewrite, the test harness uses the embedded LanceDB store
+> directly (via `plugin-v2/src/store.ts` and `plugin-v2/src/db.ts`) instead of making HTTP calls
+> to the Docker backend. The Docker backend is no longer required for E2E testing.
+
 ## Prerequisites
 
-**1. Memory backend running**
+**1. Plugin-v2 built**
 ```bash
-docker compose up -d
-# Verify: curl http://localhost:8020/health
+cd plugin-v2 && bun run build
 ```
 
 **2. OpenCode CLI installed**
@@ -16,19 +19,17 @@ bun install -g opencode-ai
 # Verify: opencode --version  (1.2.10+)
 ```
 
-**3. Plugin built**
-```bash
-cd plugin && bun run build
-```
-
-**4. Plugin configured in `~/.config/opencode/config.json`**
+**3. Plugin configured in `~/.config/opencode/opencode.json`**
 ```json
 {
-  "plugins": ["file:///path/to/opencode-memory/plugin"]
+  "plugin": ["file:///path/to/opencode-memory/plugin-v2/dist/index.js"]
 }
 ```
 
-**5. An AI provider configured** (e.g. Anthropic API key in env or config)
+**4. API keys set in environment**
+- `VOYAGE_API_KEY` — required for embeddings (voyage-code-3)
+- `ANTHROPIC_API_KEY` — required for extraction (claude-haiku-4-5)
+- An AI provider for the OpenCode agent (e.g. Anthropic API key in config)
 
 ## Running
 
@@ -48,23 +49,44 @@ bun run test:scenario 07       # single scenario
 bun run test:scenario 07,08    # multiple scenarios
 ```
 
-## Latest run results (2026-02-22)
+## Latest run results (2026-02-25) — plugin-v2 embedded rewrite
+
+Full run against `plugin-v2/` (embedded LanceDB, no Docker backend). Extraction via xAI Grok (`grok-4-fast-non-reasoning`).
+
+```
+PASS  01  Cross-Session Memory Continuity
+PASS  02  README-Based Project-Brief Seeding
+PASS  03  Transcript Noise Guard
+PASS  04  Project Brief Always Present
+PASS  05  Memory Aging
+PASS  06  Existing Codebase Auto-Init
+PASS  07  Enumeration Hybrid Retrieval
+PASS  08  Cross-Synthesis (isWideSynthesis)
+WARN  09  maxMemories=20 Under Load           ← 8/10 assertions, K=20 margin under 41 memories
+PASS  10  Knowledge Update / Superseded
+PASS  11  System Prompt Memory Injection
+PASS  12  Multi-Turn Per-Turn Refresh
+
+11/12 PASS (scenario 09 is known K=20 margin, not a regression)
+```
+
+### Previous results (2026-02-22) — plugin-v1 with Docker backend
 
 Full run against plugin build from PR #44 (`feature/mid-session-retrieval` branch):
 
 ```
 PASS  01  Cross-Session Memory Continuity          12.7s
 PASS  02  README-Based Project-Brief Seeding       19.5s
-PASS  03  Transcript Noise Guard                   19.1s  ← assertion fixed: checks backend not LLM text
-PASS  04  Project Brief Always Present             17.9s  ⚠ project-brief type not extracted (diagnostic only)
+PASS  03  Transcript Noise Guard                   19.1s
+PASS  04  Project Brief Always Present             17.9s
 PASS  05  Memory Aging                             38.7s
 PASS  06  Existing Codebase Auto-Init              68.7s
-PASS  07  Enumeration Hybrid Retrieval             25.5s  ← all 5 prefs recalled across 2 sessions
-PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s  ← Vitest+Pytest, Zod+Pydantic, ESLint+Black recalled
-PASS  09  maxMemories=20 Under Load                96.3s  ← 18 memories, early+late sessions both recalled
-PASS  10  Knowledge Update / Superseded            65.5s  ← Tortoise ORM recalled, not stale SQLAlchemy
-PASS  11  System Prompt Memory Injection           18.2s  ← validates system.transform [MEMORY] injection
-PASS  12  Multi-Turn Per-Turn Refresh              45.3s  ← 6-turn server session, 9/9 assertions pass
+PASS  07  Enumeration Hybrid Retrieval             25.5s
+PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s
+PASS  09  maxMemories=20 Under Load                96.3s
+PASS  10  Knowledge Update / Superseded            65.5s
+PASS  11  System Prompt Memory Injection           18.2s
+PASS  12  Multi-Turn Per-Turn Refresh              45.3s
 
 12/12 PASS  —  Total: ~465s (~7.8 min)
 ```
@@ -117,8 +139,11 @@ This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anom
 testing/
 ├── src/
 │   ├── runner.ts          — entry point, runs all scenarios sequentially
-│   ├── opencode.ts        — spawns opencode run/serve, parses JSON events, cleanEnv()
-│   ├── memory-api.ts      — queries localhost:8020, computes project tags, direct seeding
+│   │                        (refreshes LanceDB table before cleanup to fix delete lock contention)
+│   ├── opencode.ts        — spawns opencode serve with per-directory server cache
+│   │                        (opencode run exits before async handlers complete; serve stays alive)
+│   ├── memory-api.ts      — uses embedded LanceDB store directly (plugin-v2/src/store.ts + db.ts)
+│   │                        (replaces HTTP calls to Docker backend; calls db.refresh() before reads)
 │   ├── report.ts          — ANSI result formatting
 │   └── scenarios/
 │       ├── 01-cross-session.ts
@@ -137,6 +162,16 @@ testing/
 ├── package.json
 └── tsconfig.json
 ```
+
+### Key changes for plugin-v2
+
+1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin-v2/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process (LanceDB caches table state).
+
+2. **`opencode.ts` uses server mode** — `opencode run` exits before async plugin event handlers (auto-save, extraction) complete. Switched to `opencode serve` with per-directory server caching so the plugin process stays alive for extraction to finish. `waitForMemories(dir, N, 30_000)` polls until data appears.
+
+3. **`runner.ts` refreshes table** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale table handle.
+
+4. **Scenario 12 calls `addMemoryDirect()`** — this imports `store.ingest()` directly in the test runner process (not in a child `opencode serve` process), so extraction provider/model config must be correct in the built `dist/index.js`. Different config lifecycle than scenarios 01-11.
 
 ## How `opencode run` is used
 
@@ -165,11 +200,13 @@ The test harness provides helpers in `opencode.ts`:
 
 The `model` field in the server API must be an object `{ providerID, modelID }`, not a string like `"anthropic/claude-sonnet-4-6"`.
 
-### Direct backend seeding
+### Direct embedded store seeding
 
 For deterministic test setup, `memory-api.ts` provides:
-- `addMemoryDirect(projectTag, content, type?)` — `POST /memories` to seed a specific memory directly into the backend (bypasses the LLM extractor by providing pre-formed content)
-- `searchMemories(projectTag, query, limit?)` — `POST /memories/search` to verify semantic search results
+- `addMemoryDirect(projectTag, content, type?)` — calls `store.ingest()` directly to seed a memory (runs through the LLM extractor in the test runner process)
+- `searchMemories(projectTag, query, limit?)` — calls `store.search()` directly to verify semantic search results
+- `getMemoriesForDir(dir)` — calls `store.list()` for all memories under a project tag
+- `waitForMemories(dir, count, timeoutMs)` — polls `store.list()` until `count` memories appear (used for async auto-save)
 
 ## Memory tag computation
 

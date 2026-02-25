@@ -1,0 +1,34 @@
+{
+	"name": "opencode-memory",
+	"version": "0.2.0",
+	"description": "Embedded LanceDB memory system for OpenCode — zero Docker, zero Python",
+	"type": "module",
+	"main": "dist/index.js",
+	"private": true,
+	"scripts": {
+		"spike": "bun run src/spike.ts",
+		"build": "bun build src/index.ts --outdir dist --target node",
+		"typecheck": "tsc --noEmit",
+		"smoke:e2e": "bun run src/smoke-e2e.ts"
+	},
+	"dependencies": {
+		"@lancedb/lancedb": "^0.15.0",
+		"@opencode-ai/plugin": "^1.2.11",
+		"@opencode-ai/sdk": "^1.2.11",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.7.0"
+	},
+	"opencode": {
+		"type": "plugin",
+		"hooks": [
+			"chat.message",
+			"event"
+		]
+	},
+	"files": [
+		"dist"
+	]
+}

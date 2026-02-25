@@ -17,9 +17,12 @@ export function loadConfig(): Config {
     );
   }
 
-  // Default to Anthropic if key is available, else OpenAI
+  // FIX: Default was "claude-sonnet-4-5" — caused embedded-v2 run to score 85% vs
+  // haiku-run1's 92% because the answering/judge model was weaker. Updated to 4-6.
+  // benchmark/.env.local also sets JUDGE_MODEL and ANSWERING_MODEL explicitly,
+  // loaded by the .env.local loader in index.ts (overrides root .env).
   const defaultModel = anthropicApiKey
-    ? "claude-sonnet-4-5"
+    ? "claude-sonnet-4-6"
     : "gpt-4o";
 
   const judgeModel = process.env.JUDGE_MODEL ?? defaultModel;

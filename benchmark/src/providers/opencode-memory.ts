@@ -1,36 +1,44 @@
 /**
- * Provider adapter for the opencode-memory self-hosted backend.
+ * Provider adapter for the opencode-memory embedded store (plugin-v2).
  *
- * API surface used:
- *   POST   /memories              – ingest conversation messages (LLM extracts facts)
- *   POST   /memories/search       – semantic search
- *   GET    /memories?user_id=&limit= – list all for cleanup
- *   DELETE /memories/{id}         – delete single memory
+ * Replaces the HTTP-based adapter that called the Docker backend at localhost:8020.
+ * Now uses the embedded LanceDB store directly via plugin-v2/src/store.ts.
+ *
+ * API surface used (all direct function calls, no HTTP):
+ *   store.ingest()       – extract + embed + store memories from messages
+ *   store.search()       – semantic vector search with recency blending
+ *   store.list()         – list all memories for cleanup
+ *   store.deleteMemory() – delete single memory
+ *   db.init()            – initialize LanceDB connection
+ *   db.refresh()         – refresh table handle between operations
  */
 
 import type {
-  Provider,
-  UnifiedSession,
-  IngestResult,
-  IngestProgressCallback,
-  SearchResult,
+	Provider,
+	UnifiedSession,
+	IngestResult,
+	IngestProgressCallback,
+	SearchResult,
 } from "../types.js";
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
+
+import * as db from "../../../plugin-v2/src/db.js";
+import * as store from "../../../plugin-v2/src/store.js";
 
 // Memory types included in hybrid enumeration retrieval ("list all X", "every Y").
 // Narrow set for pure enumeration queries — excludes architecture (too broad, adds noise)
 // and session-summary (cross-project narrative contamination, caused Q177 regression).
 const ENUMERATION_TYPES = [
-  "tech-context", "preference", "learned-pattern", "error-solution", "project-config",
+	"tech-context", "preference", "learned-pattern", "error-solution", "project-config",
 ];
 
 // Wider set for cross-project synthesis queries ("across both projects", "overall state").
 // Includes architecture because synthesis queries often need component/endpoint/chart details
 // that are stored as architecture-type memories.
-// Mirrors plugin/src/services/client.ts — keep both in sync.
+// Mirrors plugin-v2/src/index.ts — keep both in sync.
 const SYNTHESIS_TYPES = [
-  ...ENUMERATION_TYPES, "architecture",
+	...ENUMERATION_TYPES, "architecture",
 ];
 
 // Detects enumeration intent: queries that enumerate facts across all sessions.
@@ -38,192 +46,146 @@ const SYNTHESIS_TYPES = [
 const ENUMERATION_REGEX = /\b(list\s+all|list\s+every|all\s+the\s+\w+|every\s+(env|config|setting|preference|error|pattern|tool|developer|tech|project|decision|approach)|across\s+all(\s+sessions)?|complete\s+(list|history|tech\s+stack|stack)|entire\s+(history|list|project\s+history|tech\s+stack)|describe\s+all|enumerate\s+all|full\s+(list|history|tech\s+stack))\b/i;
 
 export class OpencodeMemoryProvider implements Provider {
-  readonly name = "opencode-memory";
-  private baseUrl: string;
+	readonly name = "opencode-memory";
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl.replace(/\/$/, "");
-  }
+	async initialize(): Promise<void> {
+		try {
+			await db.init();
+			log.success("Embedded LanceDB store initialized");
+		} catch (err) {
+			throw new Error(
+				`Embedded store failed to initialize: ${err instanceof Error ? err.message : String(err)}`
+			);
+		}
+	}
 
-  async initialize(): Promise<void> {
-    const res = await fetch(`${this.baseUrl}/health`).catch(() => null);
-    if (!res?.ok) {
-      throw new Error(
-        `Backend not reachable at ${this.baseUrl}. Is the memory server running?`
-      );
-    }
-    log.success(`Backend reachable at ${this.baseUrl}`);
-  }
+	/**
+	 * Ingest all sessions into the embedded store.
+	 * Each session is sent as a list of messages — the LLM extractor
+	 * extracts typed memories automatically (exactly how the plugin works in prod).
+	 */
+	async ingest(sessions: UnifiedSession[], runTag: string, onProgress?: IngestProgressCallback): Promise<IngestResult> {
+		let memoriesAdded = 0;
+		let memoriesUpdated = 0;
+		const sessionIds: string[] = [];
+		const sessionDurations: number[] = [];
+		let done = 0;
 
-  /**
-   * Ingest all sessions into the backend.
-   * Each session is sent as a list of messages — the backend LLM extractor
-   * extracts typed memories automatically (exactly how the plugin works in prod).
-   */
-  async ingest(sessions: UnifiedSession[], runTag: string, onProgress?: IngestProgressCallback): Promise<IngestResult> {
-    let memoriesAdded = 0;
-    let memoriesUpdated = 0;
-    const sessionIds: string[] = [];
-    const sessionDurations: number[] = [];
-    let done = 0;
+		const phaseStart = Date.now();
 
-    const phaseStart = Date.now();
+		for (const session of sessions) {
+			log.dim(`  Ingesting ${session.sessionId} (${session.messages.length} messages)`);
 
-    for (const session of sessions) {
-      log.dim(`  Ingesting ${session.sessionId} (${session.messages.length} messages)`);
+			const metadata: Record<string, unknown> = {
+				session_id: session.sessionId,
+				...session.metadata,
+			};
 
-      const body = {
-        messages: session.messages,
-        user_id: runTag,
-        metadata: { session_id: session.sessionId, ...session.metadata },
-      };
+			const t0 = Date.now();
+			const results = await store.ingest(
+				session.messages,
+				runTag,
+				{ metadata },
+			);
+			const durationMs = Date.now() - t0;
 
-      const t0 = Date.now();
-      const res = await fetch(`${this.baseUrl}/memories`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      const durationMs = Date.now() - t0;
+			let sessionAdded = 0, sessionUpdated = 0;
+			for (const r of results) {
+				if (r.event === "ADD") { memoriesAdded++; sessionAdded++; }
+				else if (r.event === "UPDATE") { memoriesUpdated++; sessionUpdated++; }
+			}
+			sessionIds.push(session.sessionId);
+			sessionDurations.push(durationMs);
+			done++;
+			onProgress?.(session.sessionId, sessionAdded, sessionUpdated, done, durationMs);
 
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Ingest failed for ${session.sessionId}: ${res.status} ${text}`);
-      }
+			// Small delay to avoid hammering the LLM extractor
+			await sleep(500);
+		}
 
-      const data = (await res.json()) as { results: Array<{ event: string }> };
-      let sessionAdded = 0, sessionUpdated = 0;
-      for (const r of data.results) {
-        if (r.event === "ADD") { memoriesAdded++; sessionAdded++; }
-        else if (r.event === "UPDATE") { memoriesUpdated++; sessionUpdated++; }
-      }
-      sessionIds.push(session.sessionId);
-      sessionDurations.push(durationMs);
-      done++;
-      onProgress?.(session.sessionId, sessionAdded, sessionUpdated, done, durationMs);
+		const totalDurationMs = Date.now() - phaseStart;
+		return { memoriesAdded, memoriesUpdated, sessionIds, sessionDurations, totalDurationMs };
+	}
 
-      // Small delay to avoid hammering the LLM extractor
-      await sleep(500);
-    }
+	/**
+	 * Semantic search using the embedded vector store.
+	 *
+	 * recency_weight is applied per question type:
+	 *   session-continuity → 0.5  (temporal queries need recency boost)
+	 *   all others         → 0.0  (pure semantic; superseding already handles knowledge-update)
+	 */
+	async search(query: string, runTag: string, limit = 20, questionType?: string): Promise<SearchResult[]> {
+		const RECENCY_WEIGHTS: Record<string, number> = {
+			"session-continuity": 0.5,
+		};
+		const recency_weight = RECENCY_WEIGHTS[questionType ?? ""] ?? 0.0;
 
-    const totalDurationMs = Date.now() - phaseStart;
-    return { memoriesAdded, memoriesUpdated, sessionIds, sessionDurations, totalDurationMs };
-  }
+		// Hybrid enumeration retrieval: for cross-synthesis questions or queries that
+		// enumerate facts across all sessions, also fetch all memories of relevant types.
+		const isEnumeration = ENUMERATION_REGEX.test(query);
+		const isWideSynthesis = questionType === "cross-session-synthesis" ||
+			/\b(both\s+(projects?|the)|across\s+both|end[\s-]to[\s-]end|how\s+has.{0,30}evolved|sequence\s+of.{0,20}decisions?)\b/i.test(query);
+		const types = isWideSynthesis ? SYNTHESIS_TYPES : isEnumeration ? ENUMERATION_TYPES : undefined;
 
-  /**
-   * Semantic search using the backend's vector search.
-   *
-   * recency_weight is applied per question type:
-   *   session-continuity → 0.5  (temporal queries need recency boost)
-   *   all others         → 0.0  (pure semantic; superseding already handles knowledge-update)
-   */
-  async search(query: string, runTag: string, limit = 20, questionType?: string): Promise<SearchResult[]> {
-    const RECENCY_WEIGHTS: Record<string, number> = {
-      "session-continuity": 0.5,
-    };
-    const recency_weight = RECENCY_WEIGHTS[questionType ?? ""] ?? 0.0;
+		// Refresh table to see any recently ingested data
+		await db.refresh();
 
-    // Hybrid enumeration retrieval: for cross-synthesis questions or queries that
-    // enumerate facts across all sessions, also fetch all memories of relevant types.
-    // This ensures "list all env vars / every preference / complete history" queries
-    // retrieve facts from every session, not just the top-K semantically similar ones.
-    const isEnumeration = ENUMERATION_REGEX.test(query);
-    // isWideSynthesis: benchmark activates on the dataset label (all 25 cross-synthesis
-    // questions). The plugin cannot use labels — it uses the text heuristic below instead.
-    // This means synthesis questions whose text doesn't match the heuristic get hybrid
-    // retrieval here but plain top-K in production. Combined with threshold=0.2 vs 0.45,
-    // the benchmark +12pp likely overstates real-world gain for non-enumeration synthesis
-    // questions. The heuristic is also applied here as a fallback so both stay in sync
-    // for the questions it does cover.
-    const isWideSynthesis = questionType === "cross-session-synthesis" ||
-      /\b(both\s+(projects?|the)|across\s+both|end[\s-]to[\s-]end|how\s+has.{0,30}evolved|sequence\s+of.{0,20}decisions?)\b/i.test(query);
-    // Synthesis queries get the wider type set (includes architecture);
-    // pure enumeration queries stay narrow to avoid noise.
-    // Mirrors plugin/src/services/client.ts — keep both in sync.
-    const types = isWideSynthesis ? SYNTHESIS_TYPES : isEnumeration ? ENUMERATION_TYPES : undefined;
+		const results = await store.search(query, runTag, {
+			limit,
+			// NOTE: benchmark intentionally uses 0.2 (vs plugin default 0.45) to avoid
+			// artificially constraining recall during evaluation. All runs use the same
+			// threshold, so cross-run comparisons are valid — but absolute Hit@K numbers
+			// will be higher than production recall at 0.45.
+			threshold: 0.2,
+			recencyWeight: recency_weight,
+			...(types ? { types } : {}),
+		});
 
-    const res = await fetch(`${this.baseUrl}/memories/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query,
-        user_id: runTag,
-        limit,
-        // NOTE: benchmark intentionally uses 0.2 (vs plugin default 0.45) to avoid
-        // artificially constraining recall during evaluation. All runs use the same
-        // threshold, so cross-run comparisons are valid — but absolute Hit@K numbers
-        // will be higher than production recall at 0.45.
-        threshold: 0.2,
-        recency_weight,
-        ...(types ? { types } : {}),
-      }),
-    });
+		return results.map((r) => ({
+			id: r.id,
+			memory: r.memory,
+			chunk: r.chunk ?? "",
+			score: r.score,
+			metadata: r.metadata,
+			date: r.date ?? (r.metadata?.date as string | undefined),
+		}));
+	}
 
-    if (!res.ok) {
-      throw new Error(`Search failed: ${res.status} ${await res.text()}`);
-    }
+	/**
+	 * Delete all memories for a run tag (cleanup after benchmark).
+	 */
+	async clear(runTag: string): Promise<void> {
+		// Refresh to see all ingested memories
+		await db.refresh();
 
-    const data = (await res.json()) as {
-      results: Array<{
-        id: string;
-        memory: string;
-        chunk?: string;
-        score: number;
-        metadata?: Record<string, unknown>;
-        date?: string;
-      }>;
-    };
+		// include_superseded=true ensures memories retired by relational versioning
+		// during the run are also returned and deleted — otherwise they are orphaned.
+		const rows = await store.list(runTag, { limit: 1000, includeSuperseded: true });
 
-    return (data.results ?? []).map((r) => ({
-      id: r.id,
-      memory: r.memory,
-      chunk: r.chunk ?? "",
-      score: r.score,
-      metadata: r.metadata,
-      date: r.date ?? (r.metadata?.date as string | undefined),
-    }));
-  }
+		if (rows.length === 0) {
+			log.dim("  Nothing to clean up");
+			return;
+		}
 
-  /**
-   * Delete all memories for a run tag (cleanup after benchmark).
-   */
-  async clear(runTag: string): Promise<void> {
-    // include_superseded=true ensures memories retired by relational versioning
-    // during the run are also returned and deleted — otherwise they are orphaned.
-    const res = await fetch(
-      `${this.baseUrl}/memories?user_id=${encodeURIComponent(runTag)}&limit=1000&include_superseded=true`
-    );
-
-    if (!res.ok) {
-      log.warn(`Could not list memories for cleanup: ${res.status}`);
-      return;
-    }
-
-    const data = (await res.json()) as { results: Array<{ id: string }> };
-    const ids = data.results.map((r) => r.id);
-
-    if (ids.length === 0) {
-      log.dim("  Nothing to clean up");
-      return;
-    }
-
-    log.dim(`  Deleting ${ids.length} memories...`);
-    let deleted = 0;
-    for (const id of ids) {
-      const del = await fetch(`${this.baseUrl}/memories/${id}`, { method: "DELETE" });
-      if (del.ok) {
-        deleted++;
-        // Emit at 25%, 50%, 75%, and 100% to avoid flooding the feed
-        const pct = deleted / ids.length;
-        if (pct === 1 || deleted === 1 || Math.floor((deleted - 1) / ids.length * 4) < Math.floor(pct * 4)) {
-          emit({ type: "cleanup_progress", deleted, total: ids.length });
-        }
-      }
-    }
-    log.success(`Cleaned up ${deleted}/${ids.length} memories for run tag ${runTag}`);
-  }
+		log.dim(`  Deleting ${rows.length} memories...`);
+		let deleted = 0;
+		for (const row of rows) {
+			try {
+				await store.deleteMemory(row.id);
+				deleted++;
+				// Emit at 25%, 50%, 75%, and 100% to avoid flooding the feed
+				const pct = deleted / rows.length;
+				if (pct === 1 || deleted === 1 || Math.floor((deleted - 1) / rows.length * 4) < Math.floor(pct * 4)) {
+					emit({ type: "cleanup_progress", deleted, total: rows.length });
+				}
+			} catch {
+				// best-effort cleanup
+			}
+		}
+		log.success(`Cleaned up ${deleted}/${rows.length} memories for run tag ${runTag}`);
+	}
 }
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }
