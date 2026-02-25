@@ -4,11 +4,17 @@
 	"description": "Embedded LanceDB memory system for OpenCode — zero Docker, zero Python",
 	"type": "module",
 	"main": "dist/index.js",
+	"bin": {
+		"opencode-memory": "./dist/cli.js"
+	},
 	"private": true,
 	"scripts": {
 		"spike": "bun run src/spike.ts",
-		"build": "bun build src/index.ts --outdir dist --target node",
+		"build": "bun build src/index.ts --outdir dist --target node && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
+		"build:plugin": "bun build src/index.ts --outdir dist --target node",
+		"build:cli": "bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
 		"typecheck": "tsc --noEmit",
+		"cli": "bun run src/cli/index.ts",
 		"smoke:e2e": "bun run src/smoke-e2e.ts"
 	},
 	"dependencies": {
