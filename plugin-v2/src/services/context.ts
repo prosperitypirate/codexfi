@@ -1,8 +1,6 @@
 /**
  * Formats the [MEMORY] block from structured sections + semantic results.
  * Zero network calls, zero side effects — pure formatting.
- *
- * Copied from plugin/src/services/context.ts with import path adjustment.
  */
 
 import { PLUGIN_CONFIG } from "../plugin-config.js";

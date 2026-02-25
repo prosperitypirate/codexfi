@@ -1,6 +1,5 @@
 /**
  * Plugin-specific types — conversation roles, messages, and ingest responses.
- * Merged with Phase 2 types where appropriate.
  */
 
 export type MemoryScope = "user" | "project";

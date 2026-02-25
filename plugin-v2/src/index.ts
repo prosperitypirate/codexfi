@@ -1,13 +1,8 @@
 /**
  * Main plugin entry point — hooks into OpenCode's chat lifecycle.
  *
- * Phase 3d port from plugin/src/index.ts (892 lines → ~800 lines):
- * - ALL memoryClient.* HTTP calls replaced with direct store.* / db.* calls
- * - Enumeration/synthesis detection moved from client.ts into this file
- * - isConfigured() checks VOYAGE_API_KEY instead of HTTP URL
- * - Privacy stripping applied in memory tool "add" and auto-init paths (bug fix §12)
- * - nameRegistry used directly instead of HTTP POST /names
- * - db.init() + telemetry + nameRegistry initialized on first use (lazy)
+ * Registers the memory tool, system prompt injection, auto-save, and compaction hooks.
+ * All store operations are embedded (LanceDB) — no external services needed.
  */
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
@@ -39,8 +34,6 @@ import { log } from "./services/logger.js";
 import type { MemoryScope, MemoryType } from "./types/index.js";
 
 // ── Enumeration / synthesis detection ───────────────────────────────────────────
-// Moved from client.ts — store.search() accepts `types` directly, so detection
-// lives here alongside the search call.
 
 const ENUMERATION_TYPES = [
 	"tech-context", "preference", "learned-pattern", "error-solution", "project-config",
@@ -141,7 +134,6 @@ async function triggerSilentAutoInit(
 
 	const content = sections.join("\n\n");
 
-	// Privacy stripping — applied before extraction (bug fix §12)
 	const sanitized = stripPrivateContent(content);
 
 	log("auto-init: sending project files for extraction", {
@@ -149,7 +141,6 @@ async function triggerSilentAutoInit(
 		chars: sanitized.length,
 	});
 
-	// Direct store call — replaces memoryClient.addMemoryFromProjectFiles()
 	const results = await store.ingest(
 		[{ role: "user", content: sanitized }],
 		tags.project,
@@ -181,12 +172,10 @@ async function seedProjectBrief(
 	const projectName = directory.split("/").pop() ?? "this project";
 	const content = `Project Brief for "${projectName}": ${firstPara}`;
 
-	// Privacy stripping — applied before extraction (bug fix §12)
 	const sanitized = stripPrivateContent(content);
 
 	log("seed-brief: seeding project-brief from README", { contentLength: sanitized.length });
 
-	// Direct store call — replaces memoryClient.addMemory()
 	const results = await store.ingest(
 		[{ role: "user", content: sanitized }],
 		tags.project,
@@ -806,8 +795,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 									return JSON.stringify({ success: false, error: "content is required for add mode" });
 								}
 
-								// Privacy stripping — applied before extraction (bug fix §12)
-								const sanitizedContent = stripPrivateContent(args.content);
+							const sanitizedContent = stripPrivateContent(args.content);
 								if (isFullyPrivate(args.content)) {
 									return JSON.stringify({ success: false, error: "Cannot store fully private content" });
 								}
@@ -815,8 +803,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 								const scope = args.scope || "project";
 								const containerTag = scope === "user" ? tags.user : tags.project;
 
-								// Direct store call — replaces memoryClient.addMemory()
-								const results = await store.ingest(
+							const results = await store.ingest(
 									[{ role: "user", content: sanitizedContent }],
 									containerTag,
 									{ metadata: args.type ? { type: args.type } : {} },
@@ -912,8 +899,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 									return JSON.stringify({ success: false, error: "memoryId is required for forget mode" });
 								}
 
-								// Direct store call — replaces memoryClient.deleteMemory()
-								await store.deleteMemory(args.memoryId);
+							await store.deleteMemory(args.memoryId);
 
 								return JSON.stringify({
 									success: true,

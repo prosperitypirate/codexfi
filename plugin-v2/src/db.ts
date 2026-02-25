@@ -1,6 +1,7 @@
 import * as lancedb from "@lancedb/lancedb";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { EMBEDDING_DIMS } from "./config.js";
 
 const DB_PATH = join(homedir(), ".opencode-memory", "lancedb");
 const TABLE_NAME = "memories";
@@ -13,12 +14,13 @@ export async function init(dbPath?: string): Promise<void> {
 	try {
 		table = await db.openTable(TABLE_NAME);
 	} catch {
-		// First run — create table with seed row, then delete it
+		// First run — create table with seed row to define schema, then delete it.
+		// Uses EMBEDDING_DIMS to stay in sync with the embedding model.
 		table = await db.createTable(TABLE_NAME, [{
 			id: "__seed__",
 			memory: "",
 			user_id: "",
-			vector: new Array(1024).fill(0),
+			vector: new Array(EMBEDDING_DIMS).fill(0),
 			metadata_json: "{}",
 			created_at: "",
 			updated_at: "",

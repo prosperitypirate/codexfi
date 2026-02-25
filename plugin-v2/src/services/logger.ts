@@ -1,6 +1,5 @@
 /**
- * Async file logger — replaces the original sync appendFileSync with
- * non-blocking appendFile from node:fs/promises. See design doc §13.
+ * Async file logger — non-blocking appendFile from node:fs/promises.
  *
  * Fire-and-forget pattern: logging never blocks plugin execution.
  */

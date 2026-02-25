@@ -3,8 +3,6 @@
  *
  * Supports xAI (Grok), Google (Gemini), and Anthropic (Claude) as extraction providers.
  * All callers use callLlm() which dispatches to the active provider with fallback.
- *
- * Port from backend/app/extractor.py — httpx replaced by fetch(), sync → async.
  */
 
 import {

@@ -1,8 +1,7 @@
 /**
  * Voyage AI embedding wrapper.
  *
- * Direct fetch() to Voyage AI API — replaces voyageai Python SDK.
- * Records token usage to both the CostLedger and the ActivityLog.
+ * Direct fetch() to Voyage AI API with retry and telemetry.
  */
 
 import {

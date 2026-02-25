@@ -1,7 +1,6 @@
 /**
  * Tag generation — produces deterministic user/project container tags from
- * git email + directory path. Copy from plugin/src/services/tags.ts with
- * import path adjustment.
+ * git email + directory path.
  */
 
 import { createHash } from "node:crypto";

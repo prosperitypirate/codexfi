@@ -49,8 +49,7 @@ export const EMBED_RETRY: RetryConfig = {
  *
  * No per-attempt timeoutMs — the provider functions already apply
  * AbortSignal.timeout(LLM_TIMEOUT_MS = 60_000). Adding a second timeout here
- * would silently reduce the effective timeout (previous value of 30s killed
- * extraction calls that the Python backend completed in 30-60s).
+ * would silently reduce the effective timeout for longer extraction calls.
  */
 export const EXTRACT_RETRY: RetryConfig = {
 	maxRetries: 3,

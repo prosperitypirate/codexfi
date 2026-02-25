@@ -1,8 +1,6 @@
 /**
  * All LLM prompt templates used for memory extraction, summarisation, and condensation.
  * Each prompt pair (system + user) is kept together so they're easy to iterate on.
- *
- * Direct port from backend/app/prompts.py — template literals, zero logic.
  */
 
 // ── Conversation extraction ────────────────────────────────────────────────────

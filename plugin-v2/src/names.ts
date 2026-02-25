@@ -3,9 +3,6 @@
  *
  * The plugin calls registerName() on startup so the dashboard/CLI can show project folder
  * names and git usernames instead of raw hashes. Persists to DATA_DIR/names.json.
- *
- * Port from backend/app/registry.py — threading.Lock replaced by sequential async,
- * file I/O uses Bun.file() / Bun.write().
  */
 
 import { DATA_DIR } from "./config.js";

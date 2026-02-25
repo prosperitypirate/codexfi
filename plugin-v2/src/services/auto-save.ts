@@ -1,10 +1,8 @@
 /**
  * Auto-save service — buffers conversation messages and triggers extraction.
  *
- * Port from plugin/src/services/auto-save.ts:
- * - memoryClient.addMemoryFromMessages() → store.ingest()
- * - memoryClient.addMemoryFromMessagesAsSummary() → store.ingest() with mode: "summary"
- * - Privacy stripping applied before extraction (bug fix §12)
+ * Fires after each assistant turn, batching the last N messages for memory extraction.
+ * Every N turns, also generates a session summary.
  */
 
 import type { Message, Part } from "@opencode-ai/sdk";
@@ -197,7 +195,6 @@ async function extractAndSave(
 			return;
 		}
 
-		// Privacy stripping — applied before extraction (bug fix §12)
 		const sanitizedMessages = messages.map(m => ({
 			...m,
 			content: stripPrivateContent(m.content),
@@ -205,7 +202,6 @@ async function extractAndSave(
 
 		log("auto-save: extracting", { sessionID, project: tags.project, messages: sanitizedMessages.length, chars: totalChars });
 
-		// Direct store call — replaces memoryClient.addMemoryFromMessages()
 		const results = await store.ingest(sanitizedMessages, tags.project);
 
 		log("auto-save: done", { sessionID, project: tags.project, count: results.length });
@@ -251,7 +247,6 @@ async function generateSessionSummary(
 		const totalChars = messages.reduce((sum: number, m: { content: string }) => sum + m.content.length, 0);
 		if (totalChars < MIN_EXCHANGE_CHARS) return;
 
-		// Privacy stripping — applied before extraction (bug fix §12)
 		const sanitizedMessages = messages.map(m => ({
 			...m,
 			content: stripPrivateContent(m.content),
@@ -259,7 +254,6 @@ async function generateSessionSummary(
 
 		log("auto-save: sending session summary request", { sessionID, messages: sanitizedMessages.length });
 
-		// Direct store call — replaces memoryClient.addMemoryFromMessagesAsSummary()
 		const results = await store.ingest(sanitizedMessages, tags.project, {
 			mode: "summary",
 			metadata: { type: "session-summary" },

@@ -1,7 +1,6 @@
 /**
- * Phase 1: LanceDB Spike — Critical Gate
+ * LanceDB spike — validates that @lancedb/lancedb NAPI bindings work correctly in Bun.
  *
- * Validates that @lancedb/lancedb NAPI bindings work correctly inside Bun runtime.
  * Run with: bun run spike (or: bun run src/spike.ts)
  *
  * Tests: connect, create table, insert, search, filter, update, delete, drop,
@@ -322,8 +321,7 @@ async function runPerformanceBench(): Promise<void> {
 
 // === MAIN ===
 console.log("=================================================");
-console.log("  Phase 1: LanceDB Spike — Critical Gate");
-console.log("  Runtime: Bun " + Bun.version);
+console.log("  LanceDB Spike — Bun " + Bun.version);
 console.log("=================================================");
 
 try {
@@ -338,13 +336,11 @@ try {
 	console.log("\n=================================================");
 	console.log("  ALL SPIKE TESTS PASSED");
 	console.log("  LanceDB NAPI bindings work correctly in Bun");
-	console.log("  Proceed to Phase 2: Core Modules");
 	console.log("=================================================\n");
 } catch (error) {
 	console.error("\n=================================================");
-	console.error("  SPIKE FAILED — CRITICAL BLOCKER");
+	console.error("  SPIKE FAILED");
 	console.error("  Error:", error);
-	console.error("  See design doc for fallback plan");
 	console.error("=================================================\n");
 	process.exit(1);
 }

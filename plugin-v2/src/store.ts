@@ -1,8 +1,7 @@
 /**
  * Memory store — CRUD, deduplication, aging, contradiction detection, search with recency blending.
  *
- * Consolidates backend/app/store.py + backend/app/routes/memories.py into a single module.
- * All operations use the embedded LanceDB table directly — no HTTP calls.
+ * All operations use the embedded LanceDB table directly.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -22,6 +21,7 @@ import {
 	VERSIONING_SKIP_TYPES,
 	validateId,
 } from "./config.js";
+import type { VectorQuery } from "@lancedb/lancedb";
 import { getTable } from "./db.js";
 import { embed } from "./embedder.js";
 import { condenseToLearnedPattern, detectContradictions, extractMemories } from "./extractor.js";
@@ -60,9 +60,7 @@ async function findDuplicate(
 		if (count === 0) return null;
 
 		const safeUserId = validateId(userId, "user_id");
-		// FIX: .distanceType("cosine") — see search() comment for full explanation.
-		const results = await table
-			.search(vector)
+		const results = await (table.search(vector) as VectorQuery)
 			.distanceType("cosine")
 			.where(`user_id = '${safeUserId}'`)
 			.limit(1)
@@ -100,9 +98,7 @@ async function findContradictionCandidates(
 
 		const safeUserId = validateId(userId, "user_id");
 		const safeNewId = validateId(newId, "new_id");
-		// FIX: .distanceType("cosine") — see search() comment for full explanation.
-		const results = await table
-			.search(vector)
+		const results = await (table.search(vector) as VectorQuery)
 			.distanceType("cosine")
 			.where(`user_id = '${safeUserId}' AND id != '${safeNewId}' AND superseded_by = ''`)
 			.limit(limit)
@@ -300,8 +296,6 @@ export interface IngestOptions {
 
 /**
  * Extract memories from messages and store them with dedup, versioning, and aging.
- *
- * This is the main entry point — replaces POST /memories.
  */
 export async function ingest(
 	messages: Message[],
@@ -319,10 +313,7 @@ export async function ingest(
 	for (const fact of facts) {
 		const factText = fact.memory;
 		const factType = fact.type || (baseMetadata.type as string) || "";
-		// FIX: CHUNK_TRUNCATION must be 8,000 (matching Python backend's MAX_CONTENT_CHARS).
-		// A previous value of 400 silently discarded 95% of source context, causing a 7%
-		// benchmark regression (85% → 94.5% after fix). The chunk is the full truncated
-		// conversation attached to each memory — the answering LLM uses it for detail queries.
+		// Chunk = full truncated conversation attached to each memory for detail queries.
 		// Display truncation (400 chars for [MEMORY] block snippets) is separate (context.ts:126).
 		const factChunk = (fact.chunk || "").slice(0, CHUNK_TRUNCATION);
 
@@ -397,8 +388,6 @@ export interface SearchOptions {
 
 /**
  * Semantic search over memories with optional recency blending and hybrid enumeration.
- *
- * Replaces POST /memories/search.
  */
 export async function search(
 	query: string,
@@ -415,17 +404,10 @@ export async function search(
 	const w = options.recencyWeight ?? 0.0;
 
 	const queryVector = await embed(query, "query");
-	// FIX: .distanceType("cosine") is critical — LanceDB JS defaults to L2 (Euclidean).
-	// Python backend uses .metric("cosine") on every search (store.py lines 51, 94).
-	// Without this, similarity scores are systematically lower (0.40 vs 0.58 for same pair),
-	// causing 62/200 benchmark questions to return zero results. This single fix moved
-	// the benchmark from 68% → 85%. Applied to all 3 search calls (lines 49, 88, 398).
-	//
-	// LanceDB JS SDK prefilters by default (.where() filters BEFORE ANN search),
-	// matching Python's prefilter=True behavior. Use .postfilter() to opt out.
+	// LanceDB JS SDK prefilters by default (.where() filters BEFORE ANN search).
+	// Use .postfilter() to opt out.
 	const rows = await withRetry(
-		() => table
-			.search(queryVector)
+		() => (table.search(queryVector) as VectorQuery)
 			.distanceType("cosine")
 			.where(`user_id = '${safeUserId}' AND superseded_by = ''`)
 			.limit(limit)
@@ -530,7 +512,6 @@ export interface ListOptions {
 
 /**
  * List stored memories for a user, ordered by most recently updated.
- * Replaces GET /memories.
  */
 export async function list(
 	userId: string,
@@ -579,7 +560,6 @@ export async function list(
 
 /**
  * List memories filtered by types.
- * Replaces the type-filtered GET /memories path.
  */
 export async function listByType(
 	userId: string,
@@ -593,7 +573,6 @@ export async function listByType(
 
 /**
  * Delete a single memory by ID.
- * Replaces DELETE /memories/{memory_id}.
  */
 export async function deleteMemory(memoryId: string): Promise<void> {
 	const safeId = validateId(memoryId, "memory_id");

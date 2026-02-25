@@ -3,9 +3,6 @@
  *
  *   CostLedger   — persistent cumulative cost tracker (survives restarts)
  *   ActivityLog  — in-memory ring buffer for activity feed
- *
- * Port from backend/app/telemetry.py — thread locks replaced by sequential async,
- * file I/O uses Bun.file() / Bun.write().
  */
 
 import {

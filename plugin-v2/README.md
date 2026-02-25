@@ -1,188 +1,323 @@
-# plugin-v2 — Embedded Memory Plugin
+<div align="center">
 
-Replaces the entire Docker/Python/Next.js backend stack with a single Bun package that embeds LanceDB, extraction, and embeddings directly into the OpenCode plugin runtime. Zero Docker, zero Python, zero separate processes.
+# opencode-memory
 
-## Why
+**Persistent, self-hosted memory for [OpenCode](https://opencode.ai) AI agents.**
 
-The v1 architecture required users to run `docker compose up -d` to start a Python backend (FastAPI + LanceDB + Voyage AI) before the plugin could function. This created:
+The agent learns from every session automatically — no commands, no manual saves, no cloud, no Docker.
 
-- A hard dependency on Docker for local development
-- A separate Python process for memory extraction and storage
-- HTTP round-trips between plugin and backend on every operation
-- Deployment complexity (two processes, two languages, two sets of dependencies)
+<br/>
 
-plugin-v2 eliminates all of this by embedding the entire backend into the plugin itself.
+[![Score: 94.5%](https://img.shields.io/badge/Benchmark-94.5%25-22C55E?style=flat)](../benchmark/README.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](../LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
+[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded-CF3CFF?style=flat)](https://lancedb.com/)
+[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Haiku_4.5-D97706?style=flat)](https://anthropic.com)
+[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+[![Google Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25_Local-22C55E?style=flat&logo=homeassistant&logoColor=white)](https://github.com/prosperitypirate/opencode-memory)
+[![Zero Docker](https://img.shields.io/badge/Zero-Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/prosperitypirate/opencode-memory)
+[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-FF6B35?style=flat)](https://opencode.ai)
+
+</div>
+
+---
+
+## What is this?
+
+A single Bun package that gives OpenCode agents persistent memory across sessions. Everything runs embedded — LanceDB for storage, Voyage AI for embeddings, multi-provider LLM extraction — with zero external processes.
+
+After every assistant turn, the conversation is automatically analysed. Key facts are extracted, embedded, and stored locally. At the start of every new session, relevant memories are silently injected into the agent's context. The agent simply *remembers*.
+
+---
+
+## Quick Start
+
+### 1. Clone and build
+
+```bash
+git clone https://github.com/prosperitypirate/opencode-memory
+cd opencode-memory/plugin-v2
+bun install
+bun run build
+```
+
+### 2. Set API keys
+
+```bash
+# Required — embeddings
+export VOYAGE_API_KEY=pa-...
+
+# Required — extraction (pick one)
+export ANTHROPIC_API_KEY=sk-ant-...    # default, most consistent
+# export XAI_API_KEY=...               # fastest
+# export GOOGLE_API_KEY=...            # native JSON mode
+```
+
+### 3. Register with OpenCode
+
+Add to `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "plugin": ["file:///absolute/path/to/opencode-memory/plugin-v2"]
+}
+```
+
+### 4. Start a session
+
+Open any project in OpenCode. The `[MEMORY]` block appears in context from the first message. Memories auto-save after every assistant turn.
+
+**That's it.** No Docker. No Python. No separate server.
+
+---
+
+## Features
+
+- **Fully automatic** — memories save after every assistant turn with zero user action
+- **Embedded storage** — LanceDB runs in-process at `~/.opencode-memory/lancedb/`
+- **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok (fastest), Google Gemini (native JSON) with automatic fallback
+- **Code-optimised embeddings** — Voyage `voyage-code-3` (1024 dims), purpose-built for code and technical content
+- **Always-fresh context** — `[MEMORY]` block rebuilt in system prompt every LLM call via `system.transform`
+- **Per-turn semantic refresh** — every user message triggers a semantic search update so context matches the current topic
+- **Compaction-proof** — memory lives in the system prompt, which is never compacted
+- **Typed memory system** — `architecture`, `error-solution`, `preference`, `progress`, etc. in structured blocks
+- **Hybrid search** — semantic search on atomic facts + raw source chunks for exact values
+- **Smart deduplication** — cosine similarity prevents duplicate memories
+- **Relational versioning** — contradicting memories are automatically superseded
+- **Memory aging** — session summaries condense into learned patterns; only latest `progress` survives
+- **Project + user scope** — separate namespaces for project knowledge vs personal preferences
+- **Explicit save** — say "remember this" and the agent stores it immediately
+- **Privacy filter** — `<private>...</private>` tags are stripped before any extraction
+
+---
 
 ## Architecture
 
 ```
-plugin-v2/
-├── src/
-│   ├── index.ts              — 997 lines, main plugin hooks (system.transform, chat.message, tool.memory, event)
-│   ├── config.ts             — 184 lines, all 27+ centralized constants + validateId()
-│   ├── types.ts              — 107 lines, Zod schemas for memory records
-│   ├── prompts.ts            — 199 lines, all LLM prompt templates (1:1 port from backend/app/prompts.py)
-│   ├── db.ts                 — 51 lines, LanceDB init/connect/refresh
-│   ├── store.ts              — 630 lines, full CRUD + dedup + aging + contradiction + search with recency blending
-│   ├── extractor.ts          — 442 lines, multi-provider LLM extraction (Anthropic/xAI/Google) + fallback + retry
-│   ├── embedder.ts           — 69 lines, Voyage AI voyage-code-3 embedding via fetch
-│   ├── retry.ts              — 109 lines, exponential backoff with jitter
-│   ├── telemetry.ts          — 271 lines, CostLedger + ActivityLog
-│   ├── names.ts              — 55 lines, name registry JSON persistence
-│   ├── plugin-config.ts      — user-facing config from ~/.config/opencode/memory.jsonc
-│   └── services/
-│       ├── auto-save.ts      — background extraction after assistant turns
-│       ├── compaction.ts     — context window compaction with memory injection
-│       ├── context.ts        — [MEMORY] block formatting for system.transform
-│       ├── privacy.ts        — <private> tag stripping
-│       ├── tags.ts           — project/user tag computation from directory hash
-│       ├── logger.ts         — async file logger (no sync I/O)
-│       └── types/index.ts    — plugin-specific TS types
-├── dist/                     — built output (bun run build)
-├── package.json
-└── tsconfig.json
+src/
+├── index.ts              — main plugin hooks (system.transform, chat.message, tool.memory, event)
+├── config.ts             — centralized constants + validateId()
+├── types.ts              — Zod schemas for memory records
+├── prompts.ts            — all LLM prompt templates
+├── db.ts                 — LanceDB init/connect/refresh
+├── store.ts              — full CRUD + dedup + aging + contradiction + search with recency blending
+├── extractor.ts          — multi-provider LLM extraction (Anthropic/xAI/Google) + fallback + retry
+├── embedder.ts           — Voyage AI voyage-code-3 embedding via fetch
+├── retry.ts              — exponential backoff with jitter
+├── telemetry.ts          — CostLedger + ActivityLog
+├── names.ts              — name registry JSON persistence
+├── plugin-config.ts      — user-facing config from ~/.config/opencode/memory.jsonc
+└── services/
+    ├── auto-save.ts      — background extraction after assistant turns
+    ├── compaction.ts     — context window compaction with memory injection
+    ├── context.ts        — [MEMORY] block formatting for system.transform
+    ├── privacy.ts        — <private> tag stripping
+    ├── tags.ts           — project/user tag computation from directory hash
+    ├── logger.ts         — async file logger (no sync I/O)
+    └── types/index.ts    — plugin-specific TS types
 ```
 
 ### Data flow
 
 ```
 User message → chat.message hook
-  → auto-save extracts memories from last 8 messages (background)
-    → extractor.ts: LLM call (Anthropic Haiku by default)
-    → store.ts: embed → dedup → insert/update → aging → contradiction detection
-  → store.search() for semantic refresh (turns 2+)
-  → system.transform injects [MEMORY] block into context
+  ├── Turn 1: 4 parallel fetches (profile, user search, project list, project search)
+  │   └── If zero project memories + existing codebase → silent auto-init from README/package.json/etc
+  └── Turns 2+: single semantic search refreshes "Relevant to Current Task"
+
+  → system.transform injects [MEMORY] block into system prompt (every LLM call)
+
+Assistant completes turn → event hook
+  └── auto-save: extract facts from last 8 messages → embed → dedup → store
+      └── Every 5 turns: also generate session summary
 ```
 
-### Key design decisions
-
-1. **LanceDB embedded** — no server process, no Docker. Database lives at `~/.opencode-memory/lancedb/`.
-2. **Voyage AI for embeddings** — `voyage-code-3` (1024 dims) via direct fetch, no SDK dependency.
-3. **Multi-provider extraction** — Anthropic (default, most consistent), xAI (fastest), Google (native JSON mode). Automatic fallback chain with retry.
-4. **All prompts are 1:1 ports** — SHA-256 verified identical to `backend/app/prompts.py`.
-
-## Critical Discoveries & Fixes
-
-### 1. LanceDB distance metric must be cosine, not L2 (68% → 85%)
-
-**The single most impactful fix.** LanceDB JS defaults to L2 (Euclidean) distance. The Python backend uses `.metric("cosine")` on every search. Without `.distanceType("cosine")` on search calls, similarity scores are systematically lower (0.40 vs 0.58 for same query/memory pair), causing 62 of 200 benchmark questions to return zero results.
-
-**Fix:** Add `.distanceType("cosine")` to all 3 search calls in `store.ts` (lines 49, 88, 398).
-
-### 2. Chunk truncation must match backend (85% → 94.5%)
-
-The Python backend stores the full truncated conversation (up to 8,000 chars) as a `chunk` field with each memory. The initial port truncated this to 400 chars — silently discarding 95% of source context. The answering LLM uses chunks for detail-dependent queries (exact config values, error strings, specific code patterns), so this 20x reduction in context caused a 7% benchmark regression.
-
-**Fix:** `CHUNK_TRUNCATION` in `config.ts` set to `8_000` (matching `MAX_CONTENT_CHARS`). Display truncation in `context.ts` (400 chars for [MEMORY] block snippets) is separate and correct.
-
-### 3. Double timeout on extraction calls
-
-The retry wrapper (`EXTRACT_RETRY`) had a `timeoutMs: 30_000` that created a second timeout on top of the provider's own `AbortSignal.timeout(60_000)`. The effective timeout was `min(60s, 30s) = 30s`, silently killing extraction calls that the Python backend (60s timeout, no retry) would have completed.
-
-**Fix:** Removed `timeoutMs` from `EXTRACT_RETRY`. Provider functions handle their own 60s timeout via `AbortSignal.timeout(LLM_TIMEOUT_MS)`.
-
-### 4. LanceDB cross-process visibility requires table refresh
-
-When `opencode serve` child process writes memories and another process reads them, the reader's cached table handle is stale. LanceDB caches table state internally.
-
-**Fix:** Added `db.refresh()` (re-opens table) in `memory-api.ts` and `runner.ts` before reads.
-
-### 5. `opencode run` exits before async plugin handlers complete
-
-Auto-save extraction starts but the process dies mid-API-call. The extraction happens in a background event handler that outlives the CLI process.
-
-**Fix:** Converted E2E test harness to use `opencode serve` mode with per-directory server cache. Server stays alive for extraction to complete; `waitForMemories()` polls until data appears.
-
-### 6. Bun only auto-loads .env from CWD
-
-When running the benchmark from project root, `benchmark/.env.local` (which has `JUDGE_MODEL`, `ANSWERING_MODEL`, `ANTHROPIC_API_KEY`) was not loaded. This caused embedded-v2 to use `claude-sonnet-4-5` instead of `claude-sonnet-4-6` as the answering model.
-
-**Fix:** Explicit `.env.local` loader in `benchmark/src/index.ts` that resolves relative to `import.meta.url`, with override semantics (`.env.local` wins over root `.env`) and startup verification log.
-
-### 7. LanceDB JS SDK prefilters by default
-
-The Python backend uses `.where(filter, prefilter=True)` which filters BEFORE ANN search. Investigation revealed the JS SDK does this by default — `.postfilter()` is the explicit opt-out. No fix needed, but documented for future reference.
-
-## Bug Fixes Applied (from design doc)
-
-1. **Privacy stripping in all 4 ingestion paths** (design doc §12) — v1 only stripped `<private>` tags in some paths. v2 applies `stripPrivateContent()` before every call to `store.ingest()`: auto-save, session summary, compaction summary, and auto-init.
-
-2. **Compaction state leak** (design doc §4) — v1 called `summarizedSessions.add(sessionID)` BEFORE `ctx.client.session.summarize()`. If `summarize()` threw, the session was permanently marked as summarized, and the summary was never captured. v2 moves `add()` to AFTER the successful call.
-
-3. **Logger sync I/O** (design doc §13) — v1 used `appendFileSync` which blocks the event loop on every log write. v2 uses async `appendFile` from `node:fs/promises` with fire-and-forget `.catch(() => {})`.
-
-## Benchmark Results
-
-### embedded-v4 — 94.5% (189/200)
+### How the agent sees memory
 
 ```
-Category          embedded-v4    haiku-run1 (baseline)    Delta
-──────────────────────────────────────────────────────────────────
-Overall                94.5%              92.0%           +2.5%
-tech-stack             100%               96%             +4.0%
-architecture           100%               96%             +4.0%
-session-continuity      96%               96%              0.0%
-preference             100%               92%             +8.0%
-error-solution          92%              100%             -8.0%
-knowledge-update        96%               92%             +4.0%
-cross-session-synth     72%               68%             +4.0%
-abstention             100%               96%             +4.0%
+[MEMORY]
+
+## Project Brief
+- opencode-memory is a self-hosted persistent memory system for OpenCode AI agents.
+
+## Architecture
+- Plugin embeds LanceDB, extraction, and embeddings directly — no external services.
+
+## Tech Context
+- Uses voyage-code-3 embeddings; extraction via claude-haiku-4-5 (default)
+- Bun runtime, TypeScript, Zod validation, tabs for indentation
+
+## Progress & Status
+- Benchmark at 94.5% (189/200); cross-synthesis at 72% is primary remaining gap
+
+## Last Session
+- Completed code cleanup — removed all migration-era references from 21 files
+
+## User Preferences
+- Use bun not npm for all installs
+- Prefers concise responses; no emojis unless explicitly requested
+
+## Relevant to Current Task
+- [94%, 2026-02-23] Default extraction model is claude-haiku-4-5 — most consistent
+- [88%, 2026-02-21] Contradiction detection marks superseded memories via superseded_by field
+```
+
+---
+
+## How It Works
+
+### System prompt injection (every LLM call)
+
+The `[MEMORY]` block lives in the **system prompt**, not in message history. It is rebuilt fresh on every LLM call via `experimental.chat.system.transform`:
+
+- **Turn 1**: 4 parallel calls fetch profile, user memories, project list, and semantic search. Results cached per-session.
+- **Turns 2+**: A single semantic search (~300ms) refreshes "Relevant to Current Task".
+- **Every LLM call**: `system.transform` reads the cache, rebuilds `[MEMORY]`, pushes it into the system prompt.
+
+This means zero token accumulation, survives compaction, and topic switches cause different memories to surface.
+
+### Auto-save (after every turn)
+
+Every time the assistant completes a turn:
+
+1. Snapshot the recent conversation (last 8 exchanges)
+2. LLM extracts a JSON array of typed facts
+3. Each fact is embedded with `voyage-code-3` and stored after cosine dedup
+4. Raw source conversation stored as `chunk` (enables hybrid search for exact values)
+5. Contradiction search finds and supersedes stale memories
+
+A 15-second cooldown handles OpenCode's double-fire of the completion event.
+
+### Memory types
+
+| Type | What it captures |
+|------|-----------------|
+| `project-brief` | Core project definition, goals, scope |
+| `architecture` | System design, patterns, component relationships |
+| `tech-context` | Stack, tools, build commands, constraints |
+| `product-context` | Why the project exists, problems solved |
+| `progress` | Current state — only the latest entry survives |
+| `session-summary` | What was worked on; oldest condense into `learned-pattern` |
+| `error-solution` | Bug fixes, gotchas, approaches that failed |
+| `preference` | Cross-project personal preferences |
+| `learned-pattern` | Reusable patterns condensed from past sessions |
+| `project-config` | Config preferences, run commands, env setup |
+| `conversation` | Raw conversation context |
+
+### Compaction survival
+
+When OpenCode truncates the conversation, the `[MEMORY]` block is unaffected (it's in the system prompt, not message history). The plugin also intercepts the compaction hook to inject memories into the compaction context for richer summaries, then triggers a full cache refresh on the next turn.
+
+---
+
+## Extraction Providers
+
+| Provider | Model | Speed | Benchmark | Notes |
+|---|---|---|---|---|
+| **Anthropic** (default) | `claude-haiku-4-5` | ~14s/session | **93.5% avg** (3pp variance) | Most consistent |
+| **xAI** | `grok-4-1-fast-non-reasoning` | ~5s/session | ~86.5% avg (16pp variance) | Fastest, cheapest |
+| **Google** | `gemini-3-flash-preview` | ~21s/session | — | Native JSON mode |
+
+Switch via `EXTRACTION_PROVIDER=xai` (or `anthropic`, `google`). Extraction runs in the background — latency is invisible to users.
+
+---
+
+## Benchmark
+
+**94.5% overall** (189/200) on [DevMemBench](../benchmark/README.md) — 200 questions across 8 categories.
+
+```
+tech-stack        ████████████████████ 100%  (25/25)  ✓
+architecture      ████████████████████ 100%  (25/25)  ✓
+preference        ████████████████████ 100%  (25/25)  ✓
+abstention        ████████████████████ 100%  (25/25)  ✓
+session-cont.     ███████████████████░  96%  (24/25)  ✓
+knowledge-update  ███████████████████░  96%  (24/25)  ✓
+error-solution    ██████████████████░░  92%  (23/25)  ✓
+cross-synthesis   ██████████████░░░░░░  72%  (18/25)  ⚠
+──────────────────────────────────────────────────────
+Overall           94.5%  (189/200)
 ```
 
 **Extractor:** `claude-haiku-4-5` · **Judge/Answer:** `claude-sonnet-4-6` · **Embeddings:** `voyage-code-3` · **K=20 retrieval**
 
-### Progression
+E2E: 11/12 scenarios pass. See [benchmark/README.md](../benchmark/README.md) for full results.
 
-| Run | Score | What changed |
-|---|---|---|
-| embedded-v1 | 68% | Initial port — L2 distance (wrong metric) |
-| embedded-v2 | 85% | Fixed: `.distanceType("cosine")` on all searches |
-| embedded-v3 | 85% | Fixed: benchmark model to `claude-sonnet-4-6` (was using 4-5 due to `.env.local` not loading) |
-| **embedded-v4** | **94.5%** | Fixed: `CHUNK_TRUNCATION` 400→8000, removed double timeout on extraction |
-
-## E2E Test Results
-
-11/12 scenarios pass. Scenario 09 has a known K=20 margin issue (8/10 assertions under 41 memories — not a plugin bug).
-
-```
-PASS  01  Cross-Session Memory Continuity
-PASS  02  README-Based Project-Brief Seeding
-PASS  03  Transcript Noise Guard
-PASS  04  Project Brief Always Present
-PASS  05  Memory Aging
-PASS  06  Existing Codebase Auto-Init
-PASS  07  Enumeration Hybrid Retrieval
-PASS  08  Cross-Synthesis (isWideSynthesis)
-WARN  09  maxMemories=20 Under Load            ← 8/10 assertions, K=20 margin
-PASS  10  Knowledge Update / Superseded
-PASS  11  System Prompt Memory Injection
-PASS  12  Multi-Turn Per-Turn Refresh
-```
-
-## Building
-
-```bash
-cd plugin-v2
-bun install
-bun run build    # outputs to dist/index.js
-```
+---
 
 ## Configuration
 
-Set `VOYAGE_API_KEY` in your environment (required for embeddings). Extraction uses `ANTHROPIC_API_KEY` by default (can switch to xAI or Google via `EXTRACTION_PROVIDER`).
+Optional config at `~/.config/opencode/memory.jsonc`:
 
-Plugin config lives at `~/.config/opencode/memory.jsonc` (optional, all defaults are sane).
-
-Point OpenCode to the built plugin:
-```json
+```jsonc
 {
-  "plugin": ["file:///path/to/opencode-memory/plugin-v2/dist/index.js"]
+  // Minimum similarity score for retrieval (default: 0.45)
+  "similarityThreshold": 0.45,
+
+  // Max memories retrieved per scope per session (default: 10)
+  "maxMemories": 10,
+
+  // Max project memories for structured sections (default: 30)
+  "maxStructuredMemories": 30,
+
+  // Context fill ratio that triggers compaction (default: 0.80)
+  "compactionThreshold": 0.80,
+
+  // Turns between session-summary auto-saves (default: 5)
+  "turnSummaryInterval": 5,
+
+  // Additional keyword patterns that trigger explicit save
+  // "keywordPatterns": ["bookmark this", "save for later"]
 }
 ```
 
+---
+
+## Development
+
+```bash
+bun install
+bun run build          # build to dist/
+bun run typecheck      # type-check only
+bun run smoke:e2e      # full pipeline smoke test (requires API keys)
+bun run spike          # LanceDB NAPI bindings validation
+```
+
+### Log file
+
+```bash
+tail -f ~/.opencode-memory.log
+```
+
+---
+
 ## Dependencies
 
-- `@lancedb/lancedb` — embedded vector database (NAPI bindings, works in Bun 1.2.19+)
-- `zod` — runtime validation for memory record schemas
-- `@opencode-ai/plugin` — OpenCode plugin SDK types
-- `@opencode-ai/sdk` — OpenCode SDK for client interactions
+| Package | Purpose |
+|---|---|
+| `@lancedb/lancedb` | Embedded vector database (NAPI bindings, Bun 1.2.19+) |
+| `zod` | Runtime validation for memory record schemas |
+| `@opencode-ai/plugin` | OpenCode plugin SDK types |
+| `@opencode-ai/sdk` | OpenCode SDK for client interactions |
+
+---
+
+## Privacy
+
+All data stays on your machine. The only outbound API calls are:
+
+- **Voyage AI** — text sent for embedding generation
+- **Your extraction provider** — conversation text for memory extraction (one provider per request)
+
+Wrap sensitive content in `<private>...</private>` to exclude it from extraction.
+
+---
+
+<div align="center">
+
+Built with [OpenCode](https://opencode.ai) · [LanceDB](https://lancedb.com) · [Voyage AI](https://www.voyageai.com) · [Anthropic](https://anthropic.com) · [xAI](https://x.ai) · [Google AI](https://ai.google.dev) · [Bun](https://bun.sh)
+
+</div>

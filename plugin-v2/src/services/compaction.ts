@@ -1,11 +1,8 @@
 /**
  * Compaction service — monitors token usage and triggers context compaction.
  *
- * Port from plugin/src/services/compaction.ts:
- * - memoryClient.listMemories() → store.list()
- * - memoryClient.addMemory() → store.ingest()
- * - Privacy stripping applied before storage (bug fix §12)
- * - State leak bug fixed: summarizedSessions.add() moved AFTER summarize() (bug fix §4)
+ * When context usage exceeds the threshold, injects project memories into the
+ * compaction prompt, triggers summarization, and saves the summary as a memory.
  *
  * NOTE: This module has deep filesystem coupling — it directly reads/writes OpenCode's
  * internal message storage at ~/.opencode/messages/ and ~/.opencode/parts/.
@@ -278,8 +275,7 @@ export function createCompactionHook(
 
 	async function fetchProjectMemoriesForCompaction(): Promise<string[]> {
 		try {
-			// Direct store call — replaces memoryClient.listMemories()
-			const memories = await store.list(tags.project, { limit: PLUGIN_CONFIG.maxProjectMemories });
+				const memories = await store.list(tags.project, { limit: PLUGIN_CONFIG.maxProjectMemories });
 			return memories.map((m) => m.memory || "").filter(Boolean);
 		} catch (err) {
 			log("[compaction] failed to fetch project memories", { error: String(err) });
@@ -314,11 +310,9 @@ export function createCompactionHook(
 		}
 
 		try {
-			// Privacy stripping applied before storage (bug fix §12)
-			const sanitized = stripPrivateContent(summaryContent);
+		const sanitized = stripPrivateContent(summaryContent);
 
-			// Direct store call — replaces memoryClient.addMemory()
-			const results = await store.ingest(
+		const results = await store.ingest(
 				[{ role: "user", content: `[Session Summary]\n${sanitized}` }],
 				tags.project,
 				{ metadata: { type: "session-summary" } }
@@ -401,10 +395,9 @@ export function createCompactionHook(
 				agent,
 			});
 
-			// BUG FIX §4: summarizedSessions.add() moved AFTER successful summarize()
-			// Previously: add() was called before summarize(), meaning if summarize() threw,
-			// the session was permanently skipped for future summary extraction.
-			await ctx.client.session.summarize({
+		// summarizedSessions.add() is deferred until AFTER successful summarize()
+		// to prevent permanently skipping sessions if summarize() throws.
+		await ctx.client.session.summarize({
 				path: { id: sessionID },
 				body: { providerID, modelID },
 				query: { directory: ctx.directory },

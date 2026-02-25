@@ -1,11 +1,9 @@
 /**
  * Privacy tag stripping — removes <private>...</private> content before storage.
  *
- * Applied in ALL 4 ingestion paths (memory tool add, auto-save, compaction, init).
- * This fixes the privacy stripping gap from the original plugin (see design doc §12).
- *
+ * Applied in all 4 ingestion paths (memory tool add, auto-save, compaction, init).
  * Uses iterative indexOf-based parsing instead of regex to avoid polynomial
- * backtracking on adversarial input (GitHub code scanning ReDoS alert).
+ * backtracking on adversarial input.
  */
 
 const OPEN_TAG = "<private>";

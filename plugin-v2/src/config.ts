@@ -124,7 +124,7 @@ export const VERSIONING_SKIP_TYPES = new Set(["session-summary", "progress"]);
 /** Max session-summary entries per project before oldest is condensed → learned-pattern. */
 export const MAX_SESSION_SUMMARIES = 3;
 
-// ── Plugin-side constants (from index.ts / auto-save.ts / compaction.ts / client.ts) ────
+// ── Plugin constants ────────────────────────────────────────────────────────────
 
 /** HTTP request timeout (used for external API calls). */
 export const TIMEOUT_MS = 30_000;
@@ -160,17 +160,17 @@ export const INIT_TOTAL_CHAR_CAP = 7_000;
 export const SIMILARITY_THRESHOLD = 0.55;
 
 /**
- * Max chars per memory chunk.
- * Must match Python backend behavior: store the full truncated conversation
- * (up to MAX_CONTENT_CHARS = 8,000). Previous value of 400 silently discarded
- * 95% of source context, causing a 7% benchmark regression.
+ * Max chars per memory chunk — stores the full truncated conversation context
+ * attached to each memory (up to MAX_CONTENT_CHARS = 8,000). The answering LLM
+ * uses these chunks for detail queries. Display truncation for the [MEMORY] block
+ * is separate (context.ts:126).
  */
 export const CHUNK_TRUNCATION = 8_000;
 
 /** Hash prefix length for content dedup. */
 export const HASH_PREFIX_LENGTH = 16;
 
-// ── Backend-side constants (from store.py / extractor.py / routes/memories.py) ──
+// ── Store & extraction constants ────────────────────────────────────────────────
 
 /** Max input chars for extraction. */
 export const MAX_CONTENT_CHARS = 8_000;

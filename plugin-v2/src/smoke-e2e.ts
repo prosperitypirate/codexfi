@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 /**
- * E2E smoke test for plugin-v2 embedded pipeline.
+ * E2E smoke test for the embedded memory pipeline.
  *
  * Validates the full lifecycle that index.ts depends on:
  * 1. db.init() — LanceDB connection + table creation
@@ -45,7 +45,7 @@ function assert(condition: boolean, label: string, detail?: string): void {
 }
 
 async function main(): Promise<void> {
-	console.log("=== plugin-v2 E2E Smoke Test ===\n");
+	console.log("=== E2E Smoke Test ===\n");
 
 	// ── 0. Pre-flight checks ──────────────────────────────────────────────
 	console.log("0. Pre-flight checks");
@@ -186,7 +186,7 @@ async function main(): Promise<void> {
 		console.error("\nSMOKE TEST FAILED");
 		process.exit(1);
 	} else {
-		console.log("\nSMOKE TEST PASSED — plugin-v2 is ready for live wiring");
+		console.log("\nSMOKE TEST PASSED");
 	}
 }
 

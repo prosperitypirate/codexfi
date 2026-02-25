@@ -1,8 +1,5 @@
 /**
  * Plugin-specific user configuration — loaded from ~/.config/opencode/memory.jsonc.
- *
- * Uses Bun.JSONC.parse() instead of custom jsonc.ts (85 lines eliminated).
- * Replaces plugin/src/config.ts — no memoryBaseUrl (no HTTP backend).
  */
 
 import { readFileSync } from "node:fs";
@@ -113,7 +110,6 @@ export const PLUGIN_CONFIG = {
 
 /**
  * Check if the plugin is configured — requires VOYAGE_API_KEY for embeddings.
- * Unlike the old plugin, no HTTP backend URL is needed.
  */
 export function isConfigured(): boolean {
 	return !!(process.env.VOYAGE_API_KEY);
