@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/prosperitypirate/codexfi/compare/v0.4.0...v0.4.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* **plugin:** register npm package name instead of temp file path ([#61](https://github.com/prosperitypirate/codexfi/issues/61)) ([9b6619e](https://github.com/prosperitypirate/codexfi/commit/9b6619e4fde6d19fa9bb33257977bf18be9ee7a9))
+
 ## [0.4.0](https://github.com/prosperitypirate/codexfi/compare/v0.3.0...v0.4.0) (2026-02-26)
 
 
