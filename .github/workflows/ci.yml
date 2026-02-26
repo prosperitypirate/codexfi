@@ -16,23 +16,42 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            plugin:
+              - 'plugin/**'
+              - 'testing/**'
+              - '.github/workflows/ci.yml'
+
       - uses: oven-sh/setup-bun@v2
+        if: steps.changes.outputs.plugin == 'true'
 
       - name: Install plugin dependencies
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: plugin
         run: bun install --frozen-lockfile
 
       - name: Type check
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: plugin
         run: bunx tsc --noEmit
 
       - name: Build plugin
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: plugin
         run: bun run build:plugin
 
       - name: Build CLI
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: plugin
         run: bun run build:cli
+
+      - name: Skip — no plugin changes
+        if: steps.changes.outputs.plugin != 'true'
+        run: echo "No plugin/testing changes detected — skipping build"
 
   # ── Unit + Integration tests ───────────────────────────────────────────────
   test:
@@ -41,20 +60,39 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@v6
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            plugin:
+              - 'plugin/**'
+              - 'testing/**'
+              - '.github/workflows/ci.yml'
+
       - uses: oven-sh/setup-bun@v2
+        if: steps.changes.outputs.plugin == 'true'
 
       - name: Install plugin dependencies
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: plugin
         run: bun install --frozen-lockfile
 
       - name: Install test dependencies
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: testing
         run: bun install --frozen-lockfile
 
       - name: Run unit tests
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: testing
         run: bun test src/unit/
 
       - name: Run integration tests
+        if: steps.changes.outputs.plugin == 'true'
         working-directory: testing
         run: bun test src/integration/
+
+      - name: Skip — no plugin changes
+        if: steps.changes.outputs.plugin != 'true'
+        run: echo "No plugin/testing changes detected — skipping tests"
