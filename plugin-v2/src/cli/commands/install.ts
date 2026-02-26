@@ -1,26 +1,48 @@
 /**
- * `opencode-memory install` — register plugin with OpenCode and create slash commands.
+ * `opencode-memory install` — register plugin with OpenCode, prompt for API keys,
+ * and create slash commands.
  *
  * Steps:
  *   1. Resolve the plugin's absolute path from the CLI binary location.
  *   2. Find or create the OpenCode config (~/.config/opencode/opencode.json[c]).
  *   3. Register the plugin's file:// URI in the config's `plugin` array.
- *   4. Create the /memory-init slash command in ~/.config/opencode/command/.
- *   5. Print next-steps guidance (API keys, restart).
+ *   4. Prompt for API keys interactively and store in ~/.config/opencode/memory.jsonc.
+ *   5. Create the /memory-init slash command in ~/.config/opencode/command/.
+ *   6. Print next-steps guidance.
+ *
+ * API key storage follows the established OpenCode ecosystem pattern (Supermemory, etc.):
+ *   - Keys are stored in a plugin-specific JSONC config file (~/.config/opencode/memory.jsonc)
+ *   - Environment variables always take precedence over config file values
+ *   - Install command prompts interactively and writes to the config file
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { pathToFileURL } from "node:url";
 
 import type { ParsedArgs } from "../args.js";
+import { getFlag } from "../args.js";
 import * as fmt from "../fmt.js";
+import {
+	PLUGIN_CONFIG,
+	getConfigPath,
+	writeApiKeys,
+	type ApiKeyUpdate,
+} from "../../plugin-config.js";
 
 // ── Constants ───────────────────────────────────────────────────────────────────
 
 const OPENCODE_CONFIG_DIR = join(homedir(), ".config", "opencode");
 const OPENCODE_COMMAND_DIR = join(OPENCODE_CONFIG_DIR, "command");
+
+/** Extraction provider choices shown during install. */
+const PROVIDERS = [
+	{ key: "anthropic", label: "Anthropic", envVar: "ANTHROPIC_API_KEY", configKey: "anthropicApiKey" as const, hint: "sk-ant-..." },
+	{ key: "xai", label: "xAI (Grok)", envVar: "XAI_API_KEY", configKey: "xaiApiKey" as const, hint: "xai-..." },
+	{ key: "google", label: "Google (Gemini)", envVar: "GOOGLE_API_KEY", configKey: "googleApiKey" as const, hint: "AIza..." },
+] as const;
 
 /**
  * Slash command: /memory-init
@@ -138,6 +160,31 @@ After saving, run \`memory(mode:"list", scope:"project")\` and show the user a b
 summary of what was stored across each category.
 `;
 
+// ── Interactive prompt helpers ───────────────────────────────────────────────────
+
+/**
+ * Prompt the user for a line of input. Returns empty string on EOF / non-TTY.
+ */
+async function ask(question: string): Promise<string> {
+	if (!process.stdin.isTTY) return "";
+
+	const rl = createInterface({ input: process.stdin, output: process.stdout });
+	return new Promise<string>((resolve) => {
+		rl.question(question, (answer) => {
+			rl.close();
+			resolve(answer.trim());
+		});
+	});
+}
+
+/**
+ * Mask an API key for display — show first 6 chars + last 3.
+ */
+function maskKey(key: string): string {
+	if (key.length <= 8) return key.slice(0, 3) + "...";
+	return key.slice(0, 6) + "..." + key.slice(-3);
+}
+
 // ── Config file helpers ─────────────────────────────────────────────────────────
 
 /**
@@ -158,8 +205,8 @@ function findOpencodeConfig(): string | null {
 /**
  * Add the plugin URI to an existing OpenCode config file.
  *
- * Parses JSONC (via Bun.JSONC.parse if available, else strips comments manually),
- * checks for duplicates, adds the plugin URI, and writes back as formatted JSON.
+ * Parses JSONC (strips comments, then JSON.parse), checks for duplicates, adds the plugin URI,
+ * and writes back as formatted JSON.
  *
  * @returns true if successful, false on parse/write failure.
  */
@@ -173,10 +220,11 @@ function addPluginToConfig(configPath: string, pluginUri: string): boolean {
 			return true;
 		}
 
-		// Parse JSONC — Bun provides Bun.JSONC.parse() natively
+		// Parse JSONC — strip comments then JSON.parse (Bun.JSONC not available in <=1.2.x)
 		let config: Record<string, unknown>;
 		try {
-			config = Bun.JSONC.parse(raw) as Record<string, unknown>;
+			const stripped = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+			config = JSON.parse(stripped) as Record<string, unknown>;
 		} catch {
 			fmt.error(`Failed to parse ${configPath}`);
 			return false;
@@ -226,9 +274,110 @@ function createSlashCommands(): void {
 	fmt.success(`Created ${fmt.cyan("/memory-init")} slash command`);
 }
 
+// ── API key prompting ───────────────────────────────────────────────────────────
+
+/**
+ * Resolve API keys from: CLI flags > env vars > config file > interactive prompt.
+ *
+ * Returns the keys to be written to the config file (only non-empty values).
+ */
+async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
+	const keys: ApiKeyUpdate = {};
+
+	// ── Voyage API key (required) ───────────────────────────────────────────────
+	const voyageFromFlag = getFlag(args, "voyage-key");
+	const voyageFromEnv = process.env.VOYAGE_API_KEY;
+	const voyageFromConfig = PLUGIN_CONFIG.voyageApiKey;
+
+	let voyageKey = voyageFromFlag || voyageFromEnv || voyageFromConfig || "";
+
+	if (voyageKey) {
+		const source = voyageFromFlag ? "flag" : voyageFromEnv ? "env" : "config";
+		fmt.success(`VOYAGE_API_KEY ${fmt.dim(`set (${maskKey(voyageKey)}) [${source}]`)}`);
+	} else {
+		fmt.warn(`VOYAGE_API_KEY ${fmt.dim("not set — required for embeddings")}`);
+		fmt.blank();
+		fmt.info("Get your Voyage AI key at: " + fmt.cyan("https://dash.voyageai.com/api-keys"));
+		fmt.blank();
+		voyageKey = await ask(`  Enter Voyage API key ${fmt.dim("(pa-...)")}: `);
+		if (voyageKey) {
+			fmt.success(`VOYAGE_API_KEY ${fmt.dim(`saved (${maskKey(voyageKey)})`)}`);
+		} else {
+			fmt.warn("Skipped — plugin will be disabled until VOYAGE_API_KEY is set.");
+		}
+	}
+	if (voyageKey) keys.voyageApiKey = voyageKey;
+
+	fmt.blank();
+
+	// ── Extraction API key (at least one required) ──────────────────────────────
+	// Check what's already available from any source
+	const existingExtraction = resolveExistingExtraction(args);
+
+	if (existingExtraction) {
+		fmt.success(`${existingExtraction.label} API key ${fmt.dim(`set (${maskKey(existingExtraction.key)}) [${existingExtraction.source}]`)}`);
+		// Store the key in config so it persists across restarts
+		keys[existingExtraction.configKey] = existingExtraction.key;
+	} else {
+		fmt.warn("No extraction API key set — need one of: ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY");
+		fmt.blank();
+
+		// Ask which provider
+		fmt.info("Which extraction provider would you like to use?");
+		fmt.blank();
+		for (let i = 0; i < PROVIDERS.length; i++) {
+			const p = PROVIDERS[i];
+			const defaultTag = i === 0 ? fmt.dim(" (default)") : "";
+			console.log(`    ${fmt.cyan(`${i + 1}`)}. ${p.label}${defaultTag}`);
+		}
+		fmt.blank();
+
+		const choice = await ask(`  Choose provider ${fmt.dim("[1-3, default 1]")}: `);
+		const providerIdx = choice ? parseInt(choice, 10) - 1 : 0;
+		const provider = PROVIDERS[Math.max(0, Math.min(providerIdx, PROVIDERS.length - 1))];
+
+		fmt.blank();
+		const extractionKey = await ask(`  Enter ${provider.label} API key ${fmt.dim(`(${provider.hint})`)}: `);
+
+		if (extractionKey) {
+			fmt.success(`${provider.envVar} ${fmt.dim(`saved (${maskKey(extractionKey)})`)}`);
+			keys[provider.configKey] = extractionKey;
+		} else {
+			fmt.warn("Skipped — extraction will fail until an API key is configured.");
+		}
+	}
+
+	return keys;
+}
+
+/**
+ * Check all sources (flags, env, config) for an existing extraction key.
+ * Returns the first one found with its metadata, or null.
+ */
+function resolveExistingExtraction(args: ParsedArgs): {
+	label: string;
+	key: string;
+	source: string;
+	configKey: "anthropicApiKey" | "xaiApiKey" | "googleApiKey";
+} | null {
+	for (const p of PROVIDERS) {
+		// Flag name: anthropicApiKey → anthropic-key
+		const flagName = p.key + "-key";
+		const fromFlag = getFlag(args, flagName);
+		if (fromFlag) return { label: p.label, key: fromFlag, source: "flag", configKey: p.configKey };
+
+		const fromEnv = process.env[p.envVar];
+		if (fromEnv) return { label: p.label, key: fromEnv, source: "env", configKey: p.configKey };
+
+		const fromConfig = PLUGIN_CONFIG[p.configKey];
+		if (fromConfig) return { label: p.label, key: fromConfig, source: "config", configKey: p.configKey };
+	}
+	return null;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────────
 
-export async function run(_args: ParsedArgs): Promise<void> {
+export async function run(args: ParsedArgs): Promise<void> {
 	fmt.header("Install");
 
 	// Resolve plugin root: cli.ts is at src/cli/commands/, so 3 levels up = package root.
@@ -241,7 +390,7 @@ export async function run(_args: ParsedArgs): Promise<void> {
 	fmt.info(`Plugin path: ${fmt.blue(pluginRoot)}`);
 	fmt.blank();
 
-	// Step 1: Register in OpenCode config
+	// ── Step 1: Register in OpenCode config ─────────────────────────────────────
 	console.log(fmt.bold("  Step 1") + fmt.dim(" — Register plugin with OpenCode"));
 	fmt.blank();
 
@@ -258,44 +407,39 @@ export async function run(_args: ParsedArgs): Promise<void> {
 
 	fmt.blank();
 
-	// Step 2: Create slash commands
+	// ── Step 2: Create slash commands ───────────────────────────────────────────
 	console.log(fmt.bold("  Step 2") + fmt.dim(" — Create slash commands"));
 	fmt.blank();
 	createSlashCommands();
 
-	// Step 3: Check API keys
+	// ── Step 3: Configure API keys ──────────────────────────────────────────────
 	fmt.blank();
-	console.log(fmt.bold("  Step 3") + fmt.dim(" — Verify environment"));
+	console.log(fmt.bold("  Step 3") + fmt.dim(" — Configure API keys"));
 	fmt.blank();
 
-	const voyageKey = process.env.VOYAGE_API_KEY;
-	const anthropicKey = process.env.ANTHROPIC_API_KEY;
-	const xaiKey = process.env.XAI_API_KEY;
-	const googleKey = process.env.GOOGLE_API_KEY;
+	const keys = await resolveApiKeys(args);
 
-	if (voyageKey) {
-		fmt.success(`VOYAGE_API_KEY ${fmt.dim("set (" + voyageKey.slice(0, 6) + "...)")}`);
-	} else {
-		fmt.warn(`VOYAGE_API_KEY ${fmt.dim("not set — required for embeddings")}`);
+	// Write keys to config file if we have any
+	if (Object.keys(keys).length > 0) {
+		fmt.blank();
+		writeApiKeys(keys);
+		const configPath = getConfigPath();
+		fmt.success(`API keys saved to ${fmt.dim(configPath)}`);
 	}
 
-	const hasExtraction = !!(anthropicKey || xaiKey || googleKey);
-	if (anthropicKey) {
-		fmt.success(`ANTHROPIC_API_KEY ${fmt.dim("set — extraction ready")}`);
-	} else if (xaiKey) {
-		fmt.success(`XAI_API_KEY ${fmt.dim("set — extraction ready")}`);
-	} else if (googleKey) {
-		fmt.success(`GOOGLE_API_KEY ${fmt.dim("set — extraction ready")}`);
-	} else {
-		fmt.warn("No extraction API key set — need one of: ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY");
-	}
-
-	// Final guidance
+	// ── Final guidance ──────────────────────────────────────────────────────────
 	fmt.blank();
 	fmt.hr(60);
 	fmt.blank();
 
-	if (voyageKey && hasExtraction) {
+	const hasVoyage = !!(keys.voyageApiKey || process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey);
+	const hasExtraction = !!(
+		keys.anthropicApiKey || keys.xaiApiKey || keys.googleApiKey ||
+		process.env.ANTHROPIC_API_KEY || process.env.XAI_API_KEY || process.env.GOOGLE_API_KEY ||
+		PLUGIN_CONFIG.anthropicApiKey || PLUGIN_CONFIG.xaiApiKey || PLUGIN_CONFIG.googleApiKey
+	);
+
+	if (hasVoyage && hasExtraction) {
 		fmt.success(fmt.greenBold("Setup complete!"));
 	} else {
 		fmt.warn(fmt.yellow("Setup complete with warnings — see above."));
@@ -305,9 +449,14 @@ export async function run(_args: ParsedArgs): Promise<void> {
 	console.log(fmt.bold("  Next steps:"));
 	fmt.blank();
 
-	if (!voyageKey || !hasExtraction) {
-		fmt.info("Set the missing API keys in your shell environment:");
-		fmt.info(`  ${fmt.dim("export VOYAGE_API_KEY=pa-...")}`);
+	if (!hasVoyage || !hasExtraction) {
+		fmt.info("Set missing API keys by re-running:");
+		fmt.info(`  ${fmt.dim("opencode-memory install")}`);
+		fmt.blank();
+		fmt.info("Or set environment variables in your shell:");
+		if (!hasVoyage) {
+			fmt.info(`  ${fmt.dim("export VOYAGE_API_KEY=pa-...")}`);
+		}
 		if (!hasExtraction) {
 			fmt.info(`  ${fmt.dim("export ANTHROPIC_API_KEY=sk-ant-...")}`);
 		}

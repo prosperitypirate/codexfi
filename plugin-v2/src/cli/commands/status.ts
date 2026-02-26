@@ -170,7 +170,8 @@ function checkPluginRegistered(): CheckResult {
 			if (!existsSync(configPath)) continue;
 
 			const raw = readFileSync(configPath, "utf-8");
-			const config = Bun.JSONC.parse(raw) as Record<string, unknown>;
+			const stripped = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
+			const config = JSON.parse(stripped) as Record<string, unknown>;
 			const plugins = (config.plugin as string[]) ?? [];
 
 			// Check if any plugin entry looks like it points to this package

@@ -17,9 +17,25 @@
  */
 
 import { EMBEDDING_DIMS, VOYAGE_API_KEY } from "../config.js";
-import { getTable } from "../db.js";
+import { getTable, refresh as refreshDb } from "../db.js";
 import { ledger, activityLog } from "../telemetry.js";
 import { nameRegistry } from "../names.js";
+
+/**
+ * Refresh all cross-process state: LanceDB table handle, cost ledger, name registry.
+ *
+ * The dashboard runs as a separate Bun process from the plugin. All three data
+ * sources are written to disk by the plugin and cached in memory here. Without
+ * this refresh, the dashboard shows stale data from when it was started.
+ */
+async function refreshAll(): Promise<void> {
+	await Promise.all([
+		refreshDb(),
+		ledger.load(),
+		nameRegistry.load(),
+		activityLog.load(),
+	]);
+}
 import { searchByVector, deleteMemory } from "../store.js";
 import { embed } from "../embedder.js";
 import { validateId } from "../config.js";
@@ -273,6 +289,13 @@ export function startDashboard(options: DashboardOptions = {}): ReturnType<typeo
 			}
 
 			try {
+				// Refresh all cross-process state before handling API requests.
+				// The plugin writes to LanceDB, costs.json, and names.json from
+				// its own process; we need to re-read from disk on every request.
+				if (url.pathname.startsWith("/api/")) {
+					await refreshAll();
+				}
+
 				// Route dispatch — static routes first, then dynamic patterns
 				switch (url.pathname) {
 					case "/":

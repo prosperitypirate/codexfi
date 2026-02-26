@@ -13,7 +13,7 @@ import type { ParsedArgs } from "../args.js";
 import { getFlagInt } from "../args.js";
 import * as fmt from "../fmt.js";
 import { initDb } from "../shared.js";
-import { ledger } from "../../telemetry.js";
+import { ledger, activityLog } from "../../telemetry.js";
 import { nameRegistry } from "../../names.js";
 import { startDashboard } from "../../dashboard/server.js";
 
@@ -28,6 +28,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		await initDb();
 		await ledger.init();
 		await nameRegistry.init();
+		await activityLog.init();
 	});
 
 	// Start HTTP server

@@ -14,7 +14,7 @@ import { join } from "node:path";
 import * as db from "./db.js";
 import * as store from "./store.js";
 import { nameRegistry } from "./names.js";
-import { ledger } from "./telemetry.js";
+import { ledger, activityLog } from "./telemetry.js";
 import {
 	formatContextForPrompt,
 	type StructuredMemory,
@@ -230,6 +230,7 @@ async function ensureInitialized(): Promise<void> {
 	await db.init();
 	await nameRegistry.init();
 	await ledger.init();
+	await activityLog.init();
 	dbInitialized = true;
 	log("ensureInitialized: LanceDB + nameRegistry + telemetry ready");
 }

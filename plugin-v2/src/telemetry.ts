@@ -154,6 +154,22 @@ class CostLedger {
 		return JSON.parse(JSON.stringify(this.data));
 	}
 
+	/**
+	 * Re-read costs.json from disk — used by the dashboard server to pick up
+	 * writes from the plugin process (which runs in a separate Bun instance).
+	 */
+	async load(): Promise<void> {
+		if (!this.path) return;
+		try {
+			const file = Bun.file(this.path);
+			if (await file.exists()) {
+				this.data = await file.json();
+			}
+		} catch {
+			// Non-fatal — keep existing data if file read fails
+		}
+	}
+
 	async reset(): Promise<void> {
 		this.data = freshLedger();
 		this.data.last_updated = new Date().toISOString();
@@ -177,12 +193,52 @@ interface ActivityEntry {
 
 class ActivityLog {
 	private entries: ActivityEntry[] = [];
+	private path = "";
+
+	async init(dataDir: string = DATA_DIR): Promise<void> {
+		this.path = `${dataDir}/activity.json`;
+		try {
+			const file = Bun.file(this.path);
+			if (await file.exists()) {
+				this.entries = await file.json();
+			}
+		} catch {
+			this.entries = [];
+		}
+	}
+
+	private async save(): Promise<void> {
+		if (!this.path) return;
+		try {
+			await Bun.write(this.path, JSON.stringify(this.entries));
+		} catch {
+			// Non-fatal — activity log is ephemeral data
+		}
+	}
+
+	/**
+	 * Re-read activity.json from disk — used by the dashboard to pick up
+	 * entries recorded by the plugin in a separate process.
+	 */
+	async load(): Promise<void> {
+		if (!this.path) return;
+		try {
+			const file = Bun.file(this.path);
+			if (await file.exists()) {
+				this.entries = await file.json();
+			}
+		} catch {
+			// Non-fatal — keep existing entries
+		}
+	}
 
 	private append(entry: ActivityEntry): void {
 		this.entries.push(entry);
 		if (this.entries.length > ACTIVITY_MAX) {
 			this.entries = this.entries.slice(-ACTIVITY_MAX);
 		}
+		// Fire-and-forget save — don't block the caller
+		this.save();
 	}
 
 	recordXai(

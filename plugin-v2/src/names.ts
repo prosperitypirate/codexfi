@@ -39,6 +39,22 @@ class NameRegistry {
 		}
 	}
 
+	/**
+	 * Re-read names.json from disk — used by the dashboard to pick up
+	 * names registered by the plugin in a separate process.
+	 */
+	async load(): Promise<void> {
+		if (!this.path) return;
+		try {
+			const file = Bun.file(this.path);
+			if (await file.exists()) {
+				this.data = await file.json();
+			}
+		} catch {
+			// Non-fatal — keep existing data
+		}
+	}
+
 	get(userId: string): string | undefined {
 		return this.data[userId];
 	}
