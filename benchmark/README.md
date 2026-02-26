@@ -202,11 +202,11 @@ Ingest total: 353.8s (25 sessions) · ~13.6s/session mean · Total run time: 30m
 
 ## Results
 
-### embedded-v4 — 200 questions · 25 sessions · run `embedded-v4` ← current (plugin-v2 embedded rewrite)
+### embedded-v4 — 200 questions · 25 sessions · run `embedded-v4` ← current (plugin embedded rewrite)
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **Embedded LanceDB** (no Docker backend)
 >
-> This is the first benchmark run on the plugin-v2 embedded rewrite — LanceDB, extraction, and
+> This is the first benchmark run on the plugin embedded rewrite — LanceDB, extraction, and
 > embeddings run directly in the Bun plugin process. Zero Docker, zero Python, zero HTTP.
 
 ```
@@ -567,7 +567,7 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 
 ### embedded-v4 (run `embedded-v4`) — **94.5%** · Embedded LanceDB · extractor: Anthropic Haiku 4.5
 
-200 questions, 25 sessions. First successful benchmark on the plugin-v2 embedded rewrite (no Docker backend). 4 categories at 100% (tech, arch, pref, abstain), session-continuity and knowledge-update at 96%, error at 92%, synthesis at 72%. Matches haiku-run1 baseline (92%) with +2.5pp improvement. Key fixes applied: `CHUNK_TRUNCATION` 400→8000 (95% more source context), removed double timeout on extraction (30s→60s effective), `.distanceType("cosine")` on all LanceDB searches (L2→cosine), explicit `.env.local` loader for benchmark config.
+200 questions, 25 sessions. First successful benchmark on the plugin embedded rewrite (no Docker backend). 4 categories at 100% (tech, arch, pref, abstain), session-continuity and knowledge-update at 96%, error at 92%, synthesis at 72%. Matches haiku-run1 baseline (92%) with +2.5pp improvement. Key fixes applied: `CHUNK_TRUNCATION` 400→8000 (95% more source context), removed double timeout on extraction (30s→60s effective), `.distanceType("cosine")` on all LanceDB searches (L2→cosine), explicit `.env.local` loader for benchmark config.
 
 ### haiku-run3 (run `haiku-run3`) — **93.5%** · extractor: Anthropic Haiku 4.5 · 30m 14s
 
@@ -668,14 +668,14 @@ error-solution 0% → 100% after source chunk injection into answer context.
 - `ANTHROPIC_API_KEY` — for extraction (Haiku 4.5) and judge/answering (Sonnet 4.6)
 - `VOYAGE_API_KEY` — for embeddings (voyage-code-3)
 
-> **No Docker required.** The benchmark uses the embedded LanceDB store from `plugin-v2/` directly.
+> **No Docker required.** The benchmark uses the embedded LanceDB store from `plugin/` directly.
 > The Docker backend is no longer needed.
 
 ### First-time setup
 
 ```bash
-# 1. Build plugin-v2 (benchmark imports store.ts and db.ts directly)
-cd plugin-v2 && bun install && bun run build && cd ..
+# 1. Build plugin (benchmark imports store.ts and db.ts directly)
+cd plugin && bun install && bun run build && cd ..
 
 # 2. Install benchmark dependencies
 cd benchmark && bun install && cd ..

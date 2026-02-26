@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 
 // We can't directly instantiate CostLedger/ActivityLog since they're exported
 // as singletons. But we CAN test the singletons with fresh temp dirs.
-import { ledger, activityLog } from "../../../plugin-v2/src/telemetry.js";
+import { ledger, activityLog } from "../../../plugin/src/telemetry.js";
 
 let tempDir: string;
 

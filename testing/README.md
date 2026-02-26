@@ -2,15 +2,15 @@
 
 Fully autonomous end-to-end tests for the `opencode-memory` plugin. The agent (not a human) creates isolated project directories, spawns `opencode run` sessions, talks to the agent, inspects the memory backend, and reports pass/fail — zero user interaction required.
 
-> **Note:** As of the plugin-v2 embedded rewrite, the test harness uses the embedded LanceDB store
-> directly (via `plugin-v2/src/store.ts` and `plugin-v2/src/db.ts`) instead of making HTTP calls
+> **Note:** As of the plugin embedded rewrite, the test harness uses the embedded LanceDB store
+> directly (via `plugin/src/store.ts` and `plugin/src/db.ts`) instead of making HTTP calls
 > to the Docker backend. The Docker backend is no longer required for E2E testing.
 
 ## Prerequisites
 
 **1. Plugin-v2 built**
 ```bash
-cd plugin-v2 && bun run build
+cd plugin && bun run build
 ```
 
 **2. OpenCode CLI installed**
@@ -22,7 +22,7 @@ bun install -g opencode-ai
 **3. Plugin configured in `~/.config/opencode/opencode.json`**
 ```json
 {
-  "plugin": ["file:///path/to/opencode-memory/plugin-v2/dist/index.js"]
+  "plugin": ["file:///path/to/opencode-memory/plugin/dist/index.js"]
 }
 ```
 
@@ -49,9 +49,9 @@ bun run test:scenario 07       # single scenario
 bun run test:scenario 07,08    # multiple scenarios
 ```
 
-## Latest run results (2026-02-25) — plugin-v2 embedded rewrite
+## Latest run results (2026-02-25) — plugin embedded rewrite
 
-Full run against `plugin-v2/` (embedded LanceDB, no Docker backend). Extraction via xAI Grok (`grok-4-fast-non-reasoning`).
+Full run against `plugin/` (embedded LanceDB, no Docker backend). Extraction via xAI Grok (`grok-4-fast-non-reasoning`).
 
 ```
 PASS  01  Cross-Session Memory Continuity
@@ -142,7 +142,7 @@ testing/
 │   │                        (refreshes LanceDB table before cleanup to fix delete lock contention)
 │   ├── opencode.ts        — spawns opencode serve with per-directory server cache
 │   │                        (opencode run exits before async handlers complete; serve stays alive)
-│   ├── memory-api.ts      — uses embedded LanceDB store directly (plugin-v2/src/store.ts + db.ts)
+│   ├── memory-api.ts      — uses embedded LanceDB store directly (plugin/src/store.ts + db.ts)
 │   │                        (replaces HTTP calls to Docker backend; calls db.refresh() before reads)
 │   ├── report.ts          — ANSI result formatting
 │   └── scenarios/
@@ -163,9 +163,9 @@ testing/
 └── tsconfig.json
 ```
 
-### Key changes for plugin-v2
+### Key changes for plugin
 
-1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin-v2/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process (LanceDB caches table state).
+1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process (LanceDB caches table state).
 
 2. **`opencode.ts` uses server mode** — `opencode run` exits before async plugin event handlers (auto-save, extraction) complete. Switched to `opencode serve` with per-directory server caching so the plugin process stays alive for extraction to finish. `waitForMemories(dir, N, 30_000)` polls until data appears.
 

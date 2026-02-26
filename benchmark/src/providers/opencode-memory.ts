@@ -1,8 +1,8 @@
 /**
- * Provider adapter for the opencode-memory embedded store (plugin-v2).
+ * Provider adapter for the opencode-memory embedded store (plugin).
  *
  * Replaces the HTTP-based adapter that called the Docker backend at localhost:8020.
- * Now uses the embedded LanceDB store directly via plugin-v2/src/store.ts.
+ * Now uses the embedded LanceDB store directly via plugin/src/store.ts.
  *
  * API surface used (all direct function calls, no HTTP):
  *   store.ingest()       – extract + embed + store memories from messages
@@ -23,8 +23,8 @@ import type {
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
 
-import * as db from "../../../plugin-v2/src/db.js";
-import * as store from "../../../plugin-v2/src/store.js";
+import * as db from "../../../plugin/src/db.js";
+import * as store from "../../../plugin/src/store.js";
 
 // Memory types included in hybrid enumeration retrieval ("list all X", "every Y").
 // Narrow set for pure enumeration queries — excludes architecture (too broad, adds noise)
@@ -36,7 +36,7 @@ const ENUMERATION_TYPES = [
 // Wider set for cross-project synthesis queries ("across both projects", "overall state").
 // Includes architecture because synthesis queries often need component/endpoint/chart details
 // that are stored as architecture-type memories.
-// Mirrors plugin-v2/src/index.ts — keep both in sync.
+// Mirrors plugin/src/index.ts — keep both in sync.
 const SYNTHESIS_TYPES = [
 	...ENUMERATION_TYPES, "architecture",
 ];

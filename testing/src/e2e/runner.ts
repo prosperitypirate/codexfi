@@ -10,7 +10,7 @@
  *   - opencode installed: bun install -g opencode-ai
  *   - VOYAGE_API_KEY set (for embeddings)
  *   - ANTHROPIC_API_KEY or XAI_API_KEY set (for extraction)
- *   - plugin-v2 built: cd plugin-v2 && bun run build
+ *   - plugin built: cd plugin && bun run build
  */
 
 import { isBackendReady } from "./memory-api.js";
@@ -107,7 +107,7 @@ async function main() {
     if (result.testDirs && result.testDirs.length > 0) {
       const { shutdownServer } = await import("./opencode.js");
       const { cleanupTestDirs } = await import("./memory-api.js");
-      const { refresh: refreshTable } = await import("../../../plugin-v2/src/db.js");
+      const { refresh: refreshTable } = await import("../../../plugin/src/db.js");
       // Shut down any cached servers for this scenario's directories
       for (const dir of result.testDirs) {
         await shutdownServer(dir);

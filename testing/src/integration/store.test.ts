@@ -10,9 +10,9 @@ import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import * as db from "../../../plugin-v2/src/db.js";
-import { EMBEDDING_DIMS } from "../../../plugin-v2/src/config.js";
-import { searchByVector, list, deleteMemory, getProfile } from "../../../plugin-v2/src/store.js";
+import * as db from "../../../plugin/src/db.js";
+import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
+import { searchByVector, list, deleteMemory, getProfile } from "../../../plugin/src/store.js";
 import { deterministicVector } from "../helpers/mock-embedder.js";
 
 let tempDir: string;

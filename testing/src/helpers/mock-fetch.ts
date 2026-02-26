@@ -6,7 +6,7 @@
  */
 
 import { mock } from "bun:test";
-import { EMBEDDING_DIMS } from "../../../plugin-v2/src/config.js";
+import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 
 /**
  * Create a mock Voyage AI embedding response.

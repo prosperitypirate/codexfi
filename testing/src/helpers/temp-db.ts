@@ -9,7 +9,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import * as db from "../../../plugin-v2/src/db.js";
+import * as db from "../../../plugin/src/db.js";
 
 let tempDir: string;
 

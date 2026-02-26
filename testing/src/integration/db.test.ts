@@ -4,8 +4,8 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { setupTempDb, teardownTempDb } from "../helpers/temp-db.js";
-import { getTable, getDb, refresh } from "../../../plugin-v2/src/db.js";
-import { EMBEDDING_DIMS } from "../../../plugin-v2/src/config.js";
+import { getTable, getDb, refresh } from "../../../plugin/src/db.js";
+import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 
 let tempDir: string;
 

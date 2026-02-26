@@ -1,9 +1,21 @@
+/**
+ * Compaction service — monitors token usage and triggers context compaction.
+ *
+ * When context usage exceeds the threshold, injects project memories into the
+ * compaction prompt, triggers summarization, and saves the summary as a memory.
+ *
+ * NOTE: This module has deep filesystem coupling — it directly reads/writes OpenCode's
+ * internal message storage at ~/.opencode/messages/ and ~/.opencode/parts/.
+ * The exact JSON format for injectHookMessage() must be preserved.
+ */
+
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { memoryClient } from "./client.js";
+import * as store from "../store.js";
+import { stripPrivateContent } from "./privacy.js";
 import { log } from "./logger.js";
-import { CONFIG } from "../config.js";
+import { PLUGIN_CONFIG } from "../plugin-config.js";
 
 const MESSAGE_STORAGE = join(homedir(), ".opencode", "messages");
 const PART_STORAGE = join(homedir(), ".opencode", "parts");
@@ -14,60 +26,58 @@ const COMPACTION_COOLDOWN_MS = 30_000;
 const DEFAULT_CONTEXT_LIMIT = 200_000;
 
 interface CompactionState {
-  lastCompactionTime: Map<string, number>;
-  compactionInProgress: Set<string>;
-  summarizedSessions: Set<string>;
+	lastCompactionTime: Map<string, number>;
+	compactionInProgress: Set<string>;
+	summarizedSessions: Set<string>;
 }
 
 interface TokenInfo {
-  input: number;
-  output: number;
-  cache: { read: number; write: number };
+	input: number;
+	output: number;
+	cache: { read: number; write: number };
 }
 
 interface MessageInfo {
-  id: string;
-  role: string;
-  sessionID: string;
-  providerID?: string;
-  modelID?: string;
-  tokens?: TokenInfo;
-  summary?: boolean;
-  finish?: string;  // "stop", "end_turn", etc.
+	id: string;
+	role: string;
+	sessionID: string;
+	providerID?: string;
+	modelID?: string;
+	tokens?: TokenInfo;
+	summary?: boolean;
+	finish?: string;
 }
 
 interface StoredMessage {
-  agent?: string;
-  model?: { providerID?: string; modelID?: string };
+	agent?: string;
+	model?: { providerID?: string; modelID?: string };
 }
 
 interface SummarizeContext {
-  sessionID: string;
-  providerID: string;
-  modelID: string;
-  usageRatio: number;
-  directory: string;
-  agent?: string;
+	sessionID: string;
+	providerID: string;
+	modelID: string;
+	usageRatio: number;
+	directory: string;
+	agent?: string;
 }
 
 export interface CompactionOptions {
-  threshold?: number;
-  getModelLimit?: (providerID: string, modelID: string) => number | undefined;
-  /** Called after compaction completes for a session. Lets the caller
-   *  invalidate caches (e.g. flag structured sections for re-fetch). */
-  onCompaction?: (sessionID: string) => void;
+	threshold?: number;
+	getModelLimit?: (providerID: string, modelID: string) => number | undefined;
+	onCompaction?: (sessionID: string) => void;
 }
 
 function createCompactionPrompt(projectMemories: string[]): string {
-  const memoriesSection = projectMemories.length > 0 
-    ? `
+	const memoriesSection = projectMemories.length > 0
+		? `
 ## Project Knowledge (from memory)
 The following project-specific knowledge should be preserved and referenced in the summary:
 ${projectMemories.map(m => `- ${m}`).join('\n')}
 `
-    : '';
+		: '';
 
-  return `[COMPACTION CONTEXT INJECTION]
+	return `[COMPACTION CONTEXT INJECTION]
 
 When summarizing this session, you MUST include the following sections in your summary:
 
@@ -101,461 +111,457 @@ This context is critical for maintaining continuity after compaction.
 }
 
 function getMessageDir(sessionID: string): string | null {
-  if (!existsSync(MESSAGE_STORAGE)) return null;
+	if (!existsSync(MESSAGE_STORAGE)) return null;
 
-  const directPath = join(MESSAGE_STORAGE, sessionID);
-  if (existsSync(directPath)) return directPath;
+	const directPath = join(MESSAGE_STORAGE, sessionID);
+	if (existsSync(directPath)) return directPath;
 
-  for (const dir of readdirSync(MESSAGE_STORAGE)) {
-    const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
-    if (existsSync(sessionPath)) return sessionPath;
-  }
+	for (const dir of readdirSync(MESSAGE_STORAGE)) {
+		const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
+		if (existsSync(sessionPath)) return sessionPath;
+	}
 
-  return null;
+	return null;
 }
 
 function getOrCreateMessageDir(sessionID: string): string {
-  if (!existsSync(MESSAGE_STORAGE)) {
-    mkdirSync(MESSAGE_STORAGE, { recursive: true });
-  }
+	if (!existsSync(MESSAGE_STORAGE)) {
+		mkdirSync(MESSAGE_STORAGE, { recursive: true });
+	}
 
-  const directPath = join(MESSAGE_STORAGE, sessionID);
-  if (existsSync(directPath)) return directPath;
+	const directPath = join(MESSAGE_STORAGE, sessionID);
+	if (existsSync(directPath)) return directPath;
 
-  for (const dir of readdirSync(MESSAGE_STORAGE)) {
-    const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
-    if (existsSync(sessionPath)) return sessionPath;
-  }
+	for (const dir of readdirSync(MESSAGE_STORAGE)) {
+		const sessionPath = join(MESSAGE_STORAGE, dir, sessionID);
+		if (existsSync(sessionPath)) return sessionPath;
+	}
 
-  mkdirSync(directPath, { recursive: true });
-  return directPath;
+	mkdirSync(directPath, { recursive: true });
+	return directPath;
 }
 
 function findNearestMessageWithFields(messageDir: string): StoredMessage | null {
-  try {
-    const files = readdirSync(messageDir)
-      .filter((f) => f.endsWith(".json"))
-      .sort()
-      .reverse();
+	try {
+		const files = readdirSync(messageDir)
+			.filter((f) => f.endsWith(".json"))
+			.sort()
+			.reverse();
 
-    for (const file of files) {
-      try {
-        const content = readFileSync(join(messageDir, file), "utf-8");
-        const msg = JSON.parse(content) as StoredMessage;
-        if (msg.agent && msg.model?.providerID && msg.model?.modelID) {
-          return msg;
-        }
-      } catch {
-        continue;
-      }
-    }
-  } catch {
-    return null;
-  }
-  return null;
+		for (const file of files) {
+			try {
+				const content = readFileSync(join(messageDir, file), "utf-8");
+				const msg = JSON.parse(content) as StoredMessage;
+				if (msg.agent && msg.model?.providerID && msg.model?.modelID) {
+					return msg;
+				}
+			} catch {
+				continue;
+			}
+		}
+	} catch {
+		return null;
+	}
+	return null;
 }
 
 function generateMessageId(): string {
-  const timestamp = Date.now().toString(16);
-  const random = Math.random().toString(36).substring(2, 14);
-  return `msg_${timestamp}${random}`;
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(36).substring(2, 14);
+	return `msg_${timestamp}${random}`;
 }
 
 function generatePartId(): string {
-  const timestamp = Date.now().toString(16);
-  const random = Math.random().toString(36).substring(2, 10);
-  return `prt_${timestamp}${random}`;
+	const timestamp = Date.now().toString(16);
+	const random = Math.random().toString(36).substring(2, 10);
+	return `prt_${timestamp}${random}`;
 }
 
 function injectHookMessage(
-  sessionID: string,
-  hookContent: string,
-  originalMessage: {
-    agent?: string;
-    model?: { providerID?: string; modelID?: string };
-    path?: { cwd?: string; root?: string };
-  }
+	sessionID: string,
+	hookContent: string,
+	originalMessage: {
+		agent?: string;
+		model?: { providerID?: string; modelID?: string };
+		path?: { cwd?: string; root?: string };
+	}
 ): boolean {
-  if (!hookContent || hookContent.trim().length === 0) {
-    log("[compaction] attempted to inject empty content, skipping");
-    return false;
-  }
+	if (!hookContent || hookContent.trim().length === 0) {
+		log("[compaction] attempted to inject empty content, skipping");
+		return false;
+	}
 
-  const messageDir = getOrCreateMessageDir(sessionID);
-  const fallback = findNearestMessageWithFields(messageDir);
+	const messageDir = getOrCreateMessageDir(sessionID);
+	const fallback = findNearestMessageWithFields(messageDir);
 
-  const now = Date.now();
-  const messageID = generateMessageId();
-  const partID = generatePartId();
+	const now = Date.now();
+	const messageID = generateMessageId();
+	const partID = generatePartId();
 
-  const resolvedAgent = originalMessage.agent ?? fallback?.agent ?? "general";
-  const resolvedModel =
-    originalMessage.model?.providerID && originalMessage.model?.modelID
-      ? { providerID: originalMessage.model.providerID, modelID: originalMessage.model.modelID }
-      : fallback?.model?.providerID && fallback?.model?.modelID
-        ? { providerID: fallback.model.providerID, modelID: fallback.model.modelID }
-        : undefined;
+	const resolvedAgent = originalMessage.agent ?? fallback?.agent ?? "general";
+	const resolvedModel =
+		originalMessage.model?.providerID && originalMessage.model?.modelID
+			? { providerID: originalMessage.model.providerID, modelID: originalMessage.model.modelID }
+			: fallback?.model?.providerID && fallback?.model?.modelID
+				? { providerID: fallback.model.providerID, modelID: fallback.model.modelID }
+				: undefined;
 
-  const messageMeta = {
-    id: messageID,
-    sessionID,
-    role: "user",
-    time: { created: now },
-    agent: resolvedAgent,
-    model: resolvedModel,
-    path: originalMessage.path?.cwd
-      ? { cwd: originalMessage.path.cwd, root: originalMessage.path.root ?? "/" }
-      : undefined,
-  };
+	const messageMeta = {
+		id: messageID,
+		sessionID,
+		role: "user",
+		time: { created: now },
+		agent: resolvedAgent,
+		model: resolvedModel,
+		path: originalMessage.path?.cwd
+			? { cwd: originalMessage.path.cwd, root: originalMessage.path.root ?? "/" }
+			: undefined,
+	};
 
-  const textPart = {
-    id: partID,
-    type: "text",
-    text: hookContent,
-    synthetic: true,
-    time: { start: now, end: now },
-    messageID,
-    sessionID,
-  };
+	const textPart = {
+		id: partID,
+		type: "text",
+		text: hookContent,
+		synthetic: true,
+		time: { start: now, end: now },
+		messageID,
+		sessionID,
+	};
 
-  try {
-    writeFileSync(join(messageDir, `${messageID}.json`), JSON.stringify(messageMeta, null, 2));
+	try {
+		writeFileSync(join(messageDir, `${messageID}.json`), JSON.stringify(messageMeta, null, 2));
 
-    const partDir = join(PART_STORAGE, messageID);
-    if (!existsSync(partDir)) {
-      mkdirSync(partDir, { recursive: true });
-    }
-    writeFileSync(join(partDir, `${partID}.json`), JSON.stringify(textPart, null, 2));
+		const partDir = join(PART_STORAGE, messageID);
+		if (!existsSync(partDir)) {
+			mkdirSync(partDir, { recursive: true });
+		}
+		writeFileSync(join(partDir, `${partID}.json`), JSON.stringify(textPart, null, 2));
 
-    log("[compaction] hook message injected", { sessionID, messageID });
-    return true;
-  } catch (err) {
-    log("[compaction] failed to inject hook message", { error: String(err) });
-    return false;
-  }
+		log("[compaction] hook message injected", { sessionID, messageID });
+		return true;
+	} catch (err) {
+		log("[compaction] failed to inject hook message", { error: String(err) });
+		return false;
+	}
 }
 
 export interface CompactionContext {
-  directory: string;
-  client: {
-    session: {
-      summarize: (params: { path: { id: string }; body: { providerID: string; modelID: string }; query: { directory: string } }) => Promise<unknown>;
-      messages: (params: { path: { id: string }; query: { directory: string } }) => Promise<{ data?: Array<{ info: MessageInfo }> }>;
-      promptAsync: (params: { path: { id: string }; body: { agent?: string; parts: Array<{ type: string; text: string }> }; query: { directory: string } }) => Promise<unknown>;
-    };
-    tui: {
-      showToast: (params: { body: { title: string; message: string; variant: string; duration: number } }) => Promise<unknown>;
-    };
-  };
+	directory: string;
+	client: {
+		session: {
+			summarize: (params: { path: { id: string }; body: { providerID: string; modelID: string }; query: { directory: string } }) => Promise<unknown>;
+			messages: (params: { path: { id: string }; query: { directory: string } }) => Promise<{ data?: Array<{ info: MessageInfo }> }>;
+			promptAsync: (params: { path: { id: string }; body: { agent?: string; parts: Array<{ type: string; text: string }> }; query: { directory: string } }) => Promise<unknown>;
+		};
+		tui: {
+			showToast: (params: { body: { title: string; message: string; variant: string; duration: number } }) => Promise<unknown>;
+		};
+	};
 }
 
 export function createCompactionHook(
-  ctx: CompactionContext,
-  tags: { user: string; project: string },
-  options?: CompactionOptions
+	ctx: CompactionContext,
+	tags: { user: string; project: string },
+	options?: CompactionOptions
 ) {
-  const state: CompactionState = {
-    lastCompactionTime: new Map(),
-    compactionInProgress: new Set(),
-    summarizedSessions: new Set(),
-  };
+	const state: CompactionState = {
+		lastCompactionTime: new Map(),
+		compactionInProgress: new Set(),
+		summarizedSessions: new Set(),
+	};
 
-  const threshold = options?.threshold ?? DEFAULT_THRESHOLD;
-  const getModelLimit = options?.getModelLimit;
+	const threshold = options?.threshold ?? DEFAULT_THRESHOLD;
+	const getModelLimit = options?.getModelLimit;
 
-  async function fetchProjectMemoriesForCompaction(): Promise<string[]> {
-    try {
-      const result = await memoryClient.listMemories(tags.project, CONFIG.maxProjectMemories);
-      const memories = result.memories || [];
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return memories.map((m: any) => m.summary || m.content || "").filter(Boolean);
-    } catch (err) {
-      log("[compaction] failed to fetch project memories", { error: String(err) });
-      return [];
-    }
-  }
+	async function fetchProjectMemoriesForCompaction(): Promise<string[]> {
+		try {
+				const memories = await store.list(tags.project, { limit: PLUGIN_CONFIG.maxProjectMemories });
+			return memories.map((m) => m.memory || "").filter(Boolean);
+		} catch (err) {
+			log("[compaction] failed to fetch project memories", { error: String(err) });
+			return [];
+		}
+	}
 
-  async function injectCompactionContext(summarizeCtx: SummarizeContext): Promise<void> {
-    log("[compaction] injecting context", { sessionID: summarizeCtx.sessionID });
+	async function injectCompactionContext(summarizeCtx: SummarizeContext): Promise<void> {
+		log("[compaction] injecting context", { sessionID: summarizeCtx.sessionID });
 
-    const projectMemories = await fetchProjectMemoriesForCompaction();
-    const prompt = createCompactionPrompt(projectMemories);
+		const projectMemories = await fetchProjectMemoriesForCompaction();
+		const prompt = createCompactionPrompt(projectMemories);
 
-    const success = injectHookMessage(summarizeCtx.sessionID, prompt, {
-      agent: summarizeCtx.agent,
-      model: { providerID: summarizeCtx.providerID, modelID: summarizeCtx.modelID },
-      path: { cwd: summarizeCtx.directory },
-    });
+		const success = injectHookMessage(summarizeCtx.sessionID, prompt, {
+			agent: summarizeCtx.agent,
+			model: { providerID: summarizeCtx.providerID, modelID: summarizeCtx.modelID },
+			path: { cwd: summarizeCtx.directory },
+		});
 
-    if (success) {
-      log("[compaction] context injected with project memories", { 
-        sessionID: summarizeCtx.sessionID,
-        memoriesCount: projectMemories.length 
-      });
-    }
-  }
+		if (success) {
+			log("[compaction] context injected with project memories", {
+				sessionID: summarizeCtx.sessionID,
+				memoriesCount: projectMemories.length
+			});
+		}
+	}
 
-  async function saveSummaryAsMemory(sessionID: string, summaryContent: string): Promise<void> {
-    if (!summaryContent || summaryContent.length < 100) {
-      log("[compaction] summary too short to save", { sessionID, length: summaryContent.length });
-      return;
-    }
+	async function saveSummaryAsMemory(sessionID: string, summaryContent: string): Promise<void> {
+		if (!summaryContent || summaryContent.length < 100) {
+			log("[compaction] summary too short to save", { sessionID, length: summaryContent.length });
+			return;
+		}
 
-    try {
-      const result = await memoryClient.addMemory(
-        `[Session Summary]\n${summaryContent}`,
-        tags.project,
-        { type: "session-summary" }
-      );
+		try {
+		const sanitized = stripPrivateContent(summaryContent);
 
-      if (result.success) {
-        log("[compaction] summary saved as memory", { sessionID, memoryId: result.id });
-      } else {
-        log("[compaction] failed to save summary", { error: result.error });
-      }
-    } catch (err) {
-      log("[compaction] failed to save summary", { error: String(err) });
-    }
-  }
+		const results = await store.ingest(
+				[{ role: "user", content: `[Session Summary]\n${sanitized}` }],
+				tags.project,
+				{ metadata: { type: "session-summary" } }
+			);
 
-  async function checkAndTriggerCompaction(sessionID: string, lastAssistant: MessageInfo): Promise<void> {
-    if (state.compactionInProgress.has(sessionID)) return;
+			log("[compaction] summary saved as memory", { sessionID, count: results.length });
+		} catch (err) {
+			log("[compaction] failed to save summary", { error: String(err) });
+		}
+	}
 
-    const lastCompaction = state.lastCompactionTime.get(sessionID) ?? 0;
-    if (Date.now() - lastCompaction < COMPACTION_COOLDOWN_MS) return;
+	async function checkAndTriggerCompaction(sessionID: string, lastAssistant: MessageInfo): Promise<void> {
+		if (state.compactionInProgress.has(sessionID)) return;
 
-    if (lastAssistant.summary === true) return;
+		const lastCompaction = state.lastCompactionTime.get(sessionID) ?? 0;
+		if (Date.now() - lastCompaction < COMPACTION_COOLDOWN_MS) return;
 
-    const tokens = lastAssistant.tokens;
-    if (!tokens) return;
+		if (lastAssistant.summary === true) return;
 
-    let modelID = lastAssistant.modelID ?? "";
-    let providerID = lastAssistant.providerID ?? "";
-    let agent: string | undefined;
+		const tokens = lastAssistant.tokens;
+		if (!tokens) return;
 
-    // Fallback: find model/agent from stored messages if not available
-    const messageDir = getMessageDir(sessionID);
-    const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
-    
-    if (!providerID || !modelID) {
-      if (storedMessage?.model?.providerID) providerID = storedMessage.model.providerID;
-      if (storedMessage?.model?.modelID) modelID = storedMessage.model.modelID;
-    }
-    agent = storedMessage?.agent;
+		let modelID = lastAssistant.modelID ?? "";
+		let providerID = lastAssistant.providerID ?? "";
+		let agent: string | undefined;
 
-    const configLimit = getModelLimit?.(providerID, modelID);
-    const contextLimit = configLimit ?? DEFAULT_CONTEXT_LIMIT;
-    const totalUsed = tokens.input + tokens.cache.read + tokens.output;
+		const messageDir = getMessageDir(sessionID);
+		const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
 
-    if (totalUsed < MIN_TOKENS_FOR_COMPACTION) return;
+		if (!providerID || !modelID) {
+			if (storedMessage?.model?.providerID) providerID = storedMessage.model.providerID;
+			if (storedMessage?.model?.modelID) modelID = storedMessage.model.modelID;
+		}
+		agent = storedMessage?.agent;
 
-    const usageRatio = totalUsed / contextLimit;
+		const configLimit = getModelLimit?.(providerID, modelID);
+		const contextLimit = configLimit ?? DEFAULT_CONTEXT_LIMIT;
+		const totalUsed = tokens.input + tokens.cache.read + tokens.output;
 
-    log("[compaction] checking", {
-      sessionID,
-      totalUsed,
-      contextLimit,
-      usageRatio: usageRatio.toFixed(2),
-      threshold,
-    });
+		if (totalUsed < MIN_TOKENS_FOR_COMPACTION) return;
 
-    if (usageRatio < threshold) return;
+		const usageRatio = totalUsed / contextLimit;
 
-    state.compactionInProgress.add(sessionID);
-    state.lastCompactionTime.set(sessionID, Date.now());
+		log("[compaction] checking", {
+			sessionID,
+			totalUsed,
+			contextLimit,
+			usageRatio: usageRatio.toFixed(2),
+			threshold,
+		});
 
-    if (!providerID || !modelID) {
-      state.compactionInProgress.delete(sessionID);
-      return;
-    }
+		if (usageRatio < threshold) return;
 
-    await ctx.client.tui.showToast({
-      body: {
-        title: "Preemptive Compaction",
-        message: `Context at ${(usageRatio * 100).toFixed(0)}% - compacting with memory context...`,
-        variant: "warning",
-        duration: 3000,
-      },
-    }).catch(() => {});
+		state.compactionInProgress.add(sessionID);
+		state.lastCompactionTime.set(sessionID, Date.now());
 
-    log("[compaction] triggering compaction", { sessionID, usageRatio });
+		if (!providerID || !modelID) {
+			state.compactionInProgress.delete(sessionID);
+			return;
+		}
 
-    try {
-      await injectCompactionContext({
-        sessionID,
-        providerID,
-        modelID,
-        usageRatio,
-        directory: ctx.directory,
-        agent,
-      });
+		await ctx.client.tui.showToast({
+			body: {
+				title: "Preemptive Compaction",
+				message: `Context at ${(usageRatio * 100).toFixed(0)}% - compacting with memory context...`,
+				variant: "warning",
+				duration: 3000,
+			},
+		}).catch(() => {});
 
-      state.summarizedSessions.add(sessionID);
+		log("[compaction] triggering compaction", { sessionID, usageRatio });
 
-      await ctx.client.session.summarize({
-        path: { id: sessionID },
-        body: { providerID, modelID },
-        query: { directory: ctx.directory },
-      });
+		try {
+			await injectCompactionContext({
+				sessionID,
+				providerID,
+				modelID,
+				usageRatio,
+				directory: ctx.directory,
+				agent,
+			});
 
-      await ctx.client.tui.showToast({
-        body: {
-          title: "Compaction Complete",
-          message: "Session compacted with memory context. Resuming...",
-          variant: "success",
-          duration: 2000,
-        },
-      }).catch(() => {});
+		// summarizedSessions.add() is deferred until AFTER successful summarize()
+		// to prevent permanently skipping sessions if summarize() throws.
+		await ctx.client.session.summarize({
+				path: { id: sessionID },
+				body: { providerID, modelID },
+				query: { directory: ctx.directory },
+			});
 
-      state.compactionInProgress.delete(sessionID);
+			// Now safe to add — summarize() succeeded
+			state.summarizedSessions.add(sessionID);
 
-      // Notify caller so it can invalidate caches (e.g. flag structured
-      // sections for re-fetch on the next user message).
-      if (options?.onCompaction) {
-        log("[compaction] notifying caller — session needs cache refresh", { sessionID });
-        options.onCompaction(sessionID);
-      }
+			await ctx.client.tui.showToast({
+				body: {
+					title: "Compaction Complete",
+					message: "Session compacted with memory context. Resuming...",
+					variant: "success",
+					duration: 2000,
+				},
+			}).catch(() => {});
 
-      setTimeout(async () => {
-        try {
-          const messageDir = getMessageDir(sessionID);
-          const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
+			state.compactionInProgress.delete(sessionID);
 
-          await ctx.client.session.promptAsync({
-            path: { id: sessionID },
-            body: {
-              agent: storedMessage?.agent,
-              parts: [{ type: "text", text: "Continue" }],
-            },
-            query: { directory: ctx.directory },
-          });
-        } catch (err) {
-          log("[compaction] post-compaction prompt failed (non-fatal)", { error: String(err) });
-        }
-      }, 500);
-    } catch (err) {
-      log("[compaction] compaction failed", { sessionID, error: String(err) });
-      state.compactionInProgress.delete(sessionID);
-    }
-  }
+			if (options?.onCompaction) {
+				log("[compaction] notifying caller — session needs cache refresh", { sessionID });
+				options.onCompaction(sessionID);
+			}
 
-  async function handleSummaryMessage(sessionID: string, _messageInfo: MessageInfo): Promise<void> {
-    log("[compaction] handleSummaryMessage called", { sessionID, inSet: state.summarizedSessions.has(sessionID) });
-    
-    if (!state.summarizedSessions.has(sessionID)) return;
+			setTimeout(async () => {
+				try {
+					const msgDir = getMessageDir(sessionID);
+					const stored = msgDir ? findNearestMessageWithFields(msgDir) : null;
 
-    state.summarizedSessions.delete(sessionID);
-    log("[compaction] capturing summary for memory", { sessionID });
+					await ctx.client.session.promptAsync({
+						path: { id: sessionID },
+						body: {
+							agent: stored?.agent,
+							parts: [{ type: "text", text: "Continue" }],
+						},
+						query: { directory: ctx.directory },
+					});
+				} catch (err) {
+					log("[compaction] post-compaction prompt failed (non-fatal)", { error: String(err) });
+				}
+			}, 500);
+		} catch (err) {
+			log("[compaction] compaction failed", { sessionID, error: String(err) });
+			state.compactionInProgress.delete(sessionID);
+		}
+	}
 
-    try {
-      const resp = await ctx.client.session.messages({
-        path: { id: sessionID },
-        query: { directory: ctx.directory },
-      });
+	async function handleSummaryMessage(sessionID: string, _messageInfo: MessageInfo): Promise<void> {
+		log("[compaction] handleSummaryMessage called", { sessionID, inSet: state.summarizedSessions.has(sessionID) });
 
-      const rawMessages = resp.data ?? resp;
-      const messages = Array.isArray(rawMessages)
-        ? (rawMessages as Array<{ info: MessageInfo; parts?: Array<{ type: string; text?: string }> }>)
-        : [];
-      
-      const summaryMessage = messages.find(m => 
-        m.info.role === "assistant" && 
-        (m.info.summary === true || !!(m.info as unknown as Record<string, unknown>).summary)
-      );
+		if (!state.summarizedSessions.has(sessionID)) return;
 
-      log("[compaction] looking for summary message", { 
-        sessionID, 
-        found: !!summaryMessage,
-        hasParts: !!summaryMessage?.parts
-      });
+		state.summarizedSessions.delete(sessionID);
+		log("[compaction] capturing summary for memory", { sessionID });
 
-      if (summaryMessage?.parts) {
-        const textParts = summaryMessage.parts.filter(p => p.type === "text" && p.text);
-        const summaryContent = textParts.map(p => p.text).join("\n");
-        
-        log("[compaction] summary content", { 
-          sessionID, 
-          textPartsCount: textParts.length,
-          contentLength: summaryContent.length 
-        });
-        
-        if (summaryContent) {
-          await saveSummaryAsMemory(sessionID, summaryContent);
-        }
-      }
-    } catch (err) {
-      log("[compaction] failed to capture summary", { error: String(err) });
-    }
-  }
+		try {
+			const resp = await ctx.client.session.messages({
+				path: { id: sessionID },
+				query: { directory: ctx.directory },
+			});
 
-  return {
-    async event({ event }: { event: { type: string; properties?: unknown } }) {
-      const props = event.properties as Record<string, unknown> | undefined;
+			const rawMessages = resp.data ?? resp;
+			const messages = Array.isArray(rawMessages)
+				? (rawMessages as Array<{ info: MessageInfo; parts?: Array<{ type: string; text?: string }> }>)
+				: [];
 
-      if (event.type === "session.deleted") {
-        const sessionInfo = props?.info as { id?: string } | undefined;
-        if (sessionInfo?.id) {
-          state.lastCompactionTime.delete(sessionInfo.id);
-          state.compactionInProgress.delete(sessionInfo.id);
-          state.summarizedSessions.delete(sessionInfo.id);
-        }
-        return;
-      }
+			const summaryMessage = messages.find(m =>
+				m.info.role === "assistant" &&
+				(m.info.summary === true || !!(m.info as unknown as Record<string, unknown>).summary)
+			);
 
-      if (event.type === "message.updated") {
-        const info = props?.info as MessageInfo | undefined;
-        if (!info) return;
+			log("[compaction] looking for summary message", {
+				sessionID,
+				found: !!summaryMessage,
+				hasParts: !!summaryMessage?.parts
+			});
 
-        const sessionID = info.sessionID;
-        if (!sessionID) return;
+			if (summaryMessage?.parts) {
+				const textParts = summaryMessage.parts.filter(p => p.type === "text" && p.text);
+				const summaryContent = textParts.map(p => p.text).join("\n");
 
-        if (info.role === "assistant" && info.summary === true && info.finish) {
-          await handleSummaryMessage(sessionID, info);
-          return;
-        }
+				log("[compaction] summary content", {
+					sessionID,
+					textPartsCount: textParts.length,
+					contentLength: summaryContent.length
+				});
 
-        if (info.role !== "assistant" || !info.finish) return;
+				if (summaryContent) {
+					await saveSummaryAsMemory(sessionID, summaryContent);
+				}
+			}
+		} catch (err) {
+			log("[compaction] failed to capture summary", { error: String(err) });
+		}
+	}
 
-        await checkAndTriggerCompaction(sessionID, info);
-        return;
-      }
+	return {
+		async event({ event }: { event: { type: string; properties?: unknown } }) {
+			const props = event.properties as Record<string, unknown> | undefined;
 
-      if (event.type === "session.idle") {
-        const sessionID = props?.sessionID as string | undefined;
-        if (!sessionID) return;
+			if (event.type === "session.deleted") {
+				const sessionInfo = props?.info as { id?: string } | undefined;
+				if (sessionInfo?.id) {
+					state.lastCompactionTime.delete(sessionInfo.id);
+					state.compactionInProgress.delete(sessionInfo.id);
+					state.summarizedSessions.delete(sessionInfo.id);
+				}
+				return;
+			}
 
-        try {
-          const resp = await ctx.client.session.messages({
-            path: { id: sessionID },
-            query: { directory: ctx.directory },
-          });
+			if (event.type === "message.updated") {
+				const info = props?.info as MessageInfo | undefined;
+				if (!info) return;
 
-          const rawResp = resp.data ?? resp;
-          const messages = Array.isArray(rawResp)
-            ? (rawResp as Array<{ info: MessageInfo }>)
-            : [];
-          const assistants = messages
-            .filter((m) => m.info.role === "assistant")
-            .map((m) => m.info);
+				const sessionID = info.sessionID;
+				if (!sessionID) return;
 
-          if (assistants.length === 0) return;
+				if (info.role === "assistant" && info.summary === true && info.finish) {
+					await handleSummaryMessage(sessionID, info);
+					return;
+				}
 
-          const lastAssistant = assistants[assistants.length - 1]!;
+				if (info.role !== "assistant" || !info.finish) return;
 
-          if (!lastAssistant.providerID || !lastAssistant.modelID) {
-            const messageDir = getMessageDir(sessionID);
-            const storedMessage = messageDir ? findNearestMessageWithFields(messageDir) : null;
-            if (storedMessage?.model?.providerID && storedMessage?.model?.modelID) {
-              lastAssistant.providerID = storedMessage.model.providerID;
-              lastAssistant.modelID = storedMessage.model.modelID;
-            }
-          }
+				await checkAndTriggerCompaction(sessionID, info);
+				return;
+			}
 
-          await checkAndTriggerCompaction(sessionID, lastAssistant);
-        } catch (err) {
-          log("[compaction] session.idle handler failed (non-fatal)", { error: String(err) });
-        }
-      }
-    },
-  };
+			if (event.type === "session.idle") {
+				const sessionID = props?.sessionID as string | undefined;
+				if (!sessionID) return;
+
+				try {
+					const resp = await ctx.client.session.messages({
+						path: { id: sessionID },
+						query: { directory: ctx.directory },
+					});
+
+					const rawResp = resp.data ?? resp;
+					const messages = Array.isArray(rawResp)
+						? (rawResp as Array<{ info: MessageInfo }>)
+						: [];
+					const assistants = messages
+						.filter((m) => m.info.role === "assistant")
+						.map((m) => m.info);
+
+					if (assistants.length === 0) return;
+
+					const lastAssistant = assistants[assistants.length - 1]!;
+
+					if (!lastAssistant.providerID || !lastAssistant.modelID) {
+						const msgDir = getMessageDir(sessionID);
+						const stored = msgDir ? findNearestMessageWithFields(msgDir) : null;
+						if (stored?.model?.providerID && stored?.model?.modelID) {
+							lastAssistant.providerID = stored.model.providerID;
+							lastAssistant.modelID = stored.model.modelID;
+						}
+					}
+
+					await checkAndTriggerCompaction(sessionID, lastAssistant);
+				} catch (err) {
+					log("[compaction] session.idle handler failed (non-fatal)", { error: String(err) });
+				}
+			}
+		},
+	};
 }

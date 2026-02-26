@@ -1,43 +1,47 @@
+/**
+ * Plugin-specific types — conversation roles, messages, and ingest responses.
+ */
+
 export type MemoryScope = "user" | "project";
 
 export type MemoryType =
-  | "project-brief"
-  | "architecture"
-  | "tech-context"
-  | "product-context"
-  | "session-summary"
-  | "progress"
-  | "project-config"
-  | "error-solution"
-  | "preference"
-  | "learned-pattern"
-  | "conversation";
+	| "project-brief"
+	| "architecture"
+	| "tech-context"
+	| "product-context"
+	| "session-summary"
+	| "progress"
+	| "project-config"
+	| "error-solution"
+	| "preference"
+	| "learned-pattern"
+	| "conversation";
 
 export type ConversationRole = "user" | "assistant" | "system" | "tool";
 
 export type ConversationContentPart =
-  | { type: "text"; text: string }
-  | { type: "image_url"; imageUrl: { url: string } };
+	| { type: "text"; text: string }
+	| { type: "image_url"; imageUrl: { url: string } };
 
 export interface ConversationToolCall {
-  id: string;
-  type: "function";
-  function: {
-    name: string;
-    arguments: string;
-  };
+	id: string;
+	type: "function";
+	function: {
+		name: string;
+		arguments: string;
+	};
 }
 
 export interface ConversationMessage {
-  role: ConversationRole;
-  content: string | ConversationContentPart[];
-  name?: string;
-  tool_calls?: ConversationToolCall[];
-  tool_call_id?: string;
+	role: ConversationRole;
+	content: string | ConversationContentPart[];
+	name?: string;
+	tool_calls?: ConversationToolCall[];
+	tool_call_id?: string;
 }
 
 export interface ConversationIngestResponse {
-  id: string;
-  conversationId: string;
-  status: string;
+	id: string;
+	conversationId: string;
+	status: string;
 }

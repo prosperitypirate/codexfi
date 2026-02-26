@@ -1,458 +1,323 @@
-# opencode-memory plugin
+<div align="center">
 
-This document explains **exactly** how the plugin integrates with OpenCode — which hooks are used, when they fire, what data flows through them, and why.
+# codexfi
+
+**Persistent memory for AI coding agents.** Starts as an [OpenCode](https://opencode.ai) plugin.
+
+The agent learns from every session automatically — no commands, no manual saves, no cloud, no Docker.
+
+<br/>
+
+[![Score: 94.5%](https://img.shields.io/badge/Benchmark-94.5%25-22C55E?style=flat)](../benchmark/README.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](../LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
+[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded-CF3CFF?style=flat)](https://lancedb.com/)
+[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Haiku_4.5-D97706?style=flat)](https://anthropic.com)
+[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+[![Google Gemini](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
+[![Self-Hosted](https://img.shields.io/badge/Self--Hosted-100%25_Local-22C55E?style=flat&logo=homeassistant&logoColor=white)](https://github.com/prosperitypirate/codexfi)
+[![Zero Docker](https://img.shields.io/badge/Zero-Docker-2496ED?style=flat&logo=docker&logoColor=white)](https://github.com/prosperitypirate/codexfi)
+[![OpenCode Plugin](https://img.shields.io/badge/OpenCode-Plugin-FF6B35?style=flat)](https://opencode.ai)
+
+</div>
 
 ---
 
-## How OpenCode loads this plugin
+## What is this?
 
-OpenCode loads plugins listed in `~/.config/opencode/opencode.json`:
+A single Bun package that gives OpenCode agents persistent memory across sessions. Everything runs embedded — LanceDB for storage, Voyage AI for embeddings, multi-provider LLM extraction — with zero external processes.
+
+After every assistant turn, the conversation is automatically analysed. Key facts are extracted, embedded, and stored locally. At the start of every new session, relevant memories are silently injected into the agent's context. The agent simply *remembers*.
+
+---
+
+## Quick Start
+
+### 1. Clone and build
+
+```bash
+git clone https://github.com/prosperitypirate/codexfi
+cd codexfi/plugin
+bun install
+bun run build
+```
+
+### 2. Set API keys
+
+```bash
+# Required — embeddings
+export VOYAGE_API_KEY=pa-...
+
+# Required — extraction (pick one)
+export ANTHROPIC_API_KEY=sk-ant-...    # default, most consistent
+# export XAI_API_KEY=...               # fastest
+# export GOOGLE_API_KEY=...            # native JSON mode
+```
+
+### 3. Register with OpenCode
+
+Add to `~/.config/opencode/opencode.json`:
 
 ```json
 {
-  "plugin": ["file:///path/to/opencode-memory/plugin"]
+  "plugin": ["codexfi"]
 }
 ```
 
-At startup OpenCode calls `MemoryPlugin(ctx)` once **per session** (not once per process). Each call receives a fresh `ctx` object:
+### 4. Start a session
 
-```typescript
-ctx.directory   // absolute path of the folder open in OpenCode
-ctx.client      // SDK client for calling OpenCode server APIs
-ctx.$           // Bun shell API
-ctx.project     // project metadata
-ctx.worktree    // git worktree path
-```
+Open any project in OpenCode. The `[MEMORY]` block appears in context from the first message. Memories auto-save after every assistant turn.
 
-`MemoryPlugin` returns an object mapping hook names to handler functions. OpenCode calls those handlers at the appropriate times.
+**That's it.** No Docker. No Python. No separate server.
 
 ---
 
-## Identity: how users and projects are identified
+## Features
 
-Every memory is stored under a **container tag** — a stable, deterministic string that acts as the namespace key.
-
-**User tag** (`opencode_user_<sha256(git-email)[:16]>`)
-- Derived from `git config user.email` in the current directory
-- Falls back to `$USER` / `$USERNAME` if git is not configured
-- Overridable via `userContainerTag` in `~/.config/opencode/memory.jsonc`
-- Same tag across every project on the same machine → cross-project memory
-
-**Project tag** (`opencode_project_<sha256(directory)[:16]>`)
-- Derived from the absolute path of `ctx.directory`
-- Every folder gets a unique tag → per-project memory isolation
-- Overridable via `projectContainerTag` in `~/.config/opencode/memory.jsonc`
-
-Both tags are computed at plugin init and passed into every memory API call.
-
----
-
-## Hook 1: `chat.message` — session cache population + per-turn refresh
-
-**When it fires:** Before every user message is shown to the LLM.
-
-**Turn 1 (first message in session):**
-
-```
-User sends first message
-         │
-         ▼
-chat.message fires
-         │
-         ├─ 1. Detect memory keywords in user text
-         │      If matched → append synthetic [MEMORY TRIGGER DETECTED] part
-         │
-         ├─ 2. Fetch in parallel (populate SessionMemoryCache):
-         │      a. User profile (recent user-scoped memories)
-         │      b. Semantic search on user scope (query = first message text)
-         │      c. List all project-scoped memories (structured, by type)
-         │      d. Semantic search on project scope
-         │
-         ├─ 3. If zero project memories exist AND the folder has code/config files:
-         │      → triggerSilentAutoInit() — reads README/package.json/etc,
-         │        POSTs them to the memory server for silent extraction.
-         │        AWAITED so it completes before opencode run exits.
-         │
-         ├─ 4. If project memories exist but NO project-brief type among them:
-         │      → seedProjectBrief() — reads first substantive README paragraph.
-         │        AWAITED for same reason.
-         │
-         └─ 5. Store results in sessionCaches Map (NO injection here —
-               system.transform handles injection on the next step)
-```
-
-**Turns 2+ (subsequent messages in same session):**
-
-```
-User sends message (new topic)
-         │
-         ▼
-chat.message fires
-         │
-         ├─ 1. Detect memory keywords (same as turn 1)
-         │
-         └─ 2. Per-turn semantic refresh (~300ms):
-              ├─ 1 semantic search call (project scope, query = current message)
-              └─ Update cache.semanticResults with fresh topic-relevant results
-                 (system.transform will read these on the next LLM call)
-```
-
-**Why await auto-init:** In `opencode run` mode the process exits immediately after the response. Fire-and-forget HTTP calls were silently lost. Awaiting them blocks until the server confirms extraction.
+- **Fully automatic** — memories save after every assistant turn with zero user action
+- **Embedded storage** — LanceDB runs in-process at `~/.codexfi/lancedb/`
+- **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok (fastest), Google Gemini (native JSON) with automatic fallback
+- **Code-optimised embeddings** — Voyage `voyage-code-3` (1024 dims), purpose-built for code and technical content
+- **Always-fresh context** — `[MEMORY]` block rebuilt in system prompt every LLM call via `system.transform`
+- **Per-turn semantic refresh** — every user message triggers a semantic search update so context matches the current topic
+- **Compaction-proof** — memory lives in the system prompt, which is never compacted
+- **Typed memory system** — `architecture`, `error-solution`, `preference`, `progress`, etc. in structured blocks
+- **Hybrid search** — semantic search on atomic facts + raw source chunks for exact values
+- **Smart deduplication** — cosine similarity prevents duplicate memories
+- **Relational versioning** — contradicting memories are automatically superseded
+- **Memory aging** — session summaries condense into learned patterns; only latest `progress` survives
+- **Project + user scope** — separate namespaces for project knowledge vs personal preferences
+- **Explicit save** — say "remember this" and the agent stores it immediately
+- **Privacy filter** — `<private>...</private>` tags are stripped before any extraction
 
 ---
 
-## Hook 1.5: `experimental.chat.system.transform` — system prompt injection
-
-**When it fires:** Before **every** LLM call — including tool continuations within a turn. Fires AFTER `chat.message` has populated/refreshed the session cache.
-
-**What it does:**
+## Architecture
 
 ```
-system.transform fires (before LLM call)
-         │
-         ├─ Read SessionMemoryCache for this session
-         │
-         ├─ formatContextForPrompt(profile, semanticResults, structuredSections)
-         │
-         └─ output.system.push("[MEMORY]...")
-              → [MEMORY] block appended to system prompt
+src/
+├── index.ts              — main plugin hooks (system.transform, chat.message, tool.memory, event)
+├── config.ts             — centralized constants + validateId()
+├── types.ts              — Zod schemas for memory records
+├── prompts.ts            — all LLM prompt templates
+├── db.ts                 — LanceDB init/connect/refresh
+├── store.ts              — full CRUD + dedup + aging + contradiction + search with recency blending
+├── extractor.ts          — multi-provider LLM extraction (Anthropic/xAI/Google) + fallback + retry
+├── embedder.ts           — Voyage AI voyage-code-3 embedding via fetch
+├── retry.ts              — exponential backoff with jitter
+├── telemetry.ts          — CostLedger + ActivityLog
+├── names.ts              — name registry JSON persistence
+├── plugin-config.ts      — user-facing config from ~/.config/opencode/memory.jsonc
+└── services/
+    ├── auto-save.ts      — background extraction after assistant turns
+    ├── compaction.ts     — context window compaction with memory injection
+    ├── context.ts        — [MEMORY] block formatting for system.transform
+    ├── privacy.ts        — <private> tag stripping
+    ├── tags.ts           — project/user tag computation from directory hash
+    ├── logger.ts         — async file logger (no sync I/O)
+    └── types/index.ts    — plugin-specific TS types
 ```
 
-The `[MEMORY]` block in the system prompt looks like:
+### Data flow
+
+```
+User message → chat.message hook
+  ├── Turn 1: 4 parallel fetches (profile, user search, project list, project search)
+  │   └── If zero project memories + existing codebase → silent auto-init from README/package.json/etc
+  └── Turns 2+: single semantic search refreshes "Relevant to Current Task"
+
+  → system.transform injects [MEMORY] block into system prompt (every LLM call)
+
+Assistant completes turn → event hook
+  └── auto-save: extract facts from last 8 messages → embed → dedup → store
+      └── Every 5 turns: also generate session summary
+```
+
+### How the agent sees memory
 
 ```
 [MEMORY]
 
 ## Project Brief
-- ...
+- codexfi is a self-hosted persistent memory system for AI coding agents.
 
 ## Architecture
-- ...
+- Plugin embeds LanceDB, extraction, and embeddings directly — no external services.
 
 ## Tech Context
-- ...
+- Uses voyage-code-3 embeddings; extraction via claude-haiku-4-5 (default)
+- Bun runtime, TypeScript, Zod validation, tabs for indentation
 
 ## Progress & Status
-- ...
+- Benchmark at 94.5% (189/200); cross-synthesis at 72% is primary remaining gap
 
 ## Last Session
-- (most recent session-summary)
+- Completed code cleanup — removed all migration-era references from 21 files
 
 ## User Preferences
-- (user-scoped memories)
+- Use bun not npm for all installs
+- Prefers concise responses; no emojis unless explicitly requested
 
 ## Relevant to Current Task
-- [72%, 2026-02-21] ... (semantic hits, refreshed per turn)
-```
-
-**Why system prompt instead of synthetic message part:**
-1. **Zero token accumulation** — system prompt is rebuilt each call, not appended to history
-2. **Survives compaction** — system prompt is never summarized away
-3. **Always fresh** — "Relevant to Current Task" reflects the current message topic
-
----
-
-## Hook 2: `experimental.chat.messages.transform` — cache the message list
-
-**When it fires:** Before **every** LLM call in the session — once per turn, and once more before each tool-call round within a turn.
-
-**What it does:**
-
-```typescript
-"experimental.chat.messages.transform": async (_input, output) => {
-  updateMessageCache(output.messages);
-}
-```
-
-`output.messages` is the full list of messages being sent to the LLM **right now**, including all previous turns. This is stored in the module-level `cachedMessages` array.
-
-**Critical limitation:** Because this fires **before** the LLM call, the final assistant response for the current turn is never in this cache. The cache always lags one response behind.
-
----
-
-## Hook 3: `event` — auto-save and compaction
-
-The event hook receives all OpenCode server-sent events. Two subsystems use it.
-
-### Auto-save subsystem
-
-**Step A: Buffer assistant text while it streams**
-
-```
-event.type === "message.part.updated"
-  └─ part.type === "text" && !part.synthetic
-       └─ assistantTextBuffer["sessionID:messageID"] = part.text
-```
-
-`part.text` is the **full accumulated text** up to that moment (not just the delta). As the LLM streams, this overwrites repeatedly. When streaming ends, the buffer holds the complete final text for that message.
-
-This runs for every text part update — user messages too — but only the messageID match matters when we pop it later.
-
-**Step B: Inject final response and trigger save on turn completion**
-
-```
-event.type === "message.updated"
-  properties = { info: AssistantMessage }   ← no parts, only metadata
-  info.role === "assistant"
-  info.finish === "stop"  (not "tool-calls" — that's mid-turn)
-  !info.summary           (not a compaction summary)
-         │
-         ├─ popAssistantText(sessionID, messageID)
-         │    └─ returns the buffered final text, deletes from buffer
-         │
-         ├─ injectFinalAssistantMessage({ info, parts: [{ type:"text", text }] })
-         │    └─ appends to cachedMessages if not already present
-         │       NOW cachedMessages has: [user, ...tool_rounds..., final_assistant_text]
-         │
-         └─ autoSaveHook.onSessionIdle(sessionID)
-```
-
-**Why `message.updated` has no parts:** Confirmed from the official SDK type:
-```typescript
-EventMessageUpdated = { type: "message.updated", properties: { info: Message } }
-```
-`info` is metadata only (id, role, finish, tokens, cost). Parts are never included.
-
-**Why not use `session.messages()` SDK call:**
-The plugin's `ctx.client` returns `Unauthorized` for `session.messages()` in TUI mode. This is intentional — plugins cannot list arbitrary session history. The buffer approach bypasses this entirely.
-
-**Step C: Inside `onSessionIdle`**
-
-```
-cooldown check (15s between saves for the same session)
-         │
-         ├─ snapshot = [...cachedMessages]   ← NOW includes final assistant text
-         │
-         ├─ fetchMessages(sessionID, snapshot, client)
-         │    └─ single SDK attempt (works in opencode-run E2E harness,
-         │       returns Unauthorized in TUI — logged, falls back to snapshot)
-         │
-         ├─ filter: keep only user/assistant messages with non-synthetic text parts
-         │    realCount must be ≥ 2 (at least one user + one assistant)
-         │
-         ├─ if realCount < 2:
-         │    log part-type debug dump and return
-         │
-         ├─ totalChars must be ≥ 100
-         │
-         └─ memoryClient.addMemoryFromMessages(messages, projectTag)
-              └─ POST /memories with the filtered message array
-                 server extracts atomic facts, deduplicates, stores
-```
-
-**Session summary (every N turns):**
-Every `turnSummaryInterval` turns (default: 5), a second parallel call fires:
-```
-memoryClient.addMemoryFromMessagesAsSummary(messages, projectTag)
-  └─ POST /memories with summary_mode: true
-     server produces a single session-summary memory instead of atomic facts
-```
-
-### Compaction subsystem
-
-Watches `message.updated` events, checks token usage ratio against context limit. If usage exceeds `compactionThreshold` (default: 80%):
-
-1. Fetch recent project memories
-2. Write a structured compaction prompt to `~/.opencode/messages/<sessionID>/`
-3. Call `session.summarize()` which triggers OpenCode's built-in compaction
-4. Capture the resulting summary message and save it as a `session-summary` memory
-
----
-
-## Hook 4: `tool.memory` — explicit memory management
-
-A custom tool exposed to the LLM. Triggered when the agent decides to use it (either from a keyword nudge or on its own initiative).
-
-```
-memory({ mode: "add",    content, type?, scope? })  → POST /memories
-memory({ mode: "search", query,   scope? })          → POST /memories/search
-memory({ mode: "list",   scope?,  limit? })          → GET  /memories?user_id=...
-memory({ mode: "forget", memoryId })                 → DELETE /memories/:id
-memory({ mode: "profile" })                          → GET /memories?user_id=<userTag>
-```
-
-Scope `"project"` (default) → uses project tag. Scope `"user"` → uses user tag.
-
----
-
-## The keyword trigger
-
-On every `chat.message` call, user text is scanned (after stripping code blocks) against:
-
-```
-/\b(remember|memorize|save\s+this|note\s+this|keep\s+in\s+mind|
-    don'?t\s+forget|learn\s+this|store\s+this|...)\b/i
-```
-
-If matched, a synthetic `[MEMORY TRIGGER DETECTED]` part is appended to the user message. This part instructs the agent it **must** call the `memory` tool with `mode: "add"`. The agent sees this as part of the user message context.
-
----
-
-## Full event timeline for a first-turn TUI session
-
-```
-OpenCode starts session in new folder
-│
-├─ Plugin init: MemoryPlugin(ctx) called
-│   ├─ compute userTag, projectTag
-│   ├─ registerNames (non-fatal background call to label project in web UI)
-│   ├─ fetch model context limits (for compaction math)
-│   └─ create autoSaveHook and compactionHook
-│
-User types message → presses Enter
-│
-├─ chat.message fires (BEFORE LLM sees the message)
-│   ├─ check keywords
-│   ├─ fetch user profile + user search + project list + project search (parallel)
-│   ├─ if 0 project memories → triggerSilentAutoInit (awaited)
-│   ├─ store results in sessionCaches Map
-│   └─ return (no injection — system.transform handles that)
-│
-├─ experimental.chat.system.transform fires (BEFORE LLM call)
-│   ├─ read SessionMemoryCache
-│   ├─ formatContextForPrompt(profile, semanticResults, structuredSections)
-│   └─ output.system.push("[MEMORY]...") → system prompt now has [MEMORY]
-│
-├─ experimental.chat.messages.transform fires
-│   └─ cachedMessages = [user_message]   count=1
-│
-LLM begins generating response
-│
-├─ message.part.updated fires repeatedly as text streams
-│   └─ assistantTextBuffer["sessionID:msgID"] = "The directory is empty..." (grows)
-│
-├─ (if agent calls a tool):
-│   ├─ experimental.chat.messages.transform fires again
-│   │   └─ cachedMessages = [user, assistant_tool_call]   count=2
-│   ├─ tool executes
-│   └─ LLM continues generating
-│
-LLM finishes final text response
-│
-├─ message.updated fires: { info: { role:"assistant", finish:"stop", id:"msg_X" } }
-│   ├─ popAssistantText("sessionID", "msg_X")
-│   │   └─ returns "The directory is empty. What would you like to build?"
-│   │      deletes from buffer
-│   ├─ injectFinalAssistantMessage({ info, parts:[{type:"text", text:"..."}] })
-│   │   └─ cachedMessages = [user, assistant_tool_call, assistant_final_text]   count=3
-│   └─ onSessionIdle("sessionID")
-│       ├─ cooldown check: ok (first save)
-│       ├─ snapshot = [user, assistant_tool_call, assistant_final_text]
-│       ├─ fetchMessages → Unauthorized → use snapshot
-│       ├─ filter: user(has text) + assistant_final_text(has text) → realCount=2
-│       ├─ chars=319 ≥ 100: ok
-│       └─ POST /memories → server extracts "velodrome is a Go benchmark runner"
-│
-Memory saved ✓
+- [94%, 2026-02-23] Default extraction model is claude-haiku-4-5 — most consistent
+- [88%, 2026-02-21] Contradiction detection marks superseded memories via superseded_by field
 ```
 
 ---
 
-## Config file
+## How It Works
 
-`~/.config/opencode/memory.jsonc` (optional):
+### System prompt injection (every LLM call)
+
+The `[MEMORY]` block lives in the **system prompt**, not in message history. It is rebuilt fresh on every LLM call via `experimental.chat.system.transform`:
+
+- **Turn 1**: 4 parallel calls fetch profile, user memories, project list, and semantic search. Results cached per-session.
+- **Turns 2+**: A single semantic search (~300ms) refreshes "Relevant to Current Task".
+- **Every LLM call**: `system.transform` reads the cache, rebuilds `[MEMORY]`, pushes it into the system prompt.
+
+This means zero token accumulation, survives compaction, and topic switches cause different memories to surface.
+
+### Auto-save (after every turn)
+
+Every time the assistant completes a turn:
+
+1. Snapshot the recent conversation (last 8 exchanges)
+2. LLM extracts a JSON array of typed facts
+3. Each fact is embedded with `voyage-code-3` and stored after cosine dedup
+4. Raw source conversation stored as `chunk` (enables hybrid search for exact values)
+5. Contradiction search finds and supersedes stale memories
+
+A 15-second cooldown handles OpenCode's double-fire of the completion event.
+
+### Memory types
+
+| Type | What it captures |
+|------|-----------------|
+| `project-brief` | Core project definition, goals, scope |
+| `architecture` | System design, patterns, component relationships |
+| `tech-context` | Stack, tools, build commands, constraints |
+| `product-context` | Why the project exists, problems solved |
+| `progress` | Current state — only the latest entry survives |
+| `session-summary` | What was worked on; oldest condense into `learned-pattern` |
+| `error-solution` | Bug fixes, gotchas, approaches that failed |
+| `preference` | Cross-project personal preferences |
+| `learned-pattern` | Reusable patterns condensed from past sessions |
+| `project-config` | Config preferences, run commands, env setup |
+| `conversation` | Raw conversation context |
+
+### Compaction survival
+
+When OpenCode truncates the conversation, the `[MEMORY]` block is unaffected (it's in the system prompt, not message history). The plugin also intercepts the compaction hook to inject memories into the compaction context for richer summaries, then triggers a full cache refresh on the next turn.
+
+---
+
+## Extraction Providers
+
+| Provider | Model | Speed | Benchmark | Notes |
+|---|---|---|---|---|
+| **Anthropic** (default) | `claude-haiku-4-5` | ~14s/session | **93.5% avg** (3pp variance) | Most consistent |
+| **xAI** | `grok-4-1-fast-non-reasoning` | ~5s/session | ~86.5% avg (16pp variance) | Fastest, cheapest |
+| **Google** | `gemini-3-flash-preview` | ~21s/session | — | Native JSON mode |
+
+Switch via `EXTRACTION_PROVIDER=xai` (or `anthropic`, `google`). Extraction runs in the background — latency is invisible to users.
+
+---
+
+## Benchmark
+
+**94.5% overall** (189/200) on [DevMemBench](../benchmark/README.md) — 200 questions across 8 categories.
+
+```
+tech-stack        ████████████████████ 100%  (25/25)  ✓
+architecture      ████████████████████ 100%  (25/25)  ✓
+preference        ████████████████████ 100%  (25/25)  ✓
+abstention        ████████████████████ 100%  (25/25)  ✓
+session-cont.     ███████████████████░  96%  (24/25)  ✓
+knowledge-update  ███████████████████░  96%  (24/25)  ✓
+error-solution    ██████████████████░░  92%  (23/25)  ✓
+cross-synthesis   ██████████████░░░░░░  72%  (18/25)  ⚠
+──────────────────────────────────────────────────────
+Overall           94.5%  (189/200)
+```
+
+**Extractor:** `claude-haiku-4-5` · **Judge/Answer:** `claude-sonnet-4-6` · **Embeddings:** `voyage-code-3` · **K=20 retrieval**
+
+E2E: 11/12 scenarios pass. See [benchmark/README.md](../benchmark/README.md) for full results.
+
+---
+
+## Configuration
+
+Optional config at `~/.config/opencode/memory.jsonc`:
 
 ```jsonc
 {
-  // URL of the memory server (default: http://localhost:8020)
-  "memoryBaseUrl": "http://localhost:8020",
-
-  // Similarity threshold for semantic search results shown in [MEMORY] block (0.0–1.0)
+  // Minimum similarity score for retrieval (default: 0.45)
   "similarityThreshold": 0.45,
 
-  // Max memories retrieved per scope per session (user + project searched separately)
-  // Total semantic memories available = up to 2× this value
+  // Max memories retrieved per scope per session (default: 10)
   "maxMemories": 10,
 
-  // Max memories listed per project (for structured sections)
+  // Max project memories for structured sections (default: 30)
   "maxStructuredMemories": 30,
 
-  // Max user profile facts shown
-  "maxProfileItems": 5,
-
-  // Whether to show user-scoped memories in [MEMORY] block
-  "injectProfile": true,
-
-  // Prefix for auto-generated container tags
-  "containerTagPrefix": "opencode",
-
-  // Pin a specific user or project tag (overrides auto-generation)
-  "userContainerTag": "opencode_user_myteam",
-  "projectContainerTag": "opencode_project_myrepo",
-
-  // Extra memory keyword patterns (added to built-in list)
-  "keywordPatterns": ["track this", "log this"],
-
-  // Context usage ratio that triggers compaction (0.0–1.0)
+  // Context fill ratio that triggers compaction (default: 0.80)
   "compactionThreshold": 0.80,
 
-  // How many turns between session-summary auto-saves
-  "turnSummaryInterval": 5
+  // Turns between session-summary auto-saves (default: 5)
+  "turnSummaryInterval": 5,
+
+  // Additional keyword patterns that trigger explicit save
+  // "keywordPatterns": ["bookmark this", "save for later"]
 }
 ```
 
 ---
 
-## What the memory server receives
+## Development
 
-Every write to the memory server goes to `POST /memories` with this shape:
-
-```json
-{
-  "messages": [
-    { "role": "user",      "content": "My project is called velodrome..." },
-    { "role": "assistant", "content": "The directory is empty..." }
-  ],
-  "user_id": "opencode_project_a84ff7b810abb77e",
-  "metadata": {}
-}
-```
-
-The server runs an LLM extraction pass over the messages and stores atomic facts (e.g. `"Velodrome is a benchmark runner for Go HTTP handlers."`). Deduplication and type classification happen server-side.
-
-Special modes:
-- `init_mode: true` → project file content, uses a stricter extraction prompt that always emits a `project-brief`
-- `summary_mode: true` → produces one `session-summary` memory instead of atomic facts
-
----
-
-## Log file
-
-Everything the plugin does is logged to `~/.opencode-memory.log`.
-
-Useful filter:
 ```bash
-tail -f ~/.opencode-memory.log | grep -E 'auto-save|auto-init|seed-brief|chat.message'
+bun install
+bun run build          # build to dist/
+bun run typecheck      # type-check only
+bun run smoke:e2e      # full pipeline smoke test (requires API keys)
+bun run spike          # LanceDB NAPI bindings validation
 ```
 
-Key log lines and what they mean:
+### Log file
 
-| Log line | Meaning |
-|---|---|
-| `auto-save: triggered { project: "opencode_project_...", snapshotSize: N }` | Save attempt started, N messages in cache |
-| `auto-save: injected final assistant message into cache { newCacheSize: N }` | Streaming buffer injection worked |
-| `auto-save: filtered { realCount: N }` | N messages passed the text-content filter |
-| `auto-save: skipped (realCount<2)` | Not enough real messages; part debug dump follows |
-| `auto-save: skipped (too short)` | Total chars < 100 |
-| `auto-save: skipped (cooldown)` | < 15s since last save for this session |
-| `auto-save: done { count: N }` | N memories extracted and saved |
-| `auto-save: SDK fetch failed (expected in TUI mode)` | Unauthorized — normal, using cache instead |
-| `auto-init: sending project files for extraction` | First session in an existing codebase |
-| `seed-brief: seeding project-brief from README` | Fallback brief injection |
-| `chat.message: context injected` | [MEMORY] block prepended to user message |
+```bash
+tail -f ~/.codexfi.log
+```
 
 ---
 
-## Known limitations
+## Dependencies
 
-**`session.messages()` is Unauthorized in TUI mode**
-The plugin's `ctx.client` cannot list session messages when running in the desktop app. This is apparently intentional — plugins are sandboxed from reading session history. The `message.part.updated` buffer approach works around this without needing any SDK access.
+| Package | Purpose |
+|---|---|
+| `@lancedb/lancedb` | Embedded vector database (NAPI bindings, Bun 1.2.19+) |
+| `zod` | Runtime validation for memory record schemas |
+| `@opencode-ai/plugin` | OpenCode plugin SDK types |
+| `@opencode-ai/sdk` | OpenCode SDK for client interactions |
 
-**`experimental.chat.messages.transform` lags one response**
-The transform cache always reflects the state **before** the current LLM call. Without the streaming buffer, single-turn sessions where the agent responds with text only would always have `realCount=1` and skip saving.
+---
 
-**Auto-init adds latency on first message for existing projects**
-`triggerSilentAutoInit` reads and POSTs project files synchronously on the first message. This can take 2–5 seconds for the memory server to extract and respond. It is awaited deliberately — fire-and-forget causes silent failures in `opencode run` mode where the process exits immediately.
+## Privacy
 
-**First session in a new folder does not inject [MEMORY] into that same session**
-Auto-init and auto-save both write memories to the server during session 1. But the `chat.message` cache population already ran at the start of that turn, before the memories existed. The [MEMORY] block appears from session 2 onward.
+All data stays on your machine. The only outbound API calls are:
+
+- **Voyage AI** — text sent for embedding generation
+- **Your extraction provider** — conversation text for memory extraction (one provider per request)
+
+Wrap sensitive content in `<private>...</private>` to exclude it from extraction.
+
+---
+
+<div align="center">
+
+Built with [OpenCode](https://opencode.ai) · [LanceDB](https://lancedb.com) · [Voyage AI](https://www.voyageai.com) · [Anthropic](https://anthropic.com) · [xAI](https://x.ai) · [Google AI](https://ai.google.dev) · [Bun](https://bun.sh)
+
+</div>

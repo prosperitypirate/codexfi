@@ -19,19 +19,19 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install plugin dependencies
-        working-directory: plugin-v2
+        working-directory: plugin
         run: bun install --frozen-lockfile
 
       - name: Type check
-        working-directory: plugin-v2
+        working-directory: plugin
         run: bunx tsc --noEmit
 
       - name: Build plugin
-        working-directory: plugin-v2
+        working-directory: plugin
         run: bun run build:plugin
 
       - name: Build CLI
-        working-directory: plugin-v2
+        working-directory: plugin
         run: bun run build:cli
 
   # ── Unit + Integration tests ───────────────────────────────────────────────
@@ -44,7 +44,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
 
       - name: Install plugin dependencies
-        working-directory: plugin-v2
+        working-directory: plugin
         run: bun install --frozen-lockfile
 
       - name: Install test dependencies

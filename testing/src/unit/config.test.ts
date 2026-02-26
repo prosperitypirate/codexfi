@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES } from "../../../plugin-v2/src/config.js";
+import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES } from "../../../plugin/src/config.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
 

@@ -1,50 +1,60 @@
 {
-  "name": "opencode-memory",
-  "version": "0.1.0",
-  "description": "OpenCode plugin for persistent memory using a self-hosted LanceDB + Voyage AI stack",
-  "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "bin": {
-    "opencode-memory": "./dist/cli.js"
-  },
-  "scripts": {
-    "build": "bun build ./src/index.ts --outdir ./dist --target node && bun build ./src/cli.ts --outfile ./dist/cli.js --target node && tsc --emitDeclarationOnly",
-    "dev": "tsc --watch",
-    "typecheck": "tsc --noEmit"
-  },
-  "keywords": [
-    "opencode",
-    "plugin",
-    "memory",
-    "ai",
-    "coding-agent",
-    "self-hosted",
-    "lancedb",
-    "voyage"
-  ],
-  "author": "opencode-memory contributors",
-  "license": "MIT",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/prosperitypirate/opencode-memory"
-  },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.0.162"
-  },
-  "devDependencies": {
-    "@opencode-ai/sdk": "*",
-    "@types/bun": "latest",
-    "typescript": "^5.7.3"
-  },
-  "opencode": {
-    "type": "plugin",
-    "hooks": [
-      "chat.message",
-      "event"
-    ]
-  },
-  "files": [
-    "dist"
-  ]
+	"name": "codexfi",
+	"version": "0.3.0",
+	"description": "Persistent memory for AI coding agents — zero Docker, zero Python, one-liner install",
+	"type": "module",
+	"main": "dist/index.js",
+	"bin": {
+		"codexfi": "./dist/cli.js"
+	},
+	"scripts": {
+		"spike": "bun run src/spike.ts",
+		"prebuild": "rm -f dist/*.node",
+		"build": "bun build src/index.ts --outdir dist --target node --external @lancedb/lancedb && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node --external @lancedb/lancedb",
+		"build:plugin": "bun build src/index.ts --outdir dist --target node --external @lancedb/lancedb",
+		"build:cli": "bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node --external @lancedb/lancedb",
+		"typecheck": "tsc --noEmit",
+		"cli": "bun run src/cli/index.ts",
+		"smoke:e2e": "bun run src/smoke-e2e.ts"
+	},
+	"dependencies": {
+		"@lancedb/lancedb": "^0.15.0",
+		"@opencode-ai/plugin": "^1.2.11",
+		"@opencode-ai/sdk": "^1.2.11",
+		"zod": "^4.3.6"
+	},
+	"devDependencies": {
+		"@types/bun": "^1.2.0",
+		"typescript": "^5.7.0"
+	},
+	"keywords": [
+		"opencode",
+		"memory",
+		"ai",
+		"coding-agent",
+		"lancedb",
+		"persistent-memory",
+		"plugin"
+	],
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/prosperitypirate/opencode-memory.git",
+		"directory": "plugin"
+	},
+	"homepage": "https://codexfi.com",
+	"publishConfig": {
+		"access": "public",
+		"provenance": true
+	},
+	"opencode": {
+		"type": "plugin",
+		"hooks": [
+			"chat.message",
+			"event"
+		]
+	},
+	"files": [
+		"dist"
+	]
 }

@@ -10,20 +10,20 @@
 
 import { describe, test, expect, afterEach, mock } from "bun:test";
 import { installFetchMock, restoreFetch, voyageEmbedResponse } from "../helpers/mock-fetch.js";
-import { EMBEDDING_DIMS } from "../../../plugin-v2/src/config.js";
+import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 
 // Mock the config module to provide a fake VOYAGE_API_KEY for testing.
 // This must happen before embedder.ts is imported.
-mock.module("../../../plugin-v2/src/config.js", () => {
+mock.module("../../../plugin/src/config.js", () => {
 	// Re-export everything from the real config, but override VOYAGE_API_KEY
-	const realConfig = require("../../../plugin-v2/src/config.js");
+	const realConfig = require("../../../plugin/src/config.js");
 	return {
 		...realConfig,
 		VOYAGE_API_KEY: "test-voyage-key-for-unit-tests",
 	};
 });
 
-const { embed } = await import("../../../plugin-v2/src/embedder.js");
+const { embed } = await import("../../../plugin/src/embedder.js");
 
 afterEach(() => {
 	restoreFetch();

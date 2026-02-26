@@ -1,7 +1,7 @@
 /**
  * memory-api.ts — typed client for verifying memory state in tests.
  *
- * REWRITTEN for plugin-v2: uses embedded LanceDB store directly instead of
+ * REWRITTEN for plugin: uses embedded LanceDB store directly instead of
  * HTTP calls to the Docker backend at localhost:8020.
  *
  * The public API surface is identical — test scenarios import the same
@@ -11,9 +11,9 @@
 
 import { createHash } from "crypto";
 import { execSync } from "child_process";
-import * as db from "../../../plugin-v2/src/db.js";
-import { refresh as refreshTable } from "../../../plugin-v2/src/db.js";
-import * as store from "../../../plugin-v2/src/store.js";
+import * as db from "../../../plugin/src/db.js";
+import { refresh as refreshTable } from "../../../plugin/src/db.js";
+import * as store from "../../../plugin/src/store.js";
 
 const PREFIX = "opencode";
 

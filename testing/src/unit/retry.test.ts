@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { withRetry, type RetryConfig } from "../../../plugin-v2/src/retry.js";
+import { withRetry, type RetryConfig } from "../../../plugin/src/retry.js";
 
 // Suppress retry warning logs during tests
 const silent = () => {};

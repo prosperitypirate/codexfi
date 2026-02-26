@@ -1,154 +1,194 @@
+/**
+ * Main plugin entry point — hooks into OpenCode's chat lifecycle.
+ *
+ * Registers the memory tool, system prompt injection, auto-save, and compaction hooks.
+ * All store operations are embedded (LanceDB) — no external services needed.
+ */
+
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
 import type { Part } from "@opencode-ai/sdk";
 import { tool } from "@opencode-ai/plugin";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { memoryClient } from "./services/client.js";
+import * as db from "./db.js";
+import * as store from "./store.js";
+import { nameRegistry } from "./names.js";
+import { ledger, activityLog } from "./telemetry.js";
 import {
-  formatContextForPrompt,
-  type StructuredMemory,
-  type ProfileResult,
-  type MemoriesResponseMinimal,
+	formatContextForPrompt,
+	type StructuredMemory,
+	type ProfileResult,
+	type MemoriesResponseMinimal,
 } from "./services/context.js";
 import { getTags, getDisplayNames } from "./services/tags.js";
 import { stripPrivateContent, isFullyPrivate } from "./services/privacy.js";
 import { createCompactionHook, type CompactionContext } from "./services/compaction.js";
 import {
-  createAutoSaveHook, updateMessageCache,
-  updateAssistantTextBuffer, popAssistantText, injectFinalAssistantMessage,
+	createAutoSaveHook, updateMessageCache,
+	updateAssistantTextBuffer, popAssistantText, injectFinalAssistantMessage,
 } from "./services/auto-save.js";
 
-import { isConfigured, CONFIG } from "./config.js";
+import { isConfigured, PLUGIN_CONFIG } from "./plugin-config.js";
 import { log } from "./services/logger.js";
 import type { MemoryScope, MemoryType } from "./types/index.js";
+
+// ── Enumeration / synthesis detection ───────────────────────────────────────────
+
+const ENUMERATION_TYPES = [
+	"tech-context", "preference", "learned-pattern", "error-solution", "project-config",
+];
+
+const SYNTHESIS_TYPES = [
+	...ENUMERATION_TYPES, "architecture",
+];
+
+const ENUMERATION_REGEX = /\b(list\s+all|list\s+every|all\s+the\s+\w+|every\s+(env|config|setting|preference|error|pattern|tool|developer|tech|project|decision|approach)|across\s+all(\s+sessions)?|complete\s+(list|history|tech\s+stack|stack)|entire\s+(history|list|project\s+history|tech\s+stack)|describe\s+all|enumerate\s+all|full\s+(list|history|tech\s+stack))\b/i;
+
+const WIDE_SYNTHESIS_REGEX = /\b(both\s+(projects?|the)|across\s+both|end[\s-]to[\s-]end|how\s+has.{0,30}evolved|sequence\s+of.{0,20}decisions?)\b/i;
+
+function detectQueryTypes(query: string): string[] | undefined {
+	const isEnumeration = ENUMERATION_REGEX.test(query);
+	const isWideSynthesis = WIDE_SYNTHESIS_REGEX.test(query);
+	if (isWideSynthesis) return SYNTHESIS_TYPES;
+	if (isEnumeration) return ENUMERATION_TYPES;
+	return undefined;
+}
+
+// ── Code block stripping (for memory keyword detection) ─────────────────────────
 
 const CODE_BLOCK_PATTERN = /```[\s\S]*?```/g;
 const INLINE_CODE_PATTERN = /`[^`]+`/g;
 
-// Source file extensions that indicate an existing codebase
 const CODE_EXTENSIONS = new Set([
-  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
-  ".py", ".go", ".rs", ".rb", ".java", ".kt", ".swift",
-  ".c", ".cpp", ".h", ".cs", ".php", ".vue", ".svelte",
+	".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+	".py", ".go", ".rs", ".rb", ".java", ".kt", ".swift",
+	".c", ".cpp", ".h", ".cs", ".php", ".vue", ".svelte",
 ]);
 
 const ROOT_MARKERS = [
-  "package.json", "Cargo.toml", "go.mod", "pyproject.toml",
-  "requirements.txt", "Gemfile", "pom.xml", "build.gradle",
-  "CMakeLists.txt", ".git", "README.md", "README.rst",
+	"package.json", "Cargo.toml", "go.mod", "pyproject.toml",
+	"requirements.txt", "Gemfile", "pom.xml", "build.gradle",
+	"CMakeLists.txt", ".git", "README.md", "README.rst",
 ];
 
 function detectExistingCodebase(directory: string): boolean {
-  try {
-    // Check for root markers first (fast path)
-    for (const marker of ROOT_MARKERS) {
-      if (existsSync(join(directory, marker))) return true;
-    }
-    // Check top-level files for code extensions
-    const entries = readdirSync(directory, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile()) {
-        const ext = entry.name.slice(entry.name.lastIndexOf("."));
-        if (CODE_EXTENSIONS.has(ext)) return true;
-      }
-    }
-    return false;
-  } catch {
-    return false;
-  }
+	try {
+		for (const marker of ROOT_MARKERS) {
+			if (existsSync(join(directory, marker))) return true;
+		}
+		const entries = readdirSync(directory, { withFileTypes: true });
+		for (const entry of entries) {
+			if (entry.isFile()) {
+				const ext = entry.name.slice(entry.name.lastIndexOf("."));
+				if (CODE_EXTENSIONS.has(ext)) return true;
+			}
+		}
+		return false;
+	} catch {
+		return false;
+	}
 }
 
-// Key files to read for silent project auto-init (in priority order, capped per file)
+// ── Project auto-init ───────────────────────────────────────────────────────────
+
 const INIT_FILES = [
-  { name: "README.md",          maxChars: 3000 },
-  { name: "README.rst",         maxChars: 3000 },
-  { name: "package.json",       maxChars: 2000 },
-  { name: "Cargo.toml",         maxChars: 2000 },
-  { name: "go.mod",             maxChars: 1000 },
-  { name: "pyproject.toml",     maxChars: 2000 },
-  { name: "docker-compose.yml", maxChars: 1500 },
-  { name: "docker-compose.yaml",maxChars: 1500 },
-  { name: "tsconfig.json",      maxChars: 1000 },
-  { name: ".env.example",       maxChars: 500  },
+	{ name: "README.md",           maxChars: 3000 },
+	{ name: "README.rst",          maxChars: 3000 },
+	{ name: "package.json",        maxChars: 2000 },
+	{ name: "Cargo.toml",          maxChars: 2000 },
+	{ name: "go.mod",              maxChars: 1000 },
+	{ name: "pyproject.toml",      maxChars: 2000 },
+	{ name: "docker-compose.yml",  maxChars: 1500 },
+	{ name: "docker-compose.yaml", maxChars: 1500 },
+	{ name: "tsconfig.json",       maxChars: 1000 },
+	{ name: ".env.example",        maxChars: 500  },
 ];
 
 const INIT_TOTAL_CHAR_CAP = 7000;
 
 async function triggerSilentAutoInit(
-  directory: string,
-  tags: { user: string; project: string }
+	directory: string,
+	tags: { user: string; project: string }
 ): Promise<void> {
-  const sections: string[] = [];
-  let totalChars = 0;
+	const sections: string[] = [];
+	let totalChars = 0;
 
-  for (const { name, maxChars } of INIT_FILES) {
-    if (totalChars >= INIT_TOTAL_CHAR_CAP) break;
-    const filePath = join(directory, name);
-    if (!existsSync(filePath)) continue;
-    try {
-      const raw = readFileSync(filePath, "utf-8").slice(0, maxChars);
-      sections.push(`=== ${name} ===\n${raw}`);
-      totalChars += raw.length;
-    } catch {
-      continue;
-    }
-  }
+	for (const { name, maxChars } of INIT_FILES) {
+		if (totalChars >= INIT_TOTAL_CHAR_CAP) break;
+		const filePath = join(directory, name);
+		if (!existsSync(filePath)) continue;
+		try {
+			const raw = readFileSync(filePath, "utf-8").slice(0, maxChars);
+			sections.push(`=== ${name} ===\n${raw}`);
+			totalChars += raw.length;
+		} catch {
+			continue;
+		}
+	}
 
-  if (sections.length === 0) {
-    log("auto-init: no readable project files found, skipping");
-    return;
-  }
+	if (sections.length === 0) {
+		log("auto-init: no readable project files found, skipping");
+		return;
+	}
 
-  const content = sections.join("\n\n");
-  log("auto-init: sending project files for extraction", {
-    files: sections.length,
-    chars: content.length,
-  });
+	const content = sections.join("\n\n");
 
-  const result = await memoryClient.addMemoryFromProjectFiles(content, tags.project);
-  log("auto-init: extraction done", { success: result.success, count: result.count });
+	const sanitized = stripPrivateContent(content);
+
+	log("auto-init: sending project files for extraction", {
+		files: sections.length,
+		chars: sanitized.length,
+	});
+
+	const results = await store.ingest(
+		[{ role: "user", content: sanitized }],
+		tags.project,
+	);
+	log("auto-init: extraction done", { count: results.length });
 }
 
-// ── Project-brief seeding fallback ────────────────────────────────────────────
-// If auto-init ran but the extraction model still produced zero project-brief
-// memories (a known extraction-prompt failure mode), read the README's opening
-// paragraph and POST it as a very explicitly labelled brief so that the
-// (now sharpened) extraction prompt is almost certain to emit type=project-brief.
-// Fire-and-forget — does not block session start.  The backend dedup logic
-// (STRUCTURAL_DEDUP_DISTANCE) ensures at most one project-brief exists.
+// ── Project-brief seeding fallback ──────────────────────────────────────────────
+
 async function seedProjectBrief(
-  directory: string,
-  tags: { project: string }
+	directory: string,
+	tags: { project: string }
 ): Promise<void> {
-  // Only seed from README (most reliable source for a plain-language description)
-  const readmePath = join(directory, "README.md");
-  const rstPath    = join(directory, "README.rst");
-  const chosen     = existsSync(readmePath) ? readmePath : existsSync(rstPath) ? rstPath : null;
-  if (!chosen) return;
+	const readmePath = join(directory, "README.md");
+	const rstPath    = join(directory, "README.rst");
+	const chosen     = existsSync(readmePath) ? readmePath : existsSync(rstPath) ? rstPath : null;
+	if (!chosen) return;
 
-  const raw = readFileSync(chosen, "utf-8");
+	const raw = readFileSync(chosen, "utf-8");
 
-  // Find the first substantive paragraph: skip blank lines, headings (# …),
-  // badge lines ([![…), HTML tags, and horizontal rules.
-  const SKIP = /^(#|\[!\[|<|---|===|\s*$)/;
-  const firstPara = raw
-    .split("\n")
-    .map((l) => l.trim())
-    .find((l) => l.length > 20 && !SKIP.test(l));
+	const SKIP = /^(#|\[!\[|<|---|===|\s*$)/;
+	const firstPara = raw
+		.split("\n")
+		.map((l) => l.trim())
+		.find((l) => l.length > 20 && !SKIP.test(l));
 
-  if (!firstPara) return;
+	if (!firstPara) return;
 
-  const projectName = directory.split("/").pop() ?? "this project";
-  // Prefix makes the intent crystal-clear to the extraction model
-  const content = `Project Brief for "${projectName}": ${firstPara}`;
+	const projectName = directory.split("/").pop() ?? "this project";
+	const content = `Project Brief for "${projectName}": ${firstPara}`;
 
-  log("seed-brief: seeding project-brief from README", { contentLength: content.length });
-  const result = await memoryClient.addMemory(content, tags.project, { type: "project-brief" });
-  log("seed-brief: done", { success: result.success, id: result.id });
+	const sanitized = stripPrivateContent(content);
+
+	log("seed-brief: seeding project-brief from README", { contentLength: sanitized.length });
+
+	const results = await store.ingest(
+		[{ role: "user", content: sanitized }],
+		tags.project,
+		{ metadata: { type: "project-brief" } },
+	);
+	log("seed-brief: done", { count: results.length });
 }
 
-const MEMORY_KEYWORD_PATTERN = new RegExp(`\\b(${CONFIG.keywordPatterns.join("|")})\\b`, "i");
+// ── Memory keyword detection ────────────────────────────────────────────────────
+
+const MEMORY_KEYWORD_PATTERN = new RegExp(
+	`\\b(${PLUGIN_CONFIG.keywordPatterns.join("|")})\\b`, "i"
+);
 
 const MEMORY_NUDGE_MESSAGE = `[MEMORY TRIGGER DETECTED]
 The user wants you to remember something. You MUST use the \`memory\` tool with \`mode: "add"\` to save this information.
@@ -161,732 +201,800 @@ Extract the key information the user wants remembered and save it as a concise, 
 DO NOT skip this step. The user explicitly asked you to remember.`;
 
 function removeCodeBlocks(text: string): string {
-  return text.replace(CODE_BLOCK_PATTERN, "").replace(INLINE_CODE_PATTERN, "");
+	return text.replace(CODE_BLOCK_PATTERN, "").replace(INLINE_CODE_PATTERN, "");
 }
 
 function detectMemoryKeyword(text: string): boolean {
-  const textWithoutCode = removeCodeBlocks(text);
-  return MEMORY_KEYWORD_PATTERN.test(textWithoutCode);
+	const textWithoutCode = removeCodeBlocks(text);
+	return MEMORY_KEYWORD_PATTERN.test(textWithoutCode);
 }
 
-// ── Per-session memory cache ─────────────────────────────────────────────────
-// Stores structured + semantic results so system.transform can rebuild the
-// [MEMORY] block on every LLM call without additional API requests.
-// Semantic results are refreshed on each user message (turns 2+).
-// After compaction, needsStructuredRefresh is set so the next chat.message
-// re-fetches structured sections + profile (conversation history was summarized
-// away, making the [MEMORY] block the primary source of truth).
+// ── Per-session memory cache ────────────────────────────────────────────────────
+
 interface SessionMemoryCache {
-  structuredSections: Record<string, StructuredMemory[]>;
-  profile: ProfileResult | null;
-  /** User-scoped semantic hits from turn 1.  Stable within a session —
-   *  user preferences don't change mid-conversation.  Stored separately
-   *  so per-turn project refresh doesn't overwrite them. */
-  userSemanticResults: MemoriesResponseMinimal;
-  /** Project-scoped semantic hits, refreshed per turn (turns 2+). */
-  projectSemanticResults: MemoriesResponseMinimal;
-  initialized: boolean;
-  lastRefreshAt: number;
-  needsStructuredRefresh?: boolean;
+	structuredSections: Record<string, StructuredMemory[]>;
+	profile: ProfileResult | null;
+	userSemanticResults: MemoriesResponseMinimal;
+	projectSemanticResults: MemoriesResponseMinimal;
+	initialized: boolean;
+	lastRefreshAt: number;
+	needsStructuredRefresh?: boolean;
 }
 
-export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
-  const { directory } = ctx;
-  const tags = getTags(directory);
-  const displayNames = getDisplayNames(directory);
-  const sessionCaches = new Map<string, SessionMemoryCache>();
-  log("Plugin init", { directory, tags, displayNames, configured: isConfigured() });
-
-  if (!isConfigured()) {
-    log("Plugin disabled - memory server URL not configured");
-  } else {
-    // Fire-and-forget: register human-readable names so the web UI can display them
-    memoryClient.registerNames(tags.project, displayNames.project, tags.user, displayNames.user)
-      .catch((err) => log("registerNames failed (non-fatal)", { error: String(err) }));
-  }
-
-  // Fetch model limits once at plugin init
-  const modelLimits = new Map<string, number>();
-
-  (async () => {
-    try {
-      const response = await ctx.client.provider.list();
-      if (response.data?.all) {
-        for (const provider of response.data.all) {
-          if (provider.models) {
-            for (const [modelId, model] of Object.entries(provider.models)) {
-              if (model.limit?.context) {
-                modelLimits.set(`${provider.id}/${modelId}`, model.limit.context);
-              }
-            }
-          }
-        }
-      }
-      log("Model limits loaded", { count: modelLimits.size });
-    } catch (error) {
-      log("Failed to fetch model limits", { error: String(error) });
-    }
-  })();
-
-  const getModelLimit = (providerID: string, modelID: string): number | undefined => {
-    return modelLimits.get(`${providerID}/${modelID}`);
-  };
-
-  const compactionHook =
-    isConfigured() && ctx.client
-      ? createCompactionHook(ctx as CompactionContext, tags, {
-          threshold: CONFIG.compactionThreshold,
-          getModelLimit,
-          onCompaction: (sessionID: string) => {
-            const cache = sessionCaches.get(sessionID);
-            if (cache) {
-              cache.needsStructuredRefresh = true;
-              log("compaction: flagged session for structured refresh", { sessionID });
-            }
-          },
-        })
-      : null;
-
-  const autoSaveHook =
-    isConfigured() && ctx.client
-      ? createAutoSaveHook(tags, ctx.client)
-      : null;
-
-  return {
-    "experimental.chat.messages.transform": async (_input, output) => {
-      updateMessageCache(output.messages);
-    },
-
-    // ── System prompt injection ──────────────────────────────────────────────
-    // Fires AFTER chat.message populates/refreshes the session cache, but
-    // BEFORE the LLM call.  Rebuilds the [MEMORY] block from the session
-    // cache and appends it to the system prompt.
-    //
-    // Why system prompt instead of synthetic message part?
-    //  1. Zero token accumulation — system prompt is rebuilt each call, not appended.
-    //  2. Survives compaction — system prompt is never summarized away.
-    //  3. Always fresh — "Relevant to Current Task" section reflects the latest
-    //     user message because chat.message refreshes the cache before this fires.
-    "experimental.chat.system.transform": async (input, output) => {
-      if (!isConfigured()) return;
-
-      const sessionID = input.sessionID;
-      if (!sessionID) return;
-
-      const cache = sessionCaches.get(sessionID);
-      if (!cache?.initialized) return;
-
-      try {
-        const memoryContext = formatContextForPrompt(
-          cache.profile,
-          cache.userSemanticResults,     // user-scoped hits (stable, from turn 1)
-          cache.projectSemanticResults,  // project-scoped hits (refreshed per turn)
-          cache.structuredSections
-        );
-
-        if (memoryContext) {
-          output.system.push(memoryContext);
-          log("system.transform: [MEMORY] injected", {
-            length: memoryContext.length,
-            sessionID,
-            ...(cache.needsStructuredRefresh
-              ? { warning: "structured sections stale — refresh pending on next user message" }
-              : {}),
-          });
-        }
-      } catch (error) {
-        log("system.transform: ERROR", { error: String(error) });
-      }
-    },
-
-    "chat.message": async (input, output) => {
-      if (!isConfigured()) return;
-
-      const start = Date.now();
-
-      try {
-        const textParts = output.parts.filter(
-          (p): p is Part & { type: "text"; text: string } => p.type === "text"
-        );
-
-        if (textParts.length === 0) {
-          log("chat.message: no text parts found");
-          return;
-        }
-
-        const userMessage = textParts.map((p) => p.text).join("\n");
-
-        if (!userMessage.trim()) {
-          log("chat.message: empty message, skipping");
-          return;
-        }
-
-        log("chat.message: processing", {
-          messagePreview: userMessage.slice(0, 100),
-          partsCount: output.parts.length,
-          textPartsCount: textParts.length,
-        });
-
-        if (detectMemoryKeyword(userMessage)) {
-          log("chat.message: memory keyword detected");
-          const nudgePart: Part = {
-            id: `memory-nudge-${Date.now()}`,
-            sessionID: input.sessionID,
-            messageID: output.message.id,
-            type: "text",
-            text: MEMORY_NUDGE_MESSAGE,
-            synthetic: true,
-          };
-          output.parts.push(nudgePart);
-        }
-
-        const cache = sessionCaches.get(input.sessionID);
-        const isFirstMessage = !cache?.initialized;
-
-        if (isFirstMessage) {
-          // ── Turn 1: Full memory fetch + cache population ──────────────────
-          const [profileResult, userMemoriesResult, projectMemoriesListResult, projectSearchResult] = await Promise.all([
-            memoryClient.getProfile(tags.user, userMessage),
-            memoryClient.searchMemories(userMessage, tags.user, 0.1),
-            memoryClient.listMemories(tags.project, CONFIG.maxStructuredMemories),
-            // Semantic search on project scope — recency weight gently prefers newer
-            // memories when semantic scores are close, reducing stale-memory bleed.
-            memoryClient.searchMemories(userMessage, tags.project, 0.15),
-          ]);
-
-          const profile = profileResult.success ? profileResult : null;
-          const projectMemoriesList = projectMemoriesListResult.success
-            ? projectMemoriesListResult
-            : { memories: [] };
-          const projectSearch = projectSearchResult.success ? projectSearchResult : { results: [] };
-
-          const allProjectMemories = projectMemoriesList.memories || [];
-
-          // ── Auto-init: no project memory yet ──────────────────────────────
-          // Silently read key project files in the background and send for extraction.
-          // Nothing is injected into the conversation — completely transparent to the user.
-          //
-          // Awaited (not fire-and-forget) so the HTTP request completes before
-          // opencode run exits. In TUI sessions this adds ~2-5s to the first
-          // message latency (memory server extracts from files synchronously).
-          // Trade-off accepted: fire-and-forget causes silent failure in run mode.
-          if (allProjectMemories.length === 0) {
-            if (detectExistingCodebase(directory)) {
-              await triggerSilentAutoInit(directory, tags).catch(
-                (err) => log("auto-init: failed", { error: String(err) })
-              );
-            }
-            // For blank directories: do nothing — memories accumulate from conversation naturally.
-            // Fall through and let the session proceed with no memory injection.
-          }
-
-          // ── Partition project memories by type ─────────────────────────────
-          const byType: Record<string, StructuredMemory[]> = {};
-          for (const m of allProjectMemories) {
-            const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-            const key = memType || "other";
-            if (!byType[key]) byType[key] = [];
-            byType[key].push({
-              id: m.id,
-              memory: m.summary,
-              similarity: 1,
-              metadata: m.metadata as Record<string, unknown> | undefined,
-              createdAt: m.createdAt,
-            });
-          }
-
-          // ── Project-brief fallback seeding ────────────────────────────────
-          if (allProjectMemories.length > 0 && !byType["project-brief"]) {
-            await seedProjectBrief(directory, tags).catch(
-              (err) => log("seed-brief: failed", { error: String(err) })
-            );
-          }
-
-          // ── Separate user + project semantic results ────────────────────
-          // Stored separately so per-turn project refresh (turns 2+) doesn't
-          // overwrite user-scoped hits (preferences, cross-project patterns).
-          const userResults: MemoriesResponseMinimal = {
-            results: (userMemoriesResult.success ? userMemoriesResult.results || [] : [])
-              .map((r) => ({ ...r, memory: r.memory })),
-          };
-          const projectResults: MemoriesResponseMinimal = {
-            results: (projectSearch.results || [])
-              .map((r) => ({ ...r, memory: r.memory })),
-          };
-
-          // ── Populate session cache ────────────────────────────────────────
-          // system.transform reads from this cache on every subsequent LLM call
-          // to inject the [MEMORY] block into the system prompt.
-          sessionCaches.set(input.sessionID, {
-            structuredSections: byType,
-            profile,
-            userSemanticResults: userResults,
-            projectSemanticResults: projectResults,
-            initialized: true,
-            lastRefreshAt: Date.now(),
-          });
-
-          const duration = Date.now() - start;
-          log("chat.message: session cache populated (turn 1)", {
-            duration,
-            typeCount: Object.keys(byType).length,
-            userSemanticCount: userResults.results?.length ?? 0,
-            projectSemanticCount: projectResults.results?.length ?? 0,
-          });
-        } else {
-          // ── Turns 2+: Per-turn refresh ────────────────────────────────────
-          // Semantic search (project scope) always runs to update "Relevant to
-          // Current Task".  User-scope search is skipped — user preferences are
-          // stable within a session and already captured in turn-1 results.
-          //
-          // After compaction: structured sections + profile are also re-fetched
-          // because conversation history was summarized away and the [MEMORY]
-          // block becomes the primary source of truth.
-          try {
-            // ── Post-compaction: full structured refresh ─────────────────────
-            if (cache?.needsStructuredRefresh) {
-              const prevStructuredTypes = Object.keys(cache.structuredSections);
-              const prevMemoryCount = prevStructuredTypes.reduce(
-                (sum, key) => sum + (cache.structuredSections[key]?.length ?? 0), 0
-              );
-              const prevSemanticCount = cache.projectSemanticResults.results?.length ?? 0;
-              const prevProfilePresent = !!cache.profile;
-
-              log("chat.message: post-compaction structured refresh starting", {
-                sessionID: input.sessionID,
-                before: {
-                  types: prevStructuredTypes.length,
-                  memories: prevMemoryCount,
-                  semanticHits: prevSemanticCount,
-                  hasProfile: prevProfilePresent,
-                },
-              });
-
-              const refreshStart = Date.now();
-
-              // Re-fetch structured sections + profile in parallel with semantic search
-              const [freshList, freshProfile, freshSearch] = await Promise.all([
-                memoryClient.listMemories(tags.project, CONFIG.maxStructuredMemories),
-                memoryClient.getProfile(tags.user, userMessage),
-                memoryClient.searchMemories(userMessage, tags.project, 0.15),
-              ]);
-
-              // Update structured sections
-              if (freshList.success) {
-                const allProjectMemories = freshList.memories || [];
-                const byType: Record<string, StructuredMemory[]> = {};
-                for (const m of allProjectMemories) {
-                  const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-                  const key = memType || "other";
-                  if (!byType[key]) byType[key] = [];
-                  byType[key].push({
-                    id: m.id,
-                    memory: m.summary,
-                    similarity: 1,
-                    metadata: m.metadata as Record<string, unknown> | undefined,
-                    createdAt: m.createdAt,
-                  });
-                }
-                cache.structuredSections = byType;
-
-                log("chat.message: post-compaction structured sections refreshed", {
-                  before: { types: prevStructuredTypes.length, memories: prevMemoryCount },
-                  after: { types: Object.keys(byType).length, memories: allProjectMemories.length },
-                });
-              } else {
-                log("chat.message: post-compaction structured sections fetch FAILED — keeping stale cache", {
-                  error: (freshList as { error?: string }).error ?? "unknown",
-                });
-              }
-
-              // Update profile
-              if (freshProfile.success) {
-                cache.profile = freshProfile;
-                log("chat.message: post-compaction profile refreshed", {
-                  hadProfileBefore: prevProfilePresent,
-                });
-              } else {
-                log("chat.message: post-compaction profile fetch FAILED — keeping stale cache", {
-                  error: (freshProfile as { error?: string }).error ?? "unknown",
-                });
-              }
-
-              // Update project semantic results (user results stay from turn 1)
-              if (freshSearch.success) {
-                cache.projectSemanticResults = {
-                  results: (freshSearch.results || []).map((r) => ({
-                    ...r,
-                    memory: r.memory,
-                  })),
-                };
-                log("chat.message: post-compaction semantic results refreshed", {
-                  before: prevSemanticCount,
-                  after: freshSearch.results?.length ?? 0,
-                });
-              } else {
-                log("chat.message: post-compaction semantic search FAILED — keeping stale results", {
-                  error: (freshSearch as { error?: string }).error ?? "unknown",
-                });
-              }
-
-              cache.needsStructuredRefresh = false;
-              cache.lastRefreshAt = Date.now();
-
-              const refreshDuration = Date.now() - refreshStart;
-              log("chat.message: post-compaction full refresh complete", {
-                duration: refreshDuration,
-                after: {
-                  types: Object.keys(cache.structuredSections).length,
-                  semanticHits: cache.projectSemanticResults.results?.length ?? 0,
-                  hasProfile: !!cache.profile,
-                },
-              });
-            } else {
-              // ── Normal turn: semantic-only refresh ───────────────────────────
-              const freshSearch = await memoryClient.searchMemories(
-                userMessage,
-                tags.project,
-                0.15
-              );
-
-              if (freshSearch.success && cache) {
-                cache.projectSemanticResults = {
-                  results: (freshSearch.results || []).map((r) => ({
-                    ...r,
-                    memory: r.memory,
-                  })),
-                };
-                cache.lastRefreshAt = Date.now();
-
-                log("chat.message: semantic refresh (turn 2+)", {
-                  resultCount: freshSearch.results?.length ?? 0,
-                  duration: Date.now() - start,
-                });
-              }
-            }
-          } catch (error) {
-            // Non-fatal: cache retains previous results.
-            // If this was a post-compaction refresh, the flag stays true
-            // so it retries on the next user message.
-            const wasPostCompaction = cache?.needsStructuredRefresh ?? false;
-            log("chat.message: refresh failed (non-fatal)", {
-              error: String(error),
-              wasPostCompaction,
-              ...(wasPostCompaction ? { willRetry: "flag stays set, retrying next turn" } : {}),
-            });
-          }
-        }
-      } catch (error) {
-        log("chat.message: ERROR", { error: String(error) });
-      }
-    },
-
-    tool: {
-      memory: tool({
-        description:
-          "Persistent memory system (self-hosted). Use 'search' to find relevant memories, 'add' to store new knowledge, 'profile' to view user memories, 'list' to see recent memories, 'forget' to remove a memory. PROACTIVE USAGE: Search mid-session when you detect a task switch, encounter unfamiliar references, or need historical context not in the [MEMORY] block. Example: memory({ mode: 'search', query: 'PR conventions and commit workflow' })",
-        args: {
-          mode: tool.schema
-            .enum(["add", "search", "profile", "list", "forget", "help"])
-            .optional(),
-          content: tool.schema.string().optional(),
-          query: tool.schema.string().optional(),
-          type: tool.schema
-            .enum([
-              "project-brief",
-              "architecture",
-              "tech-context",
-              "product-context",
-              "session-summary",
-              "progress",
-              "project-config",
-              "error-solution",
-              "preference",
-              "learned-pattern",
-              "conversation",
-            ])
-            .optional(),
-          scope: tool.schema.enum(["user", "project"]).optional(),
-          memoryId: tool.schema.string().optional(),
-          limit: tool.schema.number().optional(),
-        },
-        async execute(args: {
-          mode?: string;
-          content?: string;
-          query?: string;
-          type?: MemoryType;
-          scope?: MemoryScope;
-          memoryId?: string;
-          limit?: number;
-        }) {
-          const mode = args.mode || "help";
-
-          try {
-            switch (mode) {
-              case "help": {
-                return JSON.stringify({
-                  success: true,
-                  message: "Memory Usage Guide (self-hosted)",
-                  commands: [
-                    { command: "add", description: "Store a new memory", args: ["content", "type?", "scope?"] },
-                    { command: "search", description: "Search memories", args: ["query", "scope?"] },
-                    { command: "profile", description: "View user memories", args: ["query?"] },
-                    { command: "list", description: "List recent memories", args: ["scope?", "limit?"] },
-                    { command: "forget", description: "Remove a memory", args: ["memoryId", "scope?"] },
-                  ],
-                  scopes: {
-                    user: "Cross-project preferences and knowledge",
-                    project: "Project-specific knowledge (default)",
-                  },
-                  types: [
-                    "project-brief",
-                    "architecture",
-                    "tech-context",
-                    "product-context",
-                    "session-summary",
-                    "progress",
-                    "project-config",
-                    "error-solution",
-                    "preference",
-                    "learned-pattern",
-                    "conversation",
-                  ],
-                });
-              }
-
-              case "add": {
-                if (!args.content) {
-                  return JSON.stringify({ success: false, error: "content is required for add mode" });
-                }
-
-                const sanitizedContent = stripPrivateContent(args.content);
-                if (isFullyPrivate(args.content)) {
-                  return JSON.stringify({ success: false, error: "Cannot store fully private content" });
-                }
-
-                const scope = args.scope || "project";
-                const containerTag = scope === "user" ? tags.user : tags.project;
-
-                const result = await memoryClient.addMemory(sanitizedContent, containerTag, { type: args.type });
-
-                if (!result.success) {
-                  return JSON.stringify({ success: false, error: result.error || "Failed to add memory" });
-                }
-
-                return JSON.stringify({ success: true, message: `Memory added to ${scope} scope`, id: result.id, scope, type: args.type });
-              }
-
-              case "search": {
-                if (!args.query) {
-                  return JSON.stringify({ success: false, error: "query is required for search mode" });
-                }
-
-                const scope = args.scope;
-
-                if (scope === "user") {
-                  const result = await memoryClient.searchMemories(args.query, tags.user);
-                  if (!result.success) return JSON.stringify({ success: false, error: result.error });
-                  return formatSearchResults(args.query, scope, result, args.limit);
-                }
-
-                if (scope === "project") {
-                  const result = await memoryClient.searchMemories(args.query, tags.project);
-                  if (!result.success) return JSON.stringify({ success: false, error: result.error });
-                  return formatSearchResults(args.query, scope, result, args.limit);
-                }
-
-                // No scope = search both
-                const [userResult, projectResult] = await Promise.all([
-                  memoryClient.searchMemories(args.query, tags.user),
-                  memoryClient.searchMemories(args.query, tags.project),
-                ]);
-
-                if (!userResult.success || !projectResult.success) {
-                  return JSON.stringify({ success: false, error: userResult.error || projectResult.error });
-                }
-
-                const combined = [
-                  ...(userResult.results || []).map((r) => ({ ...r, scope: "user" as const })),
-                  ...(projectResult.results || []).map((r) => ({ ...r, scope: "project" as const })),
-                ].sort((a, b) => b.similarity - a.similarity);
-
-                return JSON.stringify({
-                  success: true,
-                  query: args.query,
-                  count: combined.length,
-                  results: combined.slice(0, args.limit || 10).map((r) => ({
-                    id: r.id,
-                    content: r.memory,
-                    similarity: Math.round(r.similarity * 100),
-                    scope: r.scope,
-                  })),
-                });
-              }
-
-              case "profile": {
-                const result = await memoryClient.getProfile(tags.user, args.query);
-                if (!result.success) {
-                  return JSON.stringify({ success: false, error: result.error });
-                }
-                return JSON.stringify({
-                  success: true,
-                  profile: {
-                    memories: result.profile?.static || [],
-                  },
-                });
-              }
-
-              case "list": {
-                const scope = args.scope || "project";
-                const limit = args.limit || 20;
-                const containerTag = scope === "user" ? tags.user : tags.project;
-
-                const result = await memoryClient.listMemories(containerTag, limit);
-                if (!result.success) {
-                  return JSON.stringify({ success: false, error: result.error });
-                }
-
-                return JSON.stringify({
-                  success: true,
-                  scope,
-                  count: result.memories.length,
-                  memories: result.memories.map((m) => ({
-                    id: m.id,
-                    content: m.summary,
-                    createdAt: m.createdAt,
-                    metadata: m.metadata,
-                  })),
-                });
-              }
-
-              case "forget": {
-                if (!args.memoryId) {
-                  return JSON.stringify({ success: false, error: "memoryId is required for forget mode" });
-                }
-
-                const result = await memoryClient.deleteMemory(args.memoryId);
-                if (!result.success) {
-                  return JSON.stringify({ success: false, error: result.error });
-                }
-
-                return JSON.stringify({
-                  success: true,
-                  message: `Memory ${args.memoryId} deleted`,
-                });
-              }
-
-              default:
-                return JSON.stringify({ success: false, error: `Unknown mode: ${mode}` });
-            }
-          } catch (error) {
-            return JSON.stringify({
-              success: false,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          }
-        },
-      }),
-    },
-
-    event: async (input: { event: { type: string; properties?: unknown } }) => {
-      // Run compaction check
-      if (compactionHook) {
-        await compactionHook.event(input);
-      }
-
-      // Clean up session cache on session deletion to prevent memory leaks
-      if (input.event.type === "session.deleted") {
-        const props = input.event.properties as Record<string, unknown> | undefined;
-        const sessionInfo = props?.info as { id?: string } | undefined;
-        if (sessionInfo?.id) {
-          sessionCaches.delete(sessionInfo.id);
-          log("event: session cache cleaned up", { sessionID: sessionInfo.id });
-        }
-      }
-
-      if (!isConfigured()) return;
-
-      // Capture streaming assistant text via message.part.updated.
-      // The transform cache never contains the final LLM response (transform fires BEFORE
-      // the LLM call). By accumulating text parts here we can inject the final response
-      // into the cache before auto-save runs — no SDK fetch required.
-      if (input.event.type === "message.part.updated") {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const part = (input.event.properties as any)?.part;
-        if (
-          part &&
-          part.type === "text" &&
-          !part.synthetic &&
-          typeof part.text === "string" && part.text.trim() &&
-          part.sessionID && part.messageID
-        ) {
-          updateAssistantTextBuffer(part.sessionID as string, part.messageID as string, part.text as string);
-        }
-      }
-
-      // Auto-save: fire when an assistant message finishes with a terminal reason.
-      // finish="tool-calls" = mid-turn tool usage, skip.
-      // finish="stop" (or any other non-tool-calls value) = turn truly done, extract.
-      if (autoSaveHook && input.event.type === "message.updated") {
-        const props = input.event.properties as Record<string, unknown> | undefined;
-        const info = props?.info as Record<string, unknown> | undefined;
-        if (
-          info &&
-          info.role === "assistant" &&
-          typeof info.finish === "string" &&
-          info.finish !== "tool-calls" &&
-          !info.summary &&
-          info.sessionID &&
-          info.id
-        ) {
-          log("auto-save: terminal finish detected", { finish: info.finish, sessionID: info.sessionID });
-
-          // Inject the final assistant response (captured via message.part.updated streaming)
-          // into the transform cache before onSessionIdle reads it.
-          const bufferedText = popAssistantText(info.sessionID as string, info.id as string);
-          if (bufferedText) {
-            injectFinalAssistantMessage({
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              info: info as any,
-              parts: [{
-                id: `buffered-text-${info.id}`,
-                sessionID: info.sessionID as string,
-                messageID: info.id as string,
-                type: "text",
-                text: bufferedText,
-              }],
-            });
-          } else {
-            log("auto-save: no buffered text for final message (may have been empty or tool-only)", {
-              sessionID: info.sessionID,
-              messageID: info.id,
-            });
-          }
-
-          // Await the hook so opencode run doesn't exit before extraction completes
-          await autoSaveHook.onSessionIdle(info.sessionID as string);
-        }
-      }
-    },
-  };
-};
+// ── Lazy initialization guard ───────────────────────────────────────────────────
+
+let dbInitialized = false;
+
+async function ensureInitialized(): Promise<void> {
+	if (dbInitialized) return;
+	await db.init();
+	await nameRegistry.init();
+	await ledger.init();
+	await activityLog.init();
+	dbInitialized = true;
+	log("ensureInitialized: LanceDB + nameRegistry + telemetry ready");
+}
+
+// ── Search wrapper ──────────────────────────────────────────────────────────────
+// Wraps store.search() to match the shape expected by the session cache
+// (MemoriesResponseMinimal with .results[].similarity and .results[].memory).
+
+async function searchMemories(
+	query: string,
+	containerTag: string,
+	recencyWeight?: number,
+): Promise<{ results: Array<{ id: string; memory: string; chunk: string; similarity: number; date?: string }> }> {
+	const types = detectQueryTypes(query);
+	const results = await store.search(query, containerTag, {
+		limit: PLUGIN_CONFIG.maxMemories,
+		threshold: PLUGIN_CONFIG.similarityThreshold,
+		...(recencyWeight !== undefined && recencyWeight > 0 ? { recencyWeight } : {}),
+		...(types ? { types } : {}),
+	});
+
+	return {
+		results: results.map((r) => ({
+			id: r.id,
+			memory: r.memory,
+			chunk: r.chunk || "",
+			similarity: r.score,
+			date: r.date ?? undefined,
+		})),
+	};
+}
+
+// ── Profile wrapper ─────────────────────────────────────────────────────────────
+// Wraps store.getProfile() to match ProfileResult shape.
+
+async function getProfile(
+	containerTag: string,
+): Promise<ProfileResult & { success: boolean }> {
+	try {
+		const memories = await store.getProfile(containerTag, PLUGIN_CONFIG.maxProfileItems);
+		const facts = memories.map((m) => m.memory).filter(Boolean);
+		return {
+			success: true,
+			profile: {
+				static: facts,
+				dynamic: [],
+			},
+		};
+	} catch (error) {
+		log("getProfile: error", { error: String(error) });
+		return {
+			success: false,
+			profile: null,
+		};
+	}
+}
+
+// ── List wrapper ────────────────────────────────────────────────────────────────
+// Wraps store.list() to match the shape expected by existing cache logic.
+
+async function listMemories(
+	containerTag: string,
+	limit: number,
+): Promise<{
+	success: boolean;
+	memories: Array<{
+		id: string;
+		summary: string;
+		createdAt: string;
+		metadata?: Record<string, unknown>;
+	}>;
+}> {
+	try {
+		const rows = await store.list(containerTag, { limit });
+		return {
+			success: true,
+			memories: rows.map((r) => ({
+				id: r.id,
+				summary: r.memory,
+				createdAt: r.created_at ?? new Date().toISOString(),
+				metadata: r.metadata,
+			})),
+		};
+	} catch (error) {
+		log("listMemories: error", { error: String(error) });
+		return { success: false, memories: [] };
+	}
+}
+
+// ── Format search results for tool output ───────────────────────────────────────
 
 function formatSearchResults(
-  query: string,
-  scope: string | undefined,
-  results: { results?: Array<{ id: string; memory?: string; similarity: number }> },
-  limit?: number
+	query: string,
+	scope: string | undefined,
+	results: { results?: Array<{ id: string; memory?: string; similarity: number }> },
+	limit?: number
 ): string {
-  const memoryResults = results.results || [];
-  return JSON.stringify({
-    success: true,
-    query,
-    scope,
-    count: memoryResults.length,
-    results: memoryResults.slice(0, limit || 10).map((r) => ({
-      id: r.id,
-      content: r.memory,
-      similarity: Math.round(r.similarity * 100),
-    })),
-  });
+	const memoryResults = results.results || [];
+	return JSON.stringify({
+		success: true,
+		query,
+		scope,
+		count: memoryResults.length,
+		results: memoryResults.slice(0, limit || 10).map((r) => ({
+			id: r.id,
+			content: r.memory,
+			similarity: Math.round(r.similarity * 100),
+		})),
+	});
 }
+
+// ── Plugin export ───────────────────────────────────────────────────────────────
+
+export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
+	const { directory } = ctx;
+	const tags = getTags(directory);
+	const displayNames = getDisplayNames(directory);
+	const sessionCaches = new Map<string, SessionMemoryCache>();
+	const MAX_SESSION_CACHES = 100; // Prevent unbounded growth; LRU eviction below
+	const configured = isConfigured();
+	log("Plugin init", { directory, tags, displayNames, configured });
+
+	// LRU eviction for sessionCaches — evicts oldest entry when limit exceeded
+	function setSessionCache(sessionID: string, cache: SessionMemoryCache): void {
+		sessionCaches.set(sessionID, cache);
+		if (sessionCaches.size > MAX_SESSION_CACHES) {
+			// Map iterates in insertion order — first key is the oldest
+			const oldestKey = sessionCaches.keys().next().value;
+			if (oldestKey && oldestKey !== sessionID) {
+				sessionCaches.delete(oldestKey);
+				log("sessionCaches: evicted oldest entry", { evicted: oldestKey, size: sessionCaches.size });
+			}
+		}
+	}
+
+	if (!configured) {
+		log("Plugin disabled — VOYAGE_API_KEY not set");
+	} else {
+		// Fire-and-forget: register human-readable names (local JSON, not HTTP)
+		ensureInitialized()
+			.then(async () => {
+				await nameRegistry.register(tags.project, displayNames.project);
+				await nameRegistry.register(tags.user, displayNames.user);
+			})
+			.catch((err) => log("registerNames failed (non-fatal)", { error: String(err) }));
+	}
+
+	// Fetch model limits once at plugin init
+	const modelLimits = new Map<string, number>();
+
+	(async () => {
+		try {
+			const response = await ctx.client.provider.list();
+			if (response.data?.all) {
+				for (const provider of response.data.all) {
+					if (provider.models) {
+					for (const [modelId, model] of Object.entries(provider.models)) {
+						// eslint-disable-next-line @typescript-eslint/no-explicit-any
+						const m = model as any;
+						if (m.limit?.context) {
+							modelLimits.set(`${provider.id}/${modelId}`, m.limit.context as number);
+						}
+						}
+					}
+				}
+			}
+			log("Model limits loaded", { count: modelLimits.size });
+		} catch (error) {
+			log("Failed to fetch model limits", { error: String(error) });
+		}
+	})();
+
+	const getModelLimit = (providerID: string, modelID: string): number | undefined => {
+		return modelLimits.get(`${providerID}/${modelID}`);
+	};
+
+	const compactionHook =
+		configured && ctx.client
+			? createCompactionHook(ctx as CompactionContext, tags, {
+				threshold: PLUGIN_CONFIG.compactionThreshold,
+				getModelLimit,
+				onCompaction: (sessionID: string) => {
+					const cache = sessionCaches.get(sessionID);
+					if (cache) {
+						cache.needsStructuredRefresh = true;
+						log("compaction: flagged session for structured refresh", { sessionID });
+					}
+				},
+			})
+			: null;
+
+	const autoSaveHook =
+		configured && ctx.client
+			? createAutoSaveHook(tags, ctx.client)
+			: null;
+
+	return {
+		"experimental.chat.messages.transform": async (_input, output) => {
+			updateMessageCache(output.messages);
+		},
+
+		// ── System prompt injection ──────────────────────────────────────────
+		"experimental.chat.system.transform": async (input, output) => {
+			if (!configured) return;
+
+			const sessionID = input.sessionID;
+			if (!sessionID) return;
+
+			const cache = sessionCaches.get(sessionID);
+			if (!cache?.initialized) return;
+
+			try {
+				const memoryContext = formatContextForPrompt(
+					cache.profile,
+					cache.userSemanticResults,
+					cache.projectSemanticResults,
+					cache.structuredSections
+				);
+
+				if (memoryContext) {
+					output.system.push(memoryContext);
+					log("system.transform: [MEMORY] injected", {
+						length: memoryContext.length,
+						sessionID,
+						...(cache.needsStructuredRefresh
+							? { warning: "structured sections stale — refresh pending on next user message" }
+							: {}),
+					});
+				}
+			} catch (error) {
+				log("system.transform: ERROR", { error: String(error) });
+			}
+		},
+
+		"chat.message": async (input, output) => {
+			if (!configured) return;
+
+			// Ensure DB is initialized before any store operations
+			await ensureInitialized();
+
+			const start = Date.now();
+
+			try {
+				const textParts = output.parts.filter(
+					(p): p is Part & { type: "text"; text: string } => p.type === "text"
+				);
+
+				if (textParts.length === 0) {
+					log("chat.message: no text parts found");
+					return;
+				}
+
+				const userMessage = textParts.map((p) => p.text).join("\n");
+
+				if (!userMessage.trim()) {
+					log("chat.message: empty message, skipping");
+					return;
+				}
+
+				log("chat.message: processing", {
+					messagePreview: userMessage.slice(0, 100),
+					partsCount: output.parts.length,
+					textPartsCount: textParts.length,
+				});
+
+				if (detectMemoryKeyword(userMessage)) {
+					log("chat.message: memory keyword detected");
+					const nudgePart: Part = {
+						id: `memory-nudge-${Date.now()}`,
+						sessionID: input.sessionID,
+						messageID: output.message.id,
+						type: "text",
+						text: MEMORY_NUDGE_MESSAGE,
+						synthetic: true,
+					};
+					output.parts.push(nudgePart);
+				}
+
+				const cache = sessionCaches.get(input.sessionID);
+				const isFirstMessage = !cache?.initialized;
+
+				if (isFirstMessage) {
+					// ── Turn 1: Full memory fetch + cache population ────────────
+					const [profileResult, userSearch, projectMemoriesList, projectSearch] = await Promise.all([
+						getProfile(tags.user),
+						searchMemories(userMessage, tags.user, 0.1),
+						listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+						searchMemories(userMessage, tags.project, 0.15),
+					]);
+
+					const profile = profileResult.success ? profileResult : null;
+					const allProjectMemories = projectMemoriesList.success
+						? projectMemoriesList.memories
+						: [];
+
+					// ── Auto-init: no project memory yet ────────────────────────
+					if (allProjectMemories.length === 0) {
+						if (detectExistingCodebase(directory)) {
+							await triggerSilentAutoInit(directory, tags).catch(
+								(err) => log("auto-init: failed", { error: String(err) })
+							);
+						}
+					}
+
+					// ── Partition project memories by type ──────────────────────
+					const byType: Record<string, StructuredMemory[]> = {};
+					for (const m of allProjectMemories) {
+						const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
+						const key = memType || "other";
+						if (!byType[key]) byType[key] = [];
+						byType[key].push({
+							id: m.id,
+							memory: m.summary,
+							similarity: 1,
+							metadata: m.metadata as Record<string, unknown> | undefined,
+							createdAt: m.createdAt,
+						});
+					}
+
+					// ── Project-brief fallback seeding ──────────────────────────
+					if (allProjectMemories.length > 0 && !byType["project-brief"]) {
+						await seedProjectBrief(directory, tags).catch(
+							(err) => log("seed-brief: failed", { error: String(err) })
+						);
+					}
+
+					// ── Separate user + project semantic results ────────────────
+					const userResults: MemoriesResponseMinimal = {
+						results: (userSearch.results || []).map((r) => ({
+							...r,
+							memory: r.memory,
+						})),
+					};
+					const projectResults: MemoriesResponseMinimal = {
+						results: (projectSearch.results || []).map((r) => ({
+							...r,
+							memory: r.memory,
+						})),
+					};
+
+					// ── Populate session cache ──────────────────────────────────
+					setSessionCache(input.sessionID, {
+						structuredSections: byType,
+						profile,
+						userSemanticResults: userResults,
+						projectSemanticResults: projectResults,
+						initialized: true,
+						lastRefreshAt: Date.now(),
+					});
+
+					const duration = Date.now() - start;
+					log("chat.message: session cache populated (turn 1)", {
+						duration,
+						typeCount: Object.keys(byType).length,
+						userSemanticCount: userResults.results?.length ?? 0,
+						projectSemanticCount: projectResults.results?.length ?? 0,
+					});
+				} else {
+					// ── Turns 2+: Per-turn refresh ──────────────────────────────
+					try {
+						if (cache?.needsStructuredRefresh) {
+							// ── Post-compaction: full structured refresh ────────
+							const prevStructuredTypes = Object.keys(cache.structuredSections);
+							const prevMemoryCount = prevStructuredTypes.reduce(
+								(sum, key) => sum + (cache.structuredSections[key]?.length ?? 0), 0
+							);
+							const prevSemanticCount = cache.projectSemanticResults.results?.length ?? 0;
+							const prevProfilePresent = !!cache.profile;
+
+							log("chat.message: post-compaction structured refresh starting", {
+								sessionID: input.sessionID,
+								before: {
+									types: prevStructuredTypes.length,
+									memories: prevMemoryCount,
+									semanticHits: prevSemanticCount,
+									hasProfile: prevProfilePresent,
+								},
+							});
+
+							const refreshStart = Date.now();
+
+							const [freshList, freshProfile, freshSearch] = await Promise.all([
+								listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+								getProfile(tags.user),
+								searchMemories(userMessage, tags.project, 0.15),
+							]);
+
+							// Update structured sections
+							if (freshList.success) {
+								const allProjectMemories = freshList.memories || [];
+								const byType: Record<string, StructuredMemory[]> = {};
+								for (const m of allProjectMemories) {
+									const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
+									const key = memType || "other";
+									if (!byType[key]) byType[key] = [];
+									byType[key].push({
+										id: m.id,
+										memory: m.summary,
+										similarity: 1,
+										metadata: m.metadata as Record<string, unknown> | undefined,
+										createdAt: m.createdAt,
+									});
+								}
+								cache.structuredSections = byType;
+
+								log("chat.message: post-compaction structured sections refreshed", {
+									before: { types: prevStructuredTypes.length, memories: prevMemoryCount },
+									after: { types: Object.keys(byType).length, memories: allProjectMemories.length },
+								});
+							} else {
+								log("chat.message: post-compaction structured sections fetch FAILED — keeping stale cache");
+							}
+
+							// Update profile
+							if (freshProfile.success) {
+								cache.profile = freshProfile;
+								log("chat.message: post-compaction profile refreshed", {
+									hadProfileBefore: prevProfilePresent,
+								});
+							} else {
+								log("chat.message: post-compaction profile fetch FAILED — keeping stale cache");
+							}
+
+							// Update project semantic results
+							cache.projectSemanticResults = {
+								results: (freshSearch.results || []).map((r) => ({
+									...r,
+									memory: r.memory,
+								})),
+							};
+							log("chat.message: post-compaction semantic results refreshed", {
+								before: prevSemanticCount,
+								after: freshSearch.results?.length ?? 0,
+							});
+
+							cache.needsStructuredRefresh = false;
+							cache.lastRefreshAt = Date.now();
+
+							const refreshDuration = Date.now() - refreshStart;
+							log("chat.message: post-compaction full refresh complete", {
+								duration: refreshDuration,
+								after: {
+									types: Object.keys(cache.structuredSections).length,
+									semanticHits: cache.projectSemanticResults.results?.length ?? 0,
+									hasProfile: !!cache.profile,
+								},
+							});
+						} else {
+							// ── Normal turn: semantic-only refresh ──────────────
+							const freshSearch = await searchMemories(
+								userMessage,
+								tags.project,
+								0.15
+							);
+
+							if (cache) {
+								cache.projectSemanticResults = {
+									results: (freshSearch.results || []).map((r) => ({
+										...r,
+										memory: r.memory,
+									})),
+								};
+								cache.lastRefreshAt = Date.now();
+
+								log("chat.message: semantic refresh (turn 2+)", {
+									resultCount: freshSearch.results?.length ?? 0,
+									duration: Date.now() - start,
+								});
+							}
+						}
+					} catch (error) {
+						const wasPostCompaction = cache?.needsStructuredRefresh ?? false;
+						log("chat.message: refresh failed (non-fatal)", {
+							error: String(error),
+							wasPostCompaction,
+							...(wasPostCompaction ? { willRetry: "flag stays set, retrying next turn" } : {}),
+						});
+					}
+				}
+			} catch (error) {
+				log("chat.message: ERROR", { error: String(error) });
+			}
+		},
+
+		tool: {
+			memory: tool({
+				description:
+					"Persistent memory system (self-hosted). Use 'search' to find relevant memories, 'add' to store new knowledge, 'profile' to view user memories, 'list' to see recent memories, 'forget' to remove a memory. PROACTIVE USAGE: Search mid-session when you detect a task switch, encounter unfamiliar references, or need historical context not in the [MEMORY] block. Example: memory({ mode: 'search', query: 'PR conventions and commit workflow' })",
+				args: {
+					mode: tool.schema
+						.enum(["add", "search", "profile", "list", "forget", "help"])
+						.optional(),
+					content: tool.schema.string().optional(),
+					query: tool.schema.string().optional(),
+					type: tool.schema
+						.enum([
+							"project-brief",
+							"architecture",
+							"tech-context",
+							"product-context",
+							"session-summary",
+							"progress",
+							"project-config",
+							"error-solution",
+							"preference",
+							"learned-pattern",
+							"conversation",
+						])
+						.optional(),
+					scope: tool.schema.enum(["user", "project"]).optional(),
+					memoryId: tool.schema.string().optional(),
+					limit: tool.schema.number().optional(),
+				},
+				async execute(args: {
+					mode?: string;
+					content?: string;
+					query?: string;
+					type?: MemoryType;
+					scope?: MemoryScope;
+					memoryId?: string;
+					limit?: number;
+				}) {
+					const mode = args.mode || "help";
+
+					// Ensure DB is ready before any tool operation
+					await ensureInitialized();
+
+					try {
+						switch (mode) {
+							case "help": {
+								return JSON.stringify({
+									success: true,
+									message: "Memory Usage Guide (self-hosted, embedded LanceDB)",
+									commands: [
+										{ command: "add", description: "Store a new memory", args: ["content", "type?", "scope?"] },
+										{ command: "search", description: "Search memories", args: ["query", "scope?"] },
+										{ command: "profile", description: "View user memories", args: ["query?"] },
+										{ command: "list", description: "List recent memories", args: ["scope?", "limit?"] },
+										{ command: "forget", description: "Remove a memory", args: ["memoryId", "scope?"] },
+									],
+									scopes: {
+										user: "Cross-project preferences and knowledge",
+										project: "Project-specific knowledge (default)",
+									},
+									types: [
+										"project-brief",
+										"architecture",
+										"tech-context",
+										"product-context",
+										"session-summary",
+										"progress",
+										"project-config",
+										"error-solution",
+										"preference",
+										"learned-pattern",
+										"conversation",
+									],
+								});
+							}
+
+							case "add": {
+								if (!args.content) {
+									return JSON.stringify({ success: false, error: "content is required for add mode" });
+								}
+
+							const sanitizedContent = stripPrivateContent(args.content);
+								if (isFullyPrivate(args.content)) {
+									return JSON.stringify({ success: false, error: "Cannot store fully private content" });
+								}
+
+								const scope = args.scope || "project";
+								const containerTag = scope === "user" ? tags.user : tags.project;
+
+							const results = await store.ingest(
+									[{ role: "user", content: sanitizedContent }],
+									containerTag,
+									{ metadata: args.type ? { type: args.type } : {} },
+								);
+
+								const first = results.find(
+									(r) => r.event === "ADD" || r.event === "UPDATE"
+								) ?? results[0];
+
+								const id = first?.id ?? `mem-${Date.now()}`;
+								return JSON.stringify({ success: true, message: `Memory added to ${scope} scope`, id, scope, type: args.type });
+							}
+
+							case "search": {
+								if (!args.query) {
+									return JSON.stringify({ success: false, error: "query is required for search mode" });
+								}
+
+								const scope = args.scope;
+
+								if (scope === "user") {
+									const result = await searchMemories(args.query, tags.user);
+									return formatSearchResults(args.query, scope, result, args.limit);
+								}
+
+								if (scope === "project") {
+									const result = await searchMemories(args.query, tags.project);
+									return formatSearchResults(args.query, scope, result, args.limit);
+								}
+
+								// No scope = search both
+								const [userResult, projectResult] = await Promise.all([
+									searchMemories(args.query, tags.user),
+									searchMemories(args.query, tags.project),
+								]);
+
+								const combined = [
+									...(userResult.results || []).map((r) => ({ ...r, scope: "user" as const })),
+									...(projectResult.results || []).map((r) => ({ ...r, scope: "project" as const })),
+								].sort((a, b) => b.similarity - a.similarity);
+
+								return JSON.stringify({
+									success: true,
+									query: args.query,
+									count: combined.length,
+									results: combined.slice(0, args.limit || 10).map((r) => ({
+										id: r.id,
+										content: r.memory,
+										similarity: Math.round(r.similarity * 100),
+										scope: r.scope,
+									})),
+								});
+							}
+
+							case "profile": {
+								const result = await getProfile(tags.user);
+								if (!result.success) {
+									return JSON.stringify({ success: false, error: "Failed to get profile" });
+								}
+								return JSON.stringify({
+									success: true,
+									profile: {
+										memories: result.profile?.static || [],
+									},
+								});
+							}
+
+							case "list": {
+								const scope = args.scope || "project";
+								const limit = args.limit || 20;
+								const containerTag = scope === "user" ? tags.user : tags.project;
+
+								const result = await listMemories(containerTag, limit);
+								if (!result.success) {
+									return JSON.stringify({ success: false, error: "Failed to list memories" });
+								}
+
+								return JSON.stringify({
+									success: true,
+									scope,
+									count: result.memories.length,
+									memories: result.memories.map((m) => ({
+										id: m.id,
+										content: m.summary,
+										createdAt: m.createdAt,
+										metadata: m.metadata,
+									})),
+								});
+							}
+
+							case "forget": {
+								if (!args.memoryId) {
+									return JSON.stringify({ success: false, error: "memoryId is required for forget mode" });
+								}
+
+							await store.deleteMemory(args.memoryId);
+
+								return JSON.stringify({
+									success: true,
+									message: `Memory ${args.memoryId} deleted`,
+								});
+							}
+
+							default:
+								return JSON.stringify({ success: false, error: `Unknown mode: ${mode}` });
+						}
+					} catch (error) {
+						return JSON.stringify({
+							success: false,
+							error: error instanceof Error ? error.message : String(error),
+						});
+					}
+				},
+			}),
+		},
+
+		event: async (input: { event: { type: string; properties?: unknown } }) => {
+			// Run compaction check
+			if (compactionHook) {
+				await compactionHook.event(input);
+			}
+
+			// Clean up session cache on session deletion to prevent memory leaks
+			if (input.event.type === "session.deleted") {
+				const props = input.event.properties as Record<string, unknown> | undefined;
+				const sessionInfo = props?.info as { id?: string } | undefined;
+				if (sessionInfo?.id) {
+					sessionCaches.delete(sessionInfo.id);
+					log("event: session cache cleaned up", { sessionID: sessionInfo.id });
+				}
+			}
+
+			if (!configured) return;
+
+			// Ensure DB is initialized for event processing
+			await ensureInitialized();
+
+			// Capture streaming assistant text via message.part.updated
+			if (input.event.type === "message.part.updated") {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const part = (input.event.properties as any)?.part;
+				if (
+					part &&
+					part.type === "text" &&
+					!part.synthetic &&
+					typeof part.text === "string" && part.text.trim() &&
+					part.sessionID && part.messageID
+				) {
+					updateAssistantTextBuffer(part.sessionID as string, part.messageID as string, part.text as string);
+				}
+			}
+
+			// Auto-save: fire when an assistant message finishes with a terminal reason
+			if (autoSaveHook && input.event.type === "message.updated") {
+				const props = input.event.properties as Record<string, unknown> | undefined;
+				const info = props?.info as Record<string, unknown> | undefined;
+				if (
+					info &&
+					info.role === "assistant" &&
+					typeof info.finish === "string" &&
+					info.finish !== "tool-calls" &&
+					!info.summary &&
+					info.sessionID &&
+					info.id
+				) {
+					log("auto-save: terminal finish detected", { finish: info.finish, sessionID: info.sessionID });
+
+					const bufferedText = popAssistantText(info.sessionID as string, info.id as string);
+					if (bufferedText) {
+						injectFinalAssistantMessage({
+							// eslint-disable-next-line @typescript-eslint/no-explicit-any
+							info: info as any,
+							parts: [{
+								id: `buffered-text-${info.id}`,
+								sessionID: info.sessionID as string,
+								messageID: info.id as string,
+								type: "text",
+								text: bufferedText,
+							}],
+						});
+					} else {
+						log("auto-save: no buffered text for final message (may have been empty or tool-only)", {
+							sessionID: info.sessionID,
+							messageID: info.id,
+						});
+					}
+
+					await autoSaveHook.onSessionIdle(info.sessionID as string);
+				}
+			}
+		},
+	};
+};

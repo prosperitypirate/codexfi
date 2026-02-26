@@ -8,7 +8,7 @@
  * for cosine similarity tests).
  */
 
-import { EMBEDDING_DIMS } from "../../../plugin-v2/src/config.js";
+import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 
 /**
  * Generate a deterministic pseudo-random vector from text.
