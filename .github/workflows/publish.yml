@@ -1,9 +1,15 @@
-name: Publish to npm
+name: Publish to npm (manual)
 
+# Manual fallback — prefer release-please.yml for automated releases.
+# Use this only if you need to re-publish a specific version.
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Dry run (skip actual publish)"
+        required: false
+        default: "false"
+        type: boolean
 
 permissions:
   id-token: write # Required for npm OIDC trusted publishing
@@ -16,7 +22,7 @@ jobs:
       run:
         working-directory: plugin
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -40,6 +46,5 @@ jobs:
         run: npm pack --dry-run
 
       - name: Publish to npm
+        if: ${{ inputs.dry-run == 'false' }}
         run: npm publish --access public --provenance
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
