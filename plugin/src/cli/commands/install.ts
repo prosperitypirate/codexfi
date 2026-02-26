@@ -3,14 +3,17 @@
  * and create slash commands.
  *
  * Steps:
- *   1. Resolve the plugin's absolute path from the CLI binary location.
- *   2. Find or create the OpenCode config (~/.config/opencode/opencode.json[c]).
- *   3. Register the plugin's file:// URI in the config's `plugin` array.
- *   4. Prompt for API keys interactively and store in ~/.config/opencode/codexfi.jsonc.
- *   5. Create the /memory-init slash command in ~/.config/opencode/command/.
- *   6. Print next-steps guidance.
+ *   1. Register the npm package name "codexfi" in the OpenCode config.
+ *   2. Migrate any stale file:// entries from previous installs.
+ *   3. Prompt for API keys interactively and store in ~/.config/opencode/codexfi.jsonc.
+ *   4. Create the /memory-init slash command in ~/.config/opencode/command/.
+ *   5. Print next-steps guidance.
  *
- * API key storage follows the established OpenCode ecosystem pattern (Supermemory, etc.):
+ * OpenCode auto-installs npm plugins at startup and caches them in
+ * ~/.cache/opencode/node_modules/. This means users always get the
+ * latest version without manual updates.
+ *
+ * API key storage follows the established OpenCode ecosystem pattern:
  *   - Keys are stored in a plugin-specific JSONC config file (~/.config/opencode/codexfi.jsonc)
  *   - Environment variables always take precedence over config file values
  *   - Install command prompts interactively and writes to the config file
@@ -27,7 +30,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { pathToFileURL } from "node:url";
 
 import type { ParsedArgs } from "../args.js";
 import { getFlag } from "../args.js";
@@ -213,22 +215,16 @@ function findOpencodeConfig(): string | null {
 }
 
 /**
- * Add the plugin URI to an existing OpenCode config file.
+ * Add the plugin npm package name to an existing OpenCode config file.
  *
- * Parses JSONC (strips comments, then JSON.parse), checks for duplicates, adds the plugin URI,
- * and writes back as formatted JSON.
+ * Also migrates any stale file:// entries from previous installs
+ * (e.g. bunx temp paths) to the npm package name.
  *
  * @returns true if successful, false on parse/write failure.
  */
-function addPluginToConfig(configPath: string, pluginUri: string): boolean {
+function addPluginToConfig(configPath: string, packageName: string): boolean {
 	try {
 		const raw = readFileSync(configPath, "utf-8");
-
-		// Already registered — nothing to do
-		if (raw.includes(pluginUri)) {
-			fmt.success(`Plugin already registered in ${fmt.dim(configPath)}`);
-			return true;
-		}
 
 		// Parse JSONC — strip comments then JSON.parse (Bun.JSONC not available in <=1.2.x)
 		let config: Record<string, unknown>;
@@ -240,13 +236,43 @@ function addPluginToConfig(configPath: string, pluginUri: string): boolean {
 			return false;
 		}
 
-		// Add plugin to array
-		const plugins = (config.plugin as string[]) ?? [];
-		plugins.push(pluginUri);
+		let plugins = (config.plugin as string[]) ?? [];
+		let migrated = false;
+
+		// Remove stale file:// entries pointing to codexfi (bunx temp paths, old installs)
+		const staleEntries = plugins.filter(
+			(p) => p.startsWith("file://") && p.includes("codexfi"),
+		);
+		if (staleEntries.length > 0) {
+			plugins = plugins.filter((p) => !staleEntries.includes(p));
+			migrated = true;
+			for (const entry of staleEntries) {
+				fmt.info(`Migrated stale entry: ${fmt.dim(entry)}`);
+			}
+		}
+
+		// Already registered — nothing to do (after migration cleanup)
+		if (plugins.includes(packageName)) {
+			config.plugin = plugins;
+			if (migrated) {
+				writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+				fmt.success(`Migrated to npm package name in ${fmt.dim(configPath)}`);
+			} else {
+				fmt.success(`Plugin already registered in ${fmt.dim(configPath)}`);
+			}
+			return true;
+		}
+
+		// Add npm package name
+		plugins.push(packageName);
 		config.plugin = plugins;
 
 		writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-		fmt.success(`Registered plugin in ${fmt.dim(configPath)}`);
+		if (migrated) {
+			fmt.success(`Migrated and registered plugin in ${fmt.dim(configPath)}`);
+		} else {
+			fmt.success(`Registered plugin in ${fmt.dim(configPath)}`);
+		}
 		return true;
 	} catch (err) {
 		fmt.error(`Failed to update config: ${err}`);
@@ -255,15 +281,15 @@ function addPluginToConfig(configPath: string, pluginUri: string): boolean {
 }
 
 /**
- * Create a fresh OpenCode config with just the plugin URI.
+ * Create a fresh OpenCode config with just the plugin npm package name.
  */
-function createNewConfig(pluginUri: string): boolean {
+function createNewConfig(packageName: string): boolean {
 	try {
 		mkdirSync(OPENCODE_CONFIG_DIR, { recursive: true });
 		const configPath = join(OPENCODE_CONFIG_DIR, "opencode.json");
 		const config = {
 			"$schema": "https://opencode.ai/config.json",
-			plugin: [pluginUri],
+			plugin: [packageName],
 		};
 		writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 		fmt.success(`Created ${fmt.dim(configPath)}`);
@@ -387,21 +413,14 @@ function resolveExistingExtraction(args: ParsedArgs): {
 
 // ── Main ────────────────────────────────────────────────────────────────────────
 
+/** The npm package name used to register with OpenCode. */
+const NPM_PACKAGE_NAME = "codexfi";
+
 export async function run(args: ParsedArgs): Promise<void> {
 	// --no-tui: suppress all interactive prompts (for LLM agent-driven installs)
 	noTui = args.booleans["tui"] === false;
 
 	fmt.header("Install");
-
-	// Resolve plugin root: cli.ts is at src/cli/commands/, so 3 levels up = package root.
-	// At runtime (compiled), dist/cli.js is 1 level below root. We handle both.
-	const scriptDir = import.meta.dirname ?? process.cwd();
-	const pluginRoot = resolvePluginRoot(scriptDir);
-	// pathToFileURL() produces correct file:///absolute/path (3 slashes for POSIX)
-	const pluginUri = pathToFileURL(pluginRoot).toString();
-
-	fmt.info(`Plugin path: ${fmt.blue(pluginRoot)}`);
-	fmt.blank();
 
 	// ── Step 1: Register in OpenCode config ─────────────────────────────────────
 	console.log(fmt.bold("  Step 1") + fmt.dim(" — Register plugin with OpenCode"));
@@ -409,8 +428,8 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 	const existingConfig = findOpencodeConfig();
 	const configOk = existingConfig
-		? addPluginToConfig(existingConfig, pluginUri)
-		: createNewConfig(pluginUri);
+		? addPluginToConfig(existingConfig, NPM_PACKAGE_NAME)
+		: createNewConfig(NPM_PACKAGE_NAME);
 
 	if (!configOk) {
 		fmt.blank();
@@ -481,20 +500,4 @@ export async function run(args: ParsedArgs): Promise<void> {
 	fmt.blank();
 }
 
-/**
- * Resolve the plugin package root from the CLI script's location.
- *
- * Handles both development (src/cli/commands/) and compiled (dist/) paths.
- */
-function resolvePluginRoot(scriptDir: string): string {
-	// Development: scriptDir = .../plugin/src/cli/commands → go up 3 levels
-	if (scriptDir.endsWith("cli/commands") || scriptDir.includes("src/cli")) {
-		return join(scriptDir, "..", "..", "..");
-	}
-	// Compiled: scriptDir = .../plugin/dist → go up 1 level
-	if (scriptDir.endsWith("dist")) {
-		return join(scriptDir, "..");
-	}
-	// Fallback: assume CWD is the plugin root
-	return process.cwd();
-}
+
