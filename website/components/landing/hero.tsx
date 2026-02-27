@@ -6,6 +6,7 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import { fadeInUp, staggerContainer } from "@/lib/animations";
 import { MemoryFlowSVG } from "@/components/svg/memory-flow";
 import { InstallBlock } from "@/components/landing/install-block";
+import { OpenCodeWordmark } from "@/components/svg/opencode-wordmark";
 
 export function Hero() {
   return (
@@ -17,6 +18,19 @@ export function Hero() {
         variants={staggerContainer}
         className="flex max-w-4xl flex-col items-center"
       >
+        {/* OpenCode exclusive badge */}
+        <motion.a
+          variants={fadeInUp}
+          href="https://opencode.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Exclusively for OpenCode"
+          className="mb-8 inline-flex items-center gap-3 rounded-full border border-border bg-muted/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+        >
+          <span aria-hidden="true" className="text-xs uppercase tracking-widest text-muted-foreground/70">Exclusively for</span>
+          <OpenCodeWordmark height={16} width={89} />
+        </motion.a>
+
         <motion.h1
           variants={fadeInUp}
           className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"

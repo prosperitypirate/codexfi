@@ -28,17 +28,65 @@ Live at **[codexfi.com](https://codexfi.com)**.
 | Package manager | [pnpm](https://pnpm.io/) |
 | Node | 22+ required |
 
-## Development
+## Local development
+
+### Prerequisites
+
+- **Node 22** — use [nvm](https://github.com/nvm-sh/nvm) (`.nvmrc` is included)
+- **pnpm 9+** — install via `npm install -g pnpm` or `corepack enable`
 
 ```bash
-pnpm install
-pnpm dev      # http://localhost:3000
+# Run from the website/ directory
+source ~/.nvm/nvm.sh && nvm use && pnpm install && pnpm dev
+# → http://localhost:3000
 ```
 
-## Build
+> The `.nvmrc` lives in `website/` — `nvm use` must be run from that directory, not the repo root.
+>
+> If you don't have nvm, install Node 22 directly from [nodejs.org](https://nodejs.org/).
+
+### Build
 
 ```bash
 pnpm build    # must produce zero errors and zero warnings
+```
+
+A clean build with zero warnings is required before merging any PR.
+
+---
+
+## Developing with OpenCode
+
+This project is built and maintained using [OpenCode](https://opencode.ai) as the primary coding agent. If you're using OpenCode to work on the website, here's what the agent needs to know.
+
+### Key rules for the agent
+
+- **Package manager:** always use `pnpm` for the website — never `npm` or `bun`
+- **Node version:** Node 22 is required — run `nvm use` before any commands
+- **Build gate:** every change must pass `pnpm build` with zero warnings before committing
+- **No direct pushes to `main`** — always branch + PR
+- **Squash commit prefix:** use `feat(website):` or `fix(website):` for website-only changes (does not trigger an npm release)
+
+### Starting a session
+
+When opening OpenCode in this repo, give it this context up front:
+
+```
+We are working on the codexfi.com website (website/ directory).
+Package manager: pnpm. Node: 22 (run `nvm use` first).
+Dev server: pnpm dev → http://localhost:3000
+Build check: pnpm build (must be zero warnings).
+Do not push to main — branch + PR only.
+```
+
+### Shell environment note
+
+OpenCode's bash tool runs in a **non-interactive shell** — it does not source `~/.zshrc` or `~/.zprofile`. This means `nvm` and any PATH additions from your shell profile are not available by default.
+
+To ensure the correct Node version and pnpm are available, run from `website/`:
+
+```bash
+source ~/.nvm/nvm.sh && nvm use && pnpm dev
 ```
 
 ## Structure

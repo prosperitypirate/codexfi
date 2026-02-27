@@ -3,3 +3,4 @@
 node_modules/
 out/
 .source/
+next-env.d.ts
