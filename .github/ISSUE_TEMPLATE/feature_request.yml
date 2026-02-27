@@ -23,9 +23,9 @@ body:
     attributes:
       label: Component
       options:
-        - Backend (FastAPI / LanceDB)
         - Plugin (OpenCode integration)
-        - Frontend (dashboard)
+        - Memory store (LanceDB / embeddings)
+        - Website (codexfi.com)
         - Benchmark
         - CI/CD
         - Other

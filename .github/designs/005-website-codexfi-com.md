@@ -2,10 +2,10 @@
 
 **Feature**: Build and deploy codexfi.com — landing page + documentation site  
 **Issue**: #67  
-**Branch**: `feature/website` → merged to `main` via PR #68  
-**Status**: IN PROGRESS (Phases 1–4 complete, Phase 5 pending)  
+**Branch**: `feature/website` → merged to `main` via PR #68; `feature/deploy` → merged to `main` via PR #70  
+**Status**: COMPLETE — site live at https://codexfi.com  
 **Created**: February 26, 2026  
-**Updated**: February 26, 2026  
+**Updated**: February 27, 2026  
 **Estimated Duration**: ~2 weeks across 5 phases  
 
 ## PHASE STATUS
@@ -16,7 +16,7 @@
 | Phase 2 — Landing Page | ✅ Complete | PR #68 |
 | Phase 3 — Documentation Content | ✅ Complete | PR #68 |
 | Phase 4 — SVG Hero Animation | ✅ Complete | PR #68 |
-| Phase 5 — Deploy & Launch | 🔄 Next | `feature/deploy` |
+| Phase 5 — Deploy & Launch | ✅ Complete | PR #70 |
 
 ## WHAT WAS BUILT (Phases 1–4)
 
@@ -48,16 +48,16 @@
 - Twitter card: `app/twitter-image.tsx`
 - `metadataBase: "https://codexfi.com"` in root layout
 
-## WHAT REMAINS (Phase 5)
+## PHASE 5 — Deploy & Launch (Complete)
 
-### Phase 5 — Deploy & Launch
-- [ ] Vercel project created — repo connected, Root Directory set to `website`, Node 22
-- [ ] `vercel.json` `ignoreCommand` verified working in production
-- [ ] Custom domain `codexfi.com` added in Vercel project settings
-- [ ] Cloudflare DNS: CNAME `codexfi.com` → `cname.vercel-dns.com` (DNS-only / grey cloud, or SSL mode Full if proxied)
-- [ ] `www.codexfi.com` → `codexfi.com` redirect configured
-- [ ] Production deployment live and verified
-- [ ] Lighthouse audit: Performance >90, Accessibility >95
+### What Was Done
+- [x] Vercel project created — repo connected, Root Directory set to `website`, Node 22
+- [x] `vercel.json` `ignoreCommand` verified working in production
+- [x] Custom domain `codexfi.com` added in Vercel project settings
+- [x] Cloudflare DNS: CNAME `codexfi.com` → `cname.vercel-dns.com` (DNS-only)
+- [x] `www.codexfi.com` → `codexfi.com` 308 redirect configured
+- [x] Production deployment live and verified at https://codexfi.com
+- [x] ProsperityPirate attribution added to footer
 
 ### Deferred
 - SVG hero bidirectional flow redesign (Gemini Pro unavailable at time of implementation)

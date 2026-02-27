@@ -22,5 +22,5 @@ Closes #
 
 - [ ] Label(s) added
 - [ ] Issue linked above
-- [ ] Benchmark run completed (if touching retrieval, backend, or prompts)
+- [ ] Benchmark run completed (if touching retrieval, memory store, or prompts)
 - [ ] No secrets or hardcoded paths introduced
