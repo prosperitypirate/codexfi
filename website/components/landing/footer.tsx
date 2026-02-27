@@ -3,7 +3,7 @@ import Link from "next/link";
 const footerLinks = {
   Product: [
     { label: "Documentation", href: "/docs" },
-    { label: "Installation", href: "/docs" },
+    { label: "Installation", href: "/docs/installation" },
     { label: "Changelog", href: "https://github.com/prosperitypirate/codexfi/blob/main/plugin/CHANGELOG.md", external: true },
   ],
   Resources: [
