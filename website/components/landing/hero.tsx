@@ -19,7 +19,7 @@ export function Hero() {
       >
         <motion.h1
           variants={fadeInUp}
-          className="mb-6 text-4xl font-bold tracking-tight text-[#f5f5f5] sm:text-5xl md:text-6xl"
+          className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"
         >
           Persistent memory for{" "}
           <span className="text-gradient-brand">AI coding agents</span>
@@ -27,7 +27,7 @@ export function Hero() {
 
         <motion.p
           variants={fadeInUp}
-          className="mb-10 max-w-2xl text-lg text-[#a0a0a0] sm:text-xl"
+          className="mb-10 max-w-2xl text-lg text-muted-foreground sm:text-xl"
         >
           Your AI remembers everything — architecture, decisions, patterns,
           progress — across every session, automatically.
@@ -49,7 +49,7 @@ export function Hero() {
             href="https://github.com/prosperitypirate/codexfi"
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-2 rounded-lg border border-[#2a2a2a] px-6 py-3 text-sm font-medium text-[#f5f5f5] transition-colors hover:bg-[#1a1a1a]"
+            className="inline-flex items-center gap-2 rounded-lg border border-border px-6 py-3 text-sm font-medium text-foreground transition-colors hover:bg-muted"
           >
             View on GitHub
             <ExternalLink className="h-4 w-4" />

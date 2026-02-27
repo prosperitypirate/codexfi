@@ -72,7 +72,7 @@ export function Features() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="mb-4 text-center text-3xl font-bold tracking-tight text-[#f5f5f5] sm:text-4xl"
+          className="mb-4 text-center text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
         >
           Everything your AI needs to remember
         </motion.h2>
@@ -81,7 +81,7 @@ export function Features() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-          className="mx-auto mb-14 max-w-2xl text-center text-[#a0a0a0]"
+          className="mx-auto mb-14 max-w-2xl text-center text-muted-foreground"
         >
           codexfi extracts, stores, and retrieves project knowledge
           automatically — so your AI agent has full context from day one.
@@ -95,15 +95,15 @@ export function Features() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true }}
               transition={{ duration: 0.4, delay: i * 0.07, ease: "easeOut" }}
-              className="group rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 transition-[border-color,box-shadow] hover:border-brand/30 hover:shadow-[0_0_30px_-10px_rgba(168,85,247,0.15)]"
+              className="group rounded-xl border border-border bg-card p-6 transition-[border-color,box-shadow] hover:border-brand/30 hover:shadow-[0_0_30px_-10px_rgba(168,85,247,0.15)]"
             >
               <div className="mb-4 inline-flex rounded-lg bg-brand/10 p-2.5">
                 <feature.icon className="h-5 w-5 text-brand" />
               </div>
-              <h3 className="mb-2 text-sm font-semibold text-[#f5f5f5]">
+              <h3 className="mb-2 text-sm font-semibold text-foreground">
                 {feature.title}
               </h3>
-              <p className="text-sm leading-relaxed text-[#a0a0a0]">
+              <p className="text-sm leading-relaxed text-muted-foreground">
                 {feature.description}
               </p>
             </motion.div>

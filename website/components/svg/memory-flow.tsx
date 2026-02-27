@@ -33,19 +33,18 @@ export function MemoryFlowSVG() {
           width="160"
           height="160"
           rx="12"
-          fill="#1a1a1a"
-          stroke="#2a2a2a"
+          className="fill-card stroke-border"
           strokeWidth="1"
         />
-        <text x="120" y="155" textAnchor="middle" fill="#f5f5f5" fontSize="14" fontWeight="600">
+        <text x="120" y="155" textAnchor="middle" className="fill-foreground" fontSize="14" fontWeight="600">
           Conversation
         </text>
-        <rect x="60" y="170" width="120" height="8" rx="4" fill="#2a2a2a" />
-        <rect x="60" y="186" width="90" height="8" rx="4" fill="#2a2a2a" />
-        <rect x="60" y="202" width="110" height="8" rx="4" fill="#2a2a2a" />
-        <rect x="60" y="218" width="80" height="8" rx="4" fill="#2a2a2a" />
-        <rect x="60" y="234" width="100" height="8" rx="4" fill="#2a2a2a" />
-        <rect x="60" y="250" width="70" height="8" rx="4" fill="#2a2a2a" />
+        <rect x="60" y="170" width="120" height="8" rx="4" className="fill-border" />
+        <rect x="60" y="186" width="90" height="8" rx="4" className="fill-border" />
+        <rect x="60" y="202" width="110" height="8" rx="4" className="fill-border" />
+        <rect x="60" y="218" width="80" height="8" rx="4" className="fill-border" />
+        <rect x="60" y="234" width="100" height="8" rx="4" className="fill-border" />
+        <rect x="60" y="250" width="70" height="8" rx="4" className="fill-border" />
       </g>
 
       {/* Flow arrow: extraction */}
@@ -78,12 +77,12 @@ export function MemoryFlowSVG() {
           width="180"
           height="200"
           rx="12"
-          fill="#1a1a1a"
+          className="fill-card"
           stroke="#a855f7"
           strokeWidth="1"
           strokeOpacity="0.4"
         />
-        <text x="400" y="135" textAnchor="middle" fill="#f5f5f5" fontSize="14" fontWeight="600">
+        <text x="400" y="135" textAnchor="middle" className="fill-foreground" fontSize="14" fontWeight="600">
           Memory Types
         </text>
         {[
@@ -149,14 +148,13 @@ export function MemoryFlowSVG() {
           width="160"
           height="140"
           rx="12"
-          fill="#1a1a1a"
-          stroke="#2a2a2a"
+          className="fill-card stroke-border"
           strokeWidth="1"
         />
-        <text x="670" y="165" textAnchor="middle" fill="#f5f5f5" fontSize="14" fontWeight="600">
+        <text x="670" y="165" textAnchor="middle" className="fill-foreground" fontSize="14" fontWeight="600">
           LanceDB
         </text>
-        <text x="670" y="183" textAnchor="middle" fill="#a0a0a0" fontSize="11">
+        <text x="670" y="183" textAnchor="middle" className="fill-muted-foreground" fontSize="11">
           vector database
         </text>
         {/* Vector dots cluster */}

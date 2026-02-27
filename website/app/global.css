@@ -10,8 +10,6 @@
   --color-brand: #a855f7;
   --color-brand-light: #c084fc;
   --color-brand-glow: rgba(168, 85, 247, 0.2);
-  --color-surface: #1a1a1a;
-  --color-surface-elevated: #1e1e1e;
   --color-terminal-green: #4ade80;
 
   --font-sans: var(--font-geist-sans), "Inter", system-ui, sans-serif;

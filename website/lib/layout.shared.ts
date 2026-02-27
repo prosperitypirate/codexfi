@@ -5,12 +5,6 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: "codexfi",
     },
-    links: [
-      {
-        text: "GitHub",
-        url: "https://github.com/prosperitypirate/codexfi",
-        external: true,
-      },
-    ],
+    githubUrl: "https://github.com/prosperitypirate/codexfi",
   };
 }

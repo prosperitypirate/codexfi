@@ -38,7 +38,7 @@ export function HowItWorks() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="mb-4 text-center text-3xl font-bold tracking-tight text-[#f5f5f5] sm:text-4xl"
+          className="mb-4 text-center text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
         >
           How it works
         </motion.h2>
@@ -47,7 +47,7 @@ export function HowItWorks() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
-          className="mx-auto mb-14 max-w-2xl text-center text-[#a0a0a0]"
+          className="mx-auto mb-14 max-w-2xl text-center text-muted-foreground"
         >
           Three steps. No ongoing maintenance. Your AI gets smarter with every
           session.
@@ -68,22 +68,22 @@ export function HowItWorks() {
                 {step.number}
               </div>
 
-              <div className="mb-3 inline-flex rounded-lg bg-[#1a1a1a] p-2.5">
-                <step.icon className="h-5 w-5 text-[#a0a0a0]" />
+              <div className="mb-3 inline-flex rounded-lg bg-card p-2.5">
+                <step.icon className="h-5 w-5 text-muted-foreground" />
               </div>
 
-              <h3 className="mb-2 text-lg font-semibold text-[#f5f5f5]">
+              <h3 className="mb-2 text-lg font-semibold text-foreground">
                 {step.title}
               </h3>
 
-              <p className="mb-4 text-sm leading-relaxed text-[#a0a0a0]">
+              <p className="mb-4 text-sm leading-relaxed text-muted-foreground">
                 {step.description}
               </p>
 
               {step.code && (
-                <div className="rounded-lg border border-[#2a2a2a] bg-[#111111] px-4 py-2 font-mono text-xs">
+                <div className="rounded-lg border border-border bg-secondary px-4 py-2 font-mono text-xs">
                   <span className="text-terminal-green select-none">$ </span>
-                  <span className="text-[#f5f5f5]">{step.code}</span>
+                  <span className="text-foreground">{step.code}</span>
                 </div>
               )}
             </motion.div>

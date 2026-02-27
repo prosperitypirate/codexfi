@@ -15,12 +15,12 @@ export function InstallBlock() {
   }
 
   return (
-    <div className="group relative inline-flex items-center gap-3 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-5 py-3 font-mono text-sm transition-colors hover:border-[#3a3a3a]">
+    <div className="group relative inline-flex items-center gap-3 rounded-lg border border-border bg-card px-5 py-3 font-mono text-sm transition-colors hover:border-muted-foreground/30">
       <span className="text-terminal-green select-none">$</span>
-      <span className="text-[#f5f5f5]">{INSTALL_COMMAND}</span>
+      <span className="text-foreground">{INSTALL_COMMAND}</span>
       <button
         onClick={handleCopy}
-        className="ml-2 rounded p-1 text-[#a0a0a0] transition-colors hover:bg-[#2a2a2a] hover:text-[#f5f5f5]"
+        className="ml-2 rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         aria-label={copied ? "Copied!" : "Copy install command"}
       >
         {copied ? (

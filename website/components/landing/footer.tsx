@@ -19,15 +19,15 @@ const footerLinks = {
 
 export function Footer() {
   return (
-    <footer className="border-t border-[#2a2a2a] px-4 py-12">
+    <footer className="border-t border-border px-4 py-12">
       <div className="mx-auto max-w-6xl">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           {/* Brand */}
           <div>
-            <p className="mb-2 text-sm font-semibold text-[#f5f5f5]">
+            <p className="mb-2 text-sm font-semibold text-foreground">
               codexfi
             </p>
-            <p className="text-sm text-[#a0a0a0]">
+            <p className="text-sm text-muted-foreground">
               Persistent memory for AI coding agents.
             </p>
           </div>
@@ -35,7 +35,7 @@ export function Footer() {
           {/* Link columns */}
           {Object.entries(footerLinks).map(([section, links]) => (
             <div key={section}>
-              <p className="mb-3 text-sm font-semibold text-[#f5f5f5]">
+              <p className="mb-3 text-sm font-semibold text-foreground">
                 {section}
               </p>
               <ul className="space-y-2">
@@ -46,14 +46,14 @@ export function Footer() {
                         href={link.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-sm text-[#a0a0a0] transition-colors hover:text-[#f5f5f5]"
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
                         {link.label}
                       </a>
                     ) : (
                       <Link
                         href={link.href}
-                        className="text-sm text-[#a0a0a0] transition-colors hover:text-[#f5f5f5]"
+                        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
                       >
                         {link.label}
                       </Link>
@@ -65,7 +65,7 @@ export function Footer() {
           ))}
         </div>
 
-        <div className="mt-10 border-t border-[#2a2a2a] pt-6 text-center text-xs text-[#a0a0a0]">
+        <div className="mt-10 border-t border-border pt-6 text-center text-xs text-muted-foreground">
           &copy; {new Date().getFullYear()} codexfi &middot; MIT License
         </div>
       </div>
