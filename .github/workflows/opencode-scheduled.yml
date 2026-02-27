@@ -1,12 +1,7 @@
 name: opencode-scheduled
 
 on:
-  # Every Monday at 9am UTC
-  schedule:
-    - cron: "0 9 * * 1"
-
-  # Also triggerable manually from the Actions tab
-  workflow_dispatch:
+  workflow_dispatch: # disabled — enable manually if needed
     inputs:
       task:
         description: "What should OpenCode scan or do?"

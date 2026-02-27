@@ -1,8 +1,7 @@
 name: opencode-triage
 
 on:
-  issues:
-    types: [opened]
+  workflow_dispatch: # disabled — enable manually if needed
 
 jobs:
   # Gate: check account age before allocating a runner for the triage job
