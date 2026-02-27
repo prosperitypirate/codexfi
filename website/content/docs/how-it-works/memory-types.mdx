@@ -1,0 +1,105 @@
+---
+title: Memory Types
+description: The 11 typed memory categories that codexfi uses to organize project and user knowledge.
+---
+
+# Memory Types
+
+codexfi uses a typed memory system to organize knowledge into structured categories. Each memory is assigned a type during extraction, which determines how it is stored, aged, and displayed in the `[MEMORY]` block.
+
+## All memory types
+
+| Type | Scope | What it captures |
+|------|-------|-----------------|
+| `project-brief` | Project | Core project definition, goals, scope |
+| `architecture` | Project | System design, patterns, component relationships |
+| `tech-context` | Project | Stack, tools, build commands, constraints |
+| `product-context` | Project | Why the project exists, problems solved, target users |
+| `progress` | Project | Current state of work — only the latest entry survives |
+| `session-summary` | Project | What was worked on in a session; condensed over time |
+| `error-solution` | Project | Bug fixes, gotchas, approaches that worked or failed |
+| `preference` | User | Cross-project personal preferences |
+| `learned-pattern` | Project | Reusable patterns condensed from past sessions |
+| `project-config` | Project | Config preferences, run commands, environment setup |
+| `conversation` | Project | Raw conversation context (rarely used directly) |
+
+## Structured types
+
+Some types receive special treatment during deduplication and contradiction detection. These **structural types** use wider thresholds because they represent evolving understanding rather than atomic facts:
+
+- `project-brief`
+- `architecture`
+- `tech-context`
+- `product-context`
+- `project-config`
+
+Structural types use a deduplication distance of 0.25 (vs. 0.12 for general types), allowing the system to update existing structural memories more aggressively as understanding evolves.
+
+## How types map to the [MEMORY] block
+
+The `[MEMORY]` block is organized into named sections, each populated by specific memory types:
+
+| Section | Memory types |
+|---------|-------------|
+| **Project Brief** | `project-brief`, `project-config` |
+| **Architecture** | `architecture` |
+| **Tech Context** | `tech-context` |
+| **Product Context** | `product-context` |
+| **Progress & Status** | `progress` |
+| **Last Session** | `session-summary`, `conversation` |
+| **User Preferences** | `preference` (user-scoped) |
+| **Relevant to Current Task** | Any type (semantic search results) |
+
+## Aging rules
+
+### Progress
+
+Only the **latest** `progress` memory survives. When a new progress memory is stored, all older progress entries are deleted. This ensures the "Progress & Status" section always reflects the current state, not historical snapshots.
+
+### Session summaries
+
+`session-summary` memories are capped at **3 per project**. When a new summary would exceed this limit:
+
+1. The oldest summary is sent to the LLM for condensation
+2. The LLM produces a compact `learned-pattern` memory
+3. The original summary is deleted
+
+This keeps session context manageable while preserving distilled knowledge from older sessions.
+
+### Contradiction detection
+
+When a new memory is stored, the system searches for semantically nearby existing memories and asks the LLM: "Does this new fact supersede any of these existing facts?"
+
+Superseded memories are marked with a `superseded_by` field pointing to the newer memory. They are excluded from search results and the `[MEMORY]` block but remain in the database for audit purposes.
+
+Types that skip contradiction detection: `session-summary` and `conversation`.
+
+## Scopes
+
+Every memory belongs to one of two scopes:
+
+### Project scope (default)
+
+Project-scoped memories are tied to a specific directory. The project tag is a deterministic hash of the directory path, so the same directory always maps to the same project.
+
+Project memories include: architecture decisions, tech stack, progress, error solutions, and everything specific to that codebase.
+
+### User scope
+
+User-scoped memories are tied to your identity (derived from git email). They follow you across all projects.
+
+User memories include: coding preferences, communication style, tool preferences, and workflow patterns.
+
+When the agent stores a memory with `scope: "user"`, it becomes available in every project you work on.
+
+## Explicit vs. automatic
+
+Most memories are created **automatically** by the extraction pipeline after each assistant turn. The LLM reads the conversation and identifies facts worth remembering, assigning appropriate types.
+
+You can also create memories **explicitly** by telling the agent:
+
+- "Remember that we use JWT in httpOnly cookies"
+- "Save this: always run tests before committing"
+- "Note that the API rate limit is 100 req/min"
+
+These trigger the memory tool directly with `mode: "add"`. See the [Memory Tool API](/docs/api-reference/memory-tool-api) for details.

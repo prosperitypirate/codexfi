@@ -1,5 +1,6 @@
 import { source } from "@/lib/source";
 import { DocsPage, DocsBody } from "fumadocs-ui/page";
+import defaultMdxComponents from "fumadocs-ui/mdx";
 import { notFound } from "next/navigation";
 
 export default async function Page(props: {
@@ -13,7 +14,7 @@ export default async function Page(props: {
   return (
     <DocsPage toc={page.data.toc}>
       <DocsBody>
-        <MDX />
+        <MDX components={{ ...defaultMdxComponents }} />
       </DocsBody>
     </DocsPage>
   );

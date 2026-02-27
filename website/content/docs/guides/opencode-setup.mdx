@@ -1,0 +1,153 @@
+---
+title: OpenCode Setup Guide
+description: Optimize your OpenCode configuration for codexfi with AGENTS.md instructions and slash commands.
+---
+
+# OpenCode Setup Guide
+
+codexfi works immediately after installation, but adding agent instructions significantly improves how the AI interacts with the memory system. This guide covers the recommended setup.
+
+## AGENTS.md configuration
+
+OpenCode reads `~/.config/opencode/AGENTS.md` and injects it into every session. Adding codexfi instructions here tells the agent how to interpret the `[MEMORY]` block and use the memory tool effectively.
+
+Create or append to `~/.config/opencode/AGENTS.md`:
+
+````markdown
+# Memory System
+
+You have a **persistent, self-hosted memory system** that works automatically
+in the background. It uses LanceDB + Voyage AI embeddings, running locally.
+
+## How it works (fully automatic — no user action needed)
+
+**On every LLM call**, a `[MEMORY]` block is rebuilt and injected into the
+system prompt. It contains:
+- **Project Brief** — what the project is, its purpose
+- **Architecture** — system design, component structure
+- **Tech Context** — stack, tools, languages, dependencies
+- **Product Context** — features, goals, product decisions
+- **Progress & Status** — current state, what's done, what's next
+- **Last Session** — summary of the previous conversation
+- **User Preferences** — personal cross-project preferences
+- **Relevant to Current Task** — semantically matched memories
+
+**After every assistant turn**, the plugin extracts atomic typed facts from
+the last 8 messages and stores them.
+
+**Per-turn semantic refresh**: The "Relevant to Current Task" section is
+re-searched against the current user message on every turn.
+
+**Compaction survival**: Memory lives in the system prompt, which is never
+compacted.
+
+**Privacy**: Content wrapped in `<private>...</private>` tags is stripped
+before extraction.
+
+## Your role
+
+- **Read and use the `[MEMORY]` block** — treat it as ground truth for the
+  current project state.
+- **Never ask the user** to "save", "load", or manage memory — it is fully
+  automatic.
+- **Never announce** that you are saving or loading memory.
+- **When the user explicitly asks you to remember something**, use the
+  `memory` tool with `mode: "add"` immediately.
+
+## Memory tool
+
+Use it when:
+- The user explicitly asks you to remember something
+- You discover something important mid-session (key decision, tricky bug fix,
+  strong preference)
+- You need context not in the `[MEMORY]` block — search proactively on task
+  switches
+
+**Scopes:** `project` (default) or `user` (cross-project preferences)
+
+**Types:** `project-brief`, `architecture`, `tech-context`, `product-context`,
+`progress`, `project-config`, `error-solution`, `preference`, `learned-pattern`
+
+**Examples:**
+```
+memory({ mode: "add", content: "Auth uses JWT in httpOnly cookies",
+  scope: "project", type: "architecture" })
+memory({ mode: "search", query: "how is authentication handled" })
+memory({ mode: "list", scope: "project", limit: 10 })
+```
+````
+
+## What the instructions do
+
+Without AGENTS.md instructions, the agent may:
+
+- Ignore the `[MEMORY]` block and re-ask questions that are already answered
+- Announce "I'm saving this to memory" (confusing to users)
+- Not use the memory tool when explicitly asked to remember something
+- Fail to search memories proactively when switching tasks
+
+With the instructions, the agent:
+
+- Treats the `[MEMORY]` block as authoritative project context
+- Saves memories silently and automatically
+- Uses the memory tool immediately when asked to remember something
+- Searches proactively when it encounters unfamiliar references
+
+## Slash commands
+
+The `codexfi install` command creates a `/memory-init` slash command. Use it in a new project to guide the agent through structured memory initialization:
+
+```
+/memory-init
+```
+
+The command walks the agent through:
+
+1. **Check existing memories** — list what's already stored
+2. **Detect project type** — existing codebase vs. blank project
+3. **Explore and extract** (existing codebase) — read key files and save memories per category
+4. **Ask founding questions** (blank project) — gather project goals, tech stack, constraints
+5. **User preferences** — communication style, workflow preferences
+6. **Confirm** — list all stored memories for review
+
+## OpenCode config
+
+The plugin is registered in `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "plugin": ["codexfi"]
+}
+```
+
+OpenCode resolves `"codexfi"` as an npm package, auto-installs it at startup, and caches it in `~/.cache/opencode/node_modules/`.
+
+## Privacy tips
+
+- Wrap sensitive content in `<private>...</private>` tags to exclude from extraction
+- API keys, passwords, and secrets in code blocks are not treated specially — use private tags if you discuss them in conversation
+- All data stays local; the only outbound calls are to Voyage AI (embedding) and your extraction provider (LLM)
+- Memory data is stored at `~/.codexfi/lancedb/` — the database is yours to inspect or delete
+
+## Troubleshooting
+
+### Memory not appearing
+
+1. Verify the plugin is registered: check `"codexfi"` is in the `plugin` array in `~/.config/opencode/opencode.json`
+2. Check API keys: run `bunx codexfi status`
+3. Restart OpenCode after any configuration changes
+4. Check logs: `tail -f ~/.codexfi.log`
+
+### Stale memories
+
+If memories are outdated, the contradiction detection system should handle this automatically. You can also tell the agent: "Forget that the API uses REST — we switched to GraphQL" and it will update accordingly.
+
+To manually remove a specific memory, use the memory tool:
+
+```
+memory({ mode: "forget", memoryId: "uuid-here" })
+```
+
+### Too many/few memories in context
+
+Adjust `maxMemories`, `maxProjectMemories`, and `maxStructuredMemories` in your [config file](/docs/configuration). Lower values reduce token usage; higher values give the agent more context.

@@ -1,0 +1,130 @@
+---
+title: Installation
+description: Install and configure codexfi for OpenCode in under 2 minutes.
+---
+
+# Installation
+
+codexfi installs as a single command. It registers itself with OpenCode, prompts for API keys, and creates helpful slash commands.
+
+## Prerequisites
+
+- [OpenCode](https://opencode.ai) installed and working
+- [Bun](https://bun.sh) runtime (used by the plugin at runtime)
+- A [Voyage AI](https://dash.voyageai.com/api-keys) API key for embeddings
+- At least one extraction provider API key:
+  - [Anthropic](https://console.anthropic.com/) (default, most consistent)
+  - [xAI](https://console.x.ai/) (fastest, cheapest)
+  - [Google AI](https://aistudio.google.com/apikey) (native JSON mode)
+
+## Install
+
+Run the installer:
+
+```bash
+bunx codexfi install
+```
+
+The installer performs three steps:
+
+### Step 1: Register with OpenCode
+
+Adds `"codexfi"` to the `plugin` array in `~/.config/opencode/opencode.json`. If no config exists, it creates one. If you have stale `file://` entries from previous installs, they are automatically migrated.
+
+### Step 2: Create slash commands
+
+Creates the `/memory-init` slash command at `~/.config/opencode/command/memory-init.md`. This command guides the agent through a structured project memory initialization when you start working on a new codebase.
+
+### Step 3: Configure API keys
+
+The installer interactively prompts for:
+
+1. **Voyage AI key** (required) — used for all embedding operations
+2. **Extraction provider key** (required) — choose from Anthropic, xAI, or Google
+
+Keys are stored in `~/.config/opencode/codexfi.jsonc`. Environment variables always take precedence over config file values.
+
+## Non-interactive install
+
+For automated or agent-driven installs, pass keys directly:
+
+```bash
+bunx codexfi install --no-tui \
+  --voyage-key pa-... \
+  --anthropic-key sk-ant-...
+```
+
+Available flags:
+
+| Flag | Description |
+|------|-------------|
+| `--no-tui` | Skip all interactive prompts |
+| `--voyage-key <key>` | Set Voyage AI API key |
+| `--anthropic-key <key>` | Set Anthropic API key |
+| `--xai-key <key>` | Set xAI API key |
+| `--google-key <key>` | Set Google API key |
+
+## Environment variables
+
+As an alternative to the config file, set API keys as environment variables in your shell profile:
+
+```bash
+# Required — embeddings
+export VOYAGE_API_KEY=pa-...
+
+# Required — extraction (pick one)
+export ANTHROPIC_API_KEY=sk-ant-...    # default provider
+# export XAI_API_KEY=...               # fastest
+# export GOOGLE_API_KEY=...            # native JSON mode
+```
+
+Environment variables override config file values.
+
+## Verify installation
+
+After installing, restart OpenCode and open any project. You should see the `[MEMORY]` block appear in the system context from the first message.
+
+To check your configuration:
+
+```bash
+bunx codexfi status
+```
+
+## First session setup
+
+On the first session in any project, codexfi automatically reads common project files (`README.md`, `package.json`, `docker-compose.yml`, etc.) and extracts initial memories. This auto-initialization is silent and requires no user action.
+
+For a more thorough initial setup, use the `/memory-init` slash command in OpenCode. It guides the agent through:
+
+1. Checking existing memories
+2. Exploring the codebase (or asking founding questions for new projects)
+3. Saving structured memories across all categories
+4. Confirming what was stored
+
+## AGENTS.md (recommended)
+
+Adding instructions to `~/.config/opencode/AGENTS.md` improves agent behavior with codexfi. The agent will understand the `[MEMORY]` block, use the memory tool correctly, and never announce memory operations to the user.
+
+See the [OpenCode setup guide](/docs/guides/opencode-setup) for the recommended AGENTS.md configuration.
+
+## Updating
+
+OpenCode auto-installs npm plugins at startup and caches them in `~/.cache/opencode/node_modules/`. This means updates are automatic — you always get the latest version without manual action.
+
+To force a reinstall:
+
+```bash
+bunx codexfi install
+```
+
+## Uninstalling
+
+Remove `"codexfi"` from the `plugin` array in `~/.config/opencode/opencode.json`:
+
+```json
+{
+  "plugin": []
+}
+```
+
+Memory data is stored at `~/.codexfi/`. Delete this directory to remove all stored memories.

@@ -1,0 +1,129 @@
+---
+title: Architecture Overview
+description: How codexfi captures, stores, and retrieves memories across coding sessions.
+---
+
+# Architecture Overview
+
+codexfi is an [OpenCode](https://opencode.ai) plugin that runs entirely in-process. There are no external services, no Docker containers, no separate servers. Everything — LLM extraction, embedding, vector storage, and retrieval — happens inside the plugin.
+
+## System diagram
+
+```
+User message → chat.message hook
+  ├── Turn 1: 4 parallel fetches
+  │   ├── User profile (cross-project preferences)
+  │   ├── User semantic search
+  │   ├── Project memory list (structured sections)
+  │   └── Project semantic search
+  │   └── If zero project memories → silent auto-init from project files
+  └── Turns 2+: single semantic search refreshes "Relevant to Current Task"
+
+  → system.transform rebuilds [MEMORY] block into system prompt (every LLM call)
+
+Assistant completes turn → event hook
+  └── auto-save: extract facts from last 8 messages
+      ├── LLM extracts JSON array of typed facts
+      ├── Each fact embedded with voyage-code-3
+      ├── Cosine dedup prevents duplicates
+      ├── Contradiction detection supersedes stale facts
+      └── Aging rules enforce rolling windows
+      └── Every N turns: also generate session-summary
+```
+
+## Plugin hooks
+
+codexfi registers five hooks with the OpenCode plugin system:
+
+| Hook | Purpose |
+|------|---------|
+| `experimental.chat.messages.transform` | Caches recent messages for extraction |
+| `experimental.chat.system.transform` | Injects the `[MEMORY]` block into every system prompt |
+| `chat.message` | Fetches memories on turn 1, semantic refresh on turn 2+ |
+| `tool.memory` | Registers the `memory` tool for explicit agent use |
+| `event` | Handles auto-save after assistant turns, compaction, session cleanup |
+
+## Data flow: retrieval
+
+### Turn 1 (session start)
+
+On the first user message, four parallel fetches populate the memory cache:
+
+1. **Profile** — the user's cross-project preferences
+2. **User semantic search** — user-scoped memories matching the query
+3. **Project list** — all structured project memories (brief, architecture, tech context, etc.)
+4. **Project semantic search** — project-scoped memories semantically similar to the message
+
+If zero project memories exist and the directory has code, **auto-initialization** kicks in silently. codexfi reads `README.md`, `package.json`, `docker-compose.yml`, and other common project files, then extracts initial memories.
+
+### Turn 2+ (semantic refresh)
+
+Each subsequent user message triggers a single semantic search (~300ms) that refreshes the "Relevant to Current Task" section. This means topic switches cause different memories to surface automatically.
+
+### Every LLM call (system.transform)
+
+The `[MEMORY]` block is rebuilt from the cache and injected into the system prompt. This happens on every LLM call, not just the first. The block contains structured sections (Project Brief, Architecture, etc.) plus semantically matched memories.
+
+## Data flow: storage
+
+### After every assistant turn
+
+1. The last 8 messages are snapshotted
+2. The configured extraction LLM analyzes the conversation and returns a JSON array of typed facts
+3. Each fact is embedded into a 1024-dimension vector using `voyage-code-3`
+4. **Deduplication** — cosine similarity check against existing memories (threshold: 0.12 general, 0.25 structural types). Duplicates trigger an update instead of an insert.
+5. **Aging rules** — `progress` type: only the latest survives. `session-summary`: capped at 3; oldest condensed into `learned-pattern`.
+6. **Contradiction detection** — nearby memories are checked by the LLM for semantic contradictions. Stale memories are marked as superseded.
+
+A 15-second cooldown prevents duplicate processing from OpenCode's double-fire of the completion event.
+
+### Session summaries
+
+Every N turns (default: 5), a `session-summary` memory is generated in addition to the per-turn facts. Session summaries capture the high-level arc of what was worked on.
+
+When the summary count exceeds 3, the oldest is condensed by the LLM into a compact `learned-pattern` memory, then deleted. This prevents unbounded growth while preserving distilled knowledge.
+
+## Compaction survival
+
+When OpenCode truncates the conversation history (compaction), the `[MEMORY]` block is **unaffected** because it lives in the system prompt, not message history.
+
+Additionally, codexfi:
+
+1. Intercepts the compaction event
+2. Injects current memories into the compaction context for richer summaries
+3. Sets a flag to trigger a full memory cache refresh on the next turn
+
+This means memory is never lost to compaction.
+
+## Technology stack
+
+| Component | Technology |
+|-----------|-----------|
+| Storage | [LanceDB](https://lancedb.com/) — embedded vector database, NAPI bindings |
+| Embeddings | [Voyage AI](https://www.voyageai.com/) `voyage-code-3` — 1024 dimensions |
+| Extraction | Multi-provider LLM (Anthropic/xAI/Google) with automatic fallback |
+| Runtime | [Bun](https://bun.sh/) |
+| Validation | [Zod](https://zod.dev/) schemas for memory records |
+
+## File structure
+
+```
+plugin/src/
+├── index.ts          — plugin hooks (system.transform, chat.message, tool.memory, event)
+├── config.ts         — centralized constants, pricing, thresholds
+├── types.ts          — Zod schemas for memory records
+├── prompts.ts        — all LLM prompt templates
+├── db.ts             — LanceDB init/connect/refresh
+├── store.ts          — CRUD, dedup, aging, contradiction, search with recency blending
+├── extractor.ts      — multi-provider extraction with fallback and retry
+├── embedder.ts       — Voyage AI embedding via fetch
+├── retry.ts          — exponential backoff with jitter
+├── telemetry.ts      — cost tracking (CostLedger + ActivityLog)
+├── plugin-config.ts  — user config from ~/.config/opencode/codexfi.jsonc
+└── services/
+    ├── auto-save.ts  — background extraction after assistant turns
+    ├── compaction.ts — context window compaction handling
+    ├── context.ts    — [MEMORY] block formatting
+    ├── privacy.ts    — <private> tag stripping
+    └── tags.ts       — project/user tag computation
+```

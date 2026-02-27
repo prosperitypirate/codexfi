@@ -1,0 +1,163 @@
+---
+title: Configuration
+description: Configure codexfi behavior with thresholds, limits, providers, and keyword patterns.
+---
+
+# Configuration
+
+codexfi works out of the box with sensible defaults. All settings are optional and can be customized via a JSONC config file or environment variables.
+
+## Config file
+
+The config file lives at `~/.config/opencode/codexfi.jsonc`. It is created automatically by the `codexfi install` command, or you can create it manually.
+
+Legacy paths `~/.config/opencode/memory.jsonc` and `~/.config/opencode/memory.json` are also supported for backward compatibility.
+
+```jsonc
+// Codexfi — plugin configuration
+// Location: ~/.config/opencode/codexfi.jsonc
+//
+// Environment variables (VOYAGE_API_KEY, ANTHROPIC_API_KEY, etc.)
+// always override values in this file.
+{
+  // ── API Keys ──────────────────────────────────────────────────────
+  "voyageApiKey": "pa-...",
+  "anthropicApiKey": "sk-ant-...",
+  "xaiApiKey": "",
+  "googleApiKey": "",
+
+  // ── Plugin Settings ───────────────────────────────────────────────
+  "similarityThreshold": 0.45,
+  "maxMemories": 20,
+  "maxProjectMemories": 20,
+  "maxStructuredMemories": 30,
+  "maxProfileItems": 5,
+  "compactionThreshold": 0.80,
+  "turnSummaryInterval": 5
+}
+```
+
+## API keys
+
+| Key | Environment variable | Required | Purpose |
+|-----|---------------------|----------|---------|
+| `voyageApiKey` | `VOYAGE_API_KEY` | Yes | Voyage AI embeddings (`voyage-code-3`) |
+| `anthropicApiKey` | `ANTHROPIC_API_KEY` | One of three | Extraction via Claude Haiku 4.5 (default) |
+| `xaiApiKey` | `XAI_API_KEY` | One of three | Extraction via Grok 4.1 Fast |
+| `googleApiKey` | `GOOGLE_API_KEY` | One of three | Extraction via Gemini 3 Flash |
+
+Environment variables always override config file values. At minimum, you need `voyageApiKey` plus one extraction provider key.
+
+## Extraction provider
+
+Set the extraction provider with the `EXTRACTION_PROVIDER` environment variable:
+
+```bash
+export EXTRACTION_PROVIDER=anthropic  # default
+# export EXTRACTION_PROVIDER=xai      # fastest
+# export EXTRACTION_PROVIDER=google   # native JSON mode
+```
+
+| Provider | Model | Speed | Notes |
+|----------|-------|-------|-------|
+| `anthropic` (default) | `claude-haiku-4-5` | ~14s/session | Most consistent extraction |
+| `xai` | `grok-4-1-fast-non-reasoning` | ~5s/session | Fastest, cheapest |
+| `google` | `gemini-3-flash-preview` | ~21s/session | Native JSON response mode |
+
+The plugin falls back through all configured providers automatically. If the primary fails, it tries the next one in the fallback order: `anthropic` > `xai` > `google`.
+
+## Plugin settings
+
+### `similarityThreshold`
+
+- **Default:** `0.45`
+- **Range:** `0.0` to `1.0`
+
+Minimum cosine similarity score for a memory to appear in search results. Lower values return more results (potentially less relevant); higher values are stricter.
+
+### `maxMemories`
+
+- **Default:** `20`
+
+Maximum number of memories retrieved per scope (user or project) during semantic search.
+
+### `maxProjectMemories`
+
+- **Default:** `20`
+
+Maximum number of project-scoped memories retrieved during structured fetches.
+
+### `maxStructuredMemories`
+
+- **Default:** `30`
+
+Maximum number of memories retrieved for structured sections (Project Brief, Architecture, Tech Context, etc.) in the `[MEMORY]` block.
+
+### `maxProfileItems`
+
+- **Default:** `5`
+
+Maximum number of user preference items shown in the "User Preferences" section of the `[MEMORY]` block.
+
+### `injectProfile`
+
+- **Default:** `true`
+
+Whether to include the "User Preferences" section in the `[MEMORY]` block. Set to `false` to disable user-scoped preference injection.
+
+### `compactionThreshold`
+
+- **Default:** `0.80`
+- **Range:** `0.01` to `1.0`
+
+Ratio of context window usage that triggers compaction handling. When the conversation exceeds this threshold, codexfi injects memories into the compaction context and flags a full refresh for the next turn.
+
+### `turnSummaryInterval`
+
+- **Default:** `5`
+
+Number of assistant turns between automatic session summary saves. Every N turns, a `session-summary` memory is generated in addition to the regular per-turn extraction.
+
+### `containerTagPrefix`
+
+- **Default:** `"opencode"`
+
+Prefix used for generating deterministic user and project tags from git email and directory hash.
+
+### `userContainerTag`
+
+- **Default:** auto-generated from git email
+
+Override the user-scope tag. Useful for testing or shared environments.
+
+### `projectContainerTag`
+
+- **Default:** auto-generated from directory hash
+
+Override the project-scope tag. Useful for linking multiple directories to the same project memory.
+
+### `keywordPatterns`
+
+- **Default:** built-in patterns (see below)
+
+Additional regex patterns that trigger the "explicit save" nudge. When a user message matches any pattern, codexfi injects a message telling the LLM to use the memory tool.
+
+Built-in patterns include: `remember`, `memorize`, `save this`, `note this`, `keep in mind`, `don't forget`, `learn this`, `store this`, `record this`, `make a note`, `take note`, `jot down`, `commit to memory`, `never forget`, `always remember`.
+
+Custom patterns are appended to the built-in list:
+
+```jsonc
+{
+  "keywordPatterns": ["bookmark this", "save for later"]
+}
+```
+
+## Data storage
+
+All memory data is stored locally at `~/.codexfi/lancedb/`. This is a LanceDB embedded database — no external process required.
+
+| Path | Contents |
+|------|----------|
+| `~/.codexfi/lancedb/` | Vector database (memories table) |
+| `~/.codexfi.log` | Plugin log file |
+| `~/.config/opencode/codexfi.jsonc` | Configuration file |

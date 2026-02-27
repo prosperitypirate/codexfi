@@ -1,0 +1,141 @@
+---
+title: Extraction Pipeline
+description: How codexfi uses LLMs to extract structured memories from conversations.
+---
+
+# Extraction Pipeline
+
+After every assistant turn, codexfi runs an extraction pipeline to identify and store key facts from the conversation. This happens in the background and is invisible to the user.
+
+## Pipeline steps
+
+### 1. Message snapshot
+
+The last 8 messages from the conversation are collected. Each message is formatted as `[role] content` and concatenated into a single text block. Content longer than the maximum character limit is truncated.
+
+### 2. LLM extraction
+
+The conversation text is sent to the configured extraction provider with a system prompt instructing it to identify important facts. The LLM returns a JSON array of typed facts:
+
+```json
+[
+  {
+    "memory": "Auth uses JWT stored in httpOnly cookies, not localStorage",
+    "type": "architecture"
+  },
+  {
+    "memory": "User prefers bun over npm for all installs",
+    "type": "preference"
+  }
+]
+```
+
+Each fact is an atomic, self-contained piece of knowledge with an assigned [memory type](/docs/how-it-works/memory-types).
+
+### 3. Embedding
+
+Each extracted fact is embedded into a 1024-dimension vector using Voyage AI's `voyage-code-3` model. This model is specifically optimized for code and technical content.
+
+The embedding uses `input_type: "document"` for storage and `input_type: "query"` for retrieval, which Voyage AI uses to optimize the embedding for each purpose.
+
+### 4. Deduplication
+
+Before storing, each fact is checked against existing memories using cosine similarity:
+
+| Memory category | Dedup threshold | Meaning |
+|----------------|-----------------|---------|
+| General types | 0.12 | Very close matches are considered duplicates |
+| Structural types | 0.25 | Wider threshold — structural knowledge evolves |
+
+If a duplicate is found, the existing memory is **updated** (text refreshed, timestamp updated) rather than creating a new entry. This keeps memory count manageable.
+
+### 5. Storage
+
+New memories (non-duplicates) are inserted into LanceDB with:
+
+- A UUID identifier
+- The memory text
+- The embedding vector
+- Metadata (type, scope)
+- Source chunk (the conversation excerpt that produced this fact)
+- Timestamps (created_at, updated_at)
+
+### 6. Aging rules
+
+After insertion, type-specific aging rules run:
+
+- **`progress`**: all older progress memories are deleted (only latest survives)
+- **`session-summary`**: if count exceeds 3, oldest is condensed into a `learned-pattern`
+
+### 7. Contradiction detection
+
+The system searches for semantically nearby existing memories (within contradiction distance) and asks the LLM: "Does this new fact supersede any of these?"
+
+If contradictions are found, the old memories are marked as `superseded_by` the new one. They remain in the database but are excluded from search results.
+
+## Extraction modes
+
+The pipeline runs in three modes:
+
+### Normal mode
+
+Used after every assistant turn. Extracts atomic facts from the recent conversation with types assigned per fact.
+
+### Summary mode
+
+Triggered every N turns (default: 5). Generates a high-level session summary covering what was worked on, decisions made, and progress achieved.
+
+### Init mode
+
+Used during auto-initialization when a new project is detected. Reads project files (README, package.json, etc.) and extracts foundational facts about the project.
+
+## Extraction providers
+
+codexfi supports three extraction providers. The configured primary provider is tried first, with automatic fallback through the remaining providers.
+
+### Anthropic (default)
+
+- **Model**: `claude-haiku-4-5`
+- **Speed**: ~14 seconds per session
+- **Notes**: Most consistent extraction quality. Reliable JSON output.
+
+### xAI
+
+- **Model**: `grok-4-1-fast-non-reasoning`
+- **Speed**: ~5 seconds per session
+- **Notes**: Fastest and cheapest. Slightly higher variance in extraction quality.
+
+### Google
+
+- **Model**: `gemini-3-flash-preview`
+- **Speed**: ~21 seconds per session
+- **Notes**: Uses native `responseMimeType: "application/json"` for guaranteed JSON output.
+
+### Fallback behavior
+
+If the primary provider fails after retries, the plugin tries the next provider in order: `anthropic` → `xai` → `google`. If all providers fail, extraction is silently skipped for that turn — the user's session is never interrupted.
+
+## Retry strategy
+
+All LLM calls and database operations use exponential backoff with jitter:
+
+- **LLM extraction**: retries with configurable delay and jitter
+- **Database writes**: retries for transient LanceDB errors
+- **Embedding calls**: retries for Voyage AI API errors
+
+Telemetry failures never block extraction or embedding operations.
+
+## JSON parsing
+
+LLM responses are parsed with tolerance for common quirks:
+
+- Markdown code fences (` ```json ... ``` `) are stripped
+- Plain string arrays are accepted (items default to `learned-pattern` type)
+- Wrapped objects (`{"memories": [...]}`) are unwrapped
+- Parse failures return an empty array — zero memories for this turn, no error
+
+## Privacy
+
+Before extraction, content wrapped in `<private>...</private>` tags is stripped. Nothing inside private tags is sent to any LLM provider or stored in the database.
+
+Messages that are fully private (entire content inside private tags) are excluded from the extraction snapshot entirely.

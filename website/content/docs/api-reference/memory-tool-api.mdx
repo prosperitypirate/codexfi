@@ -1,0 +1,214 @@
+---
+title: Memory Tool API
+description: Reference for the memory tool that agents use to interact with codexfi.
+---
+
+# Memory Tool API
+
+codexfi registers a `memory` tool with OpenCode that the AI agent can call to interact with the memory system. The tool supports five modes for reading and writing memories.
+
+## Tool signature
+
+The agent calls the memory tool with a JSON object:
+
+```typescript
+memory({
+  mode: "add" | "search" | "list" | "profile" | "forget" | "help",
+  content?: string,     // required for "add"
+  query?: string,       // required for "search"
+  scope?: "user" | "project",  // default: "project"
+  type?: string,        // memory type for "add"
+  memoryId?: string,    // required for "forget"
+  limit?: number,       // for "search" and "list"
+})
+```
+
+## Modes
+
+### `add`
+
+Store a new memory explicitly.
+
+```
+memory({
+  mode: "add",
+  content: "Auth uses JWT stored in httpOnly cookies, not localStorage",
+  scope: "project",
+  type: "architecture"
+})
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `content` | Yes | — | The memory text to store |
+| `scope` | No | `"project"` | `"project"` or `"user"` |
+| `type` | No | `"learned-pattern"` | One of the 11 [memory types](/docs/how-it-works/memory-types) |
+
+The memory goes through the same pipeline as automatically extracted facts: embedding, deduplication, and contradiction detection.
+
+**Returns**: Confirmation with the stored memory ID and any superseded memories.
+
+### `search`
+
+Semantic search over stored memories.
+
+```
+memory({
+  mode: "search",
+  query: "how is authentication handled",
+  scope: "project",
+  limit: 10
+})
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `query` | Yes | — | Natural language search query |
+| `scope` | No | `"project"` | `"project"` or `"user"` |
+| `limit` | No | `20` | Maximum results to return |
+
+Results include similarity scores, memory text, source chunks, metadata, and creation dates. Results are sorted by score (semantic similarity with optional recency blending).
+
+**Returns**: Array of matching memories with similarity percentages and dates.
+
+### `list`
+
+List stored memories ordered by most recently updated.
+
+```
+memory({
+  mode: "list",
+  scope: "project",
+  limit: 20
+})
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `scope` | No | `"project"` | `"project"` or `"user"` |
+| `limit` | No | `20` | Maximum results to return |
+
+Unlike `search`, this does not use semantic matching — it returns all memories sorted by recency.
+
+**Returns**: Array of memories with IDs, text, metadata, and timestamps.
+
+### `profile`
+
+View the user's memory profile — all stored memories (limited).
+
+```
+memory({
+  mode: "profile"
+})
+```
+
+No additional parameters. Returns up to 100 memories across both scopes with IDs, text, metadata, and creation dates.
+
+**Returns**: Array of all stored memories for the current user.
+
+### `forget`
+
+Delete a specific memory by ID.
+
+```
+memory({
+  mode: "forget",
+  memoryId: "550e8400-e29b-41d4-a716-446655440000"
+})
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `memoryId` | Yes | — | UUID of the memory to delete |
+
+The memory is permanently removed from the database.
+
+**Returns**: Confirmation of deletion.
+
+### `help`
+
+Show usage information for the memory tool.
+
+```
+memory({
+  mode: "help"
+})
+```
+
+No parameters required. Returns a summary of available modes, parameters, and example usage.
+
+## Scopes
+
+### `project` (default)
+
+Project-scoped memories are tied to the current working directory. The project tag is a deterministic hash, so the same directory always maps to the same memory namespace.
+
+Use project scope for: architecture decisions, tech stack, error solutions, progress, project-specific configuration.
+
+### `user`
+
+User-scoped memories are tied to your identity (derived from git email). They persist across all projects.
+
+Use user scope for: coding preferences, communication style, tool preferences, workflow patterns.
+
+```
+memory({
+  mode: "add",
+  content: "Prefers pnpm over npm for all projects",
+  scope: "user",
+  type: "preference"
+})
+```
+
+## Memory types for `add`
+
+When using `mode: "add"`, set the `type` parameter to categorize the memory:
+
+| Type | When to use |
+|------|------------|
+| `project-brief` | What the project is, its purpose |
+| `architecture` | System design, component relationships |
+| `tech-context` | Stack, tools, languages, patterns |
+| `product-context` | Features, goals, product decisions |
+| `progress` | Current state, what's done, what's blocked |
+| `project-config` | Config preferences, run commands, env setup |
+| `error-solution` | Bug fixes, workarounds discovered |
+| `preference` | User coding preferences (typically user-scoped) |
+| `learned-pattern` | Patterns observed across sessions |
+
+If no type is specified, it defaults to `learned-pattern`.
+
+## Triggering explicit saves
+
+Users can trigger the memory tool by using natural language:
+
+- "Remember that we use JWT in httpOnly cookies"
+- "Save this: the API rate limit is 100 req/min"
+- "Don't forget that tests must pass before merging"
+- "Note this for future sessions"
+
+codexfi detects these keyword patterns and nudges the agent to use the memory tool with `mode: "add"`. The detection is configurable via [keywordPatterns](/docs/configuration#keywordpatterns) in the config file.
+
+## Example session
+
+```
+User: "Remember that this project uses PostgreSQL 16 with pgvector"
+
+Agent uses memory tool:
+memory({
+  mode: "add",
+  content: "Project uses PostgreSQL 16 with pgvector extension for vector storage",
+  scope: "project",
+  type: "tech-context"
+})
+
+→ Memory stored with ID abc-123
+
+User: "What database are we using?"
+
+Agent reads from [MEMORY] block:
+## Tech Context
+- Project uses PostgreSQL 16 with pgvector extension for vector storage
+
+Agent: "You're using PostgreSQL 16 with the pgvector extension."
+```

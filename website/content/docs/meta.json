@@ -1,4 +1,14 @@
 {
   "title": "Documentation",
-  "pages": ["index"]
+  "pages": [
+    "index",
+    "installation",
+    "configuration",
+    "---How it Works---",
+    "how-it-works",
+    "---Guides---",
+    "guides",
+    "---Reference---",
+    "api-reference"
+  ]
 }
