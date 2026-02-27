@@ -12,6 +12,38 @@ const supportsColor =
 	process.env.TERM !== "dumb" &&
 	(process.stdout.isTTY ?? false);
 
+// ── Unicode support detection ───────────────────────────────────────────────────
+//
+// Color support (isTTY) and UTF-8 encoding capability are independent.
+// A terminal can be a TTY with ANSI colors but decode bytes as Latin-1,
+// rendering multi-byte UTF-8 sequences as garbage (e.g. ✓ → â, • → â¢).
+//
+// We check two signals:
+//   1. Locale env vars — LANG / LC_ALL / LC_CTYPE containing "UTF-8" or "utf8"
+//   2. Known terminal programs that always use UTF-8 regardless of locale
+//      (iTerm2, macOS Terminal.app, VSCode integrated terminal, Windows Terminal)
+//
+// If neither confirms UTF-8, we fall back to plain ASCII symbols.
+
+function detectUnicode(): boolean {
+	// Known-good terminal programs that always handle UTF-8
+	const termProgram = process.env.TERM_PROGRAM ?? "";
+	if (["iTerm.app", "Apple_Terminal", "vscode", "WindowsTerminal"].includes(termProgram)) {
+		return true;
+	}
+
+	// Locale env vars
+	const locale = process.env.LC_ALL ?? process.env.LC_CTYPE ?? process.env.LANG ?? "";
+	if (/utf-?8/i.test(locale)) return true;
+
+	// WT_SESSION is set by Windows Terminal
+	if (process.env.WT_SESSION) return true;
+
+	return false;
+}
+
+const supportsUnicode = detectUnicode();
+
 // ── ANSI escape helpers ─────────────────────────────────────────────────────────
 
 function ansi(code: string): (text: string) => string {
@@ -54,15 +86,15 @@ export const cyanBold = (text: string): string => bold(cyan(text));
 
 // ── Unicode symbols ─────────────────────────────────────────────────────────────
 
-/** Check/cross/warning symbols — falls back to ASCII if color is off. */
+/** Check/cross/warning symbols — falls back to ASCII if Unicode is not supported. */
 export const sym = {
-	check: supportsColor ? "✓" : "[ok]",
-	cross: supportsColor ? "✗" : "[!!]",
-	warn: supportsColor ? "⚠" : "[!]",
-	arrow: supportsColor ? "→" : "->",
-	bullet: supportsColor ? "•" : "-",
-	bar: supportsColor ? "│" : "|",
-	dash: "─",
+	check: supportsUnicode ? "✓" : "[ok]",
+	cross: supportsUnicode ? "✗" : "[!!]",
+	warn: supportsUnicode ? "⚠" : "[!]",
+	arrow: supportsUnicode ? "→" : "->",
+	bullet: supportsUnicode ? "•" : "-",
+	bar: supportsUnicode ? "│" : "|",
+	dash: supportsUnicode ? "─" : "-",
 } as const;
 
 // ── Layout helpers ──────────────────────────────────────────────────────────────
@@ -194,7 +226,8 @@ function stripAnsi(str: string): string {
 function truncate(str: string, maxLen: number): string {
 	const visible = stripAnsi(str);
 	if (visible.length <= maxLen) return str;
-	return str.slice(0, maxLen - 1) + "…";
+	const ellipsis = supportsUnicode ? "…" : "...";
+	return str.slice(0, maxLen - ellipsis.length) + ellipsis;
 }
 
 /** Pad a (possibly ANSI-colored) string to targetLen with correct visual width. */
@@ -206,7 +239,7 @@ function padCell(str: string, targetLen: number, align: "left" | "right"): strin
 
 // ── Progress / spinner ──────────────────────────────────────────────────────────
 
-const SPINNER_FRAMES = supportsColor
+const SPINNER_FRAMES = supportsUnicode
 	? ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
 	: ["-", "\\", "|", "/"];
 

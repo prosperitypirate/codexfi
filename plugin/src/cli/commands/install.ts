@@ -346,69 +346,66 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 
 	fmt.blank();
 
-	// ── Extraction API key (at least one required) ──────────────────────────────
-	// Check what's already available from any source
-	const existingExtraction = resolveExistingExtraction(args);
+	// ── Extraction API keys (at least one required) ─────────────────────────────
+	// Walk all 3 providers sequentially. For each:
+	//   - If a key is already found (flag/env/config): show masked value and ask to keep or replace
+	//   - If no key found: prompt for one, or Enter to skip
+	// After all 3: if zero keys collected, error out.
 
-	if (existingExtraction) {
-		fmt.success(`${existingExtraction.label} API key ${fmt.dim(`set (${maskKey(existingExtraction.key)}) [${existingExtraction.source}]`)}`);
-		// Store the key in config so it persists across restarts
-		keys[existingExtraction.configKey] = existingExtraction.key;
-	} else {
-		fmt.warn("No extraction API key set — need one of: ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY");
-		fmt.blank();
+	let extractionKeysCollected = 0;
 
-		// Ask which provider
-		fmt.info("Which extraction provider would you like to use?");
-		fmt.blank();
-		for (let i = 0; i < PROVIDERS.length; i++) {
-			const p = PROVIDERS[i];
-			const defaultTag = i === 0 ? fmt.dim(" (default)") : "";
-			console.log(`    ${fmt.cyan(`${i + 1}`)}. ${p.label}${defaultTag}`);
-		}
-		fmt.blank();
-
-		const choice = await ask(`  Choose provider ${fmt.dim("[1-3, default 1]")}: `);
-		const providerIdx = choice ? parseInt(choice, 10) - 1 : 0;
-		const provider = PROVIDERS[Math.max(0, Math.min(providerIdx, PROVIDERS.length - 1))];
+	for (const p of PROVIDERS) {
+		const flagName = p.key + "-key";
+		const fromFlag = getFlag(args, flagName);
+		const fromEnv = process.env[p.envVar];
+		const fromConfig = PLUGIN_CONFIG[p.configKey];
+		const existing = fromFlag || fromEnv || fromConfig || "";
+		const source = fromFlag ? "flag" : fromEnv ? "env" : fromConfig ? "config" : "";
 
 		fmt.blank();
-		const extractionKey = await ask(`  Enter ${provider.label} API key ${fmt.dim(`(${provider.hint})`)}: `);
 
-		if (extractionKey) {
-			fmt.success(`${provider.envVar} ${fmt.dim(`saved (${maskKey(extractionKey)})`)}`);
-			keys[provider.configKey] = extractionKey;
+		if (existing) {
+			// Key already found — show it and ask to keep or replace
+			console.log(`  ${p.label} API key found: ${fmt.cyan(maskKey(existing))} ${fmt.dim(`[${source}]`)}`);
+			const keep = await ask(`  Keep this? ${fmt.dim("[Y/n]")}: `);
+
+			if (!keep || keep.toLowerCase() === "y" || keep.toLowerCase() === "yes") {
+				keys[p.configKey] = existing;
+				extractionKeysCollected++;
+				fmt.success(`${p.label} API key saved`);
+			} else {
+				// User wants to replace it
+				const replacement = await ask(`  Enter new ${p.label} API key ${fmt.dim(`(${p.hint}, or Enter to skip)`)}: `);
+				if (replacement) {
+					keys[p.configKey] = replacement;
+					extractionKeysCollected++;
+					fmt.success(`${p.label} API key saved ${fmt.dim(`(${maskKey(replacement)})`)}`);
+				} else {
+					fmt.warn(`${p.label} skipped.`);
+				}
+			}
 		} else {
-			fmt.warn("Skipped — extraction will fail until an API key is configured.");
+			// No key found — prompt for one
+			const entered = await ask(`  ${p.label} API key ${fmt.dim(`(${p.hint}, or Enter to skip)`)}: `);
+			if (entered) {
+				keys[p.configKey] = entered;
+				extractionKeysCollected++;
+				fmt.success(`${p.label} API key saved ${fmt.dim(`(${maskKey(entered)})`)}`);
+			} else {
+				fmt.warn(`${p.label} skipped.`);
+			}
 		}
+	}
+
+	fmt.blank();
+
+	if (extractionKeysCollected === 0) {
+		fmt.error("No extraction API key configured — at least one of Anthropic, xAI, or Google is required.");
+		fmt.info("Re-run `codexfi install` and provide at least one key.");
+		process.exit(1);
 	}
 
 	return keys;
-}
-
-/**
- * Check all sources (flags, env, config) for an existing extraction key.
- * Returns the first one found with its metadata, or null.
- */
-function resolveExistingExtraction(args: ParsedArgs): {
-	label: string;
-	key: string;
-	source: string;
-	configKey: "anthropicApiKey" | "xaiApiKey" | "googleApiKey";
-} | null {
-	for (const p of PROVIDERS) {
-		// Flag name: anthropicApiKey → anthropic-key
-		const flagName = p.key + "-key";
-		const fromFlag = getFlag(args, flagName);
-		if (fromFlag) return { label: p.label, key: fromFlag, source: "flag", configKey: p.configKey };
-
-		const fromEnv = process.env[p.envVar];
-		if (fromEnv) return { label: p.label, key: fromEnv, source: "env", configKey: p.configKey };
-
-		const fromConfig = PLUGIN_CONFIG[p.configKey];
-		if (fromConfig) return { label: p.label, key: fromConfig, source: "config", configKey: p.configKey };
-	}
-	return null;
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────────

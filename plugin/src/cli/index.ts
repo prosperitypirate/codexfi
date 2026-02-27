@@ -58,10 +58,11 @@ loadEnvFile();
 
 import { parseArgs } from "./args.js";
 import * as fmt from "./fmt.js";
+import pkg from "../../package.json";
 
 // ── Version ─────────────────────────────────────────────────────────────────────
 
-const VERSION = "0.3.0";
+const VERSION = pkg.version;
 
 // ── Command registry ────────────────────────────────────────────────────────────
 
