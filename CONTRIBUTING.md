@@ -75,7 +75,16 @@ pnpm build          # production build — must produce zero warnings/errors
    - `chore/update-deps`
    - `docs/contributing-guide`
 3. **Write code** — keep changes focused. One logical change per PR.
-4. **Run checks** before opening a PR:
+4. **Set your PR title correctly.** PRs are merged with squash — the PR title becomes the single commit that release-please reads to decide whether to publish a new version. Use [Conventional Commits](https://www.conventionalcommits.org/):
+
+   | PR title prefix | Effect |
+   |---|---|
+   | `fix(plugin): …` | patch release (0.x.y → 0.x.y+1) |
+   | `feat(plugin): …` | minor release (0.x → 0.x+1) |
+   | `chore:` / `docs:` / `ci:` | **no release** — release-please ignores these |
+
+   If your PR fixes a bug or adds a feature in `plugin/` but the title uses `chore:` or `docs:`, no release will be triggered.
+5. **Run checks** before opening a PR:
    - Plugin: `bun run typecheck && bun run build`
    - Website: `pnpm build` (zero warnings)
 5. If your change touches retrieval, memory extraction, or embeddings, run the benchmark suite and include results in the PR description.
