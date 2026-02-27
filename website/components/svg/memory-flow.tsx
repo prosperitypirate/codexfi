@@ -149,7 +149,7 @@ export function MemoryFlowSVG() {
         
         {/* Retrieval Node */}
         <g className="float" style={{ transformOrigin: "500px 450px" }}>
-          <rect x="420" y="434" width="160" height="32" rx="16" fill="#111" stroke="#4ade80" strokeWidth="1.5" filter="url(#glow-green)" />
+          <rect x="420" y="434" width="160" height="32" rx="16" className="fill-card" stroke="#4ade80" strokeWidth="1.5" filter="url(#glow-green)" />
           <text x="500" y="455" textAnchor="middle" fill="#4ade80" fontSize="12" fontFamily="var(--font-mono, monospace)" fontWeight="600" letterSpacing="0.5">
             [MEMORY] injected
           </text>
@@ -188,7 +188,7 @@ export function MemoryFlowSVG() {
               width={node.text.length * 8 + 20} 
               height="24" 
               rx="12" 
-              fill="#1a1a1a" 
+              className="fill-card" 
               stroke={node.color} 
               strokeWidth="1"
               filter="url(#glow-subtle)"
@@ -228,9 +228,9 @@ export function MemoryFlowSVG() {
 
         {/* AI bubble 1 */}
         <g className="chat-appear" style={{ animationDelay: "2s" }}>
-          <rect x="70" y="130" width="160" height="48" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
+          <rect x="70" y="130" width="185" height="48" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
           <text x="82" y="148" className="fill-foreground" fontSize="11">I'll set up the providers.</text>
-          <text x="82" y="160" fill="#a855f7" fontSize="10" fontFamily="var(--font-mono, monospace)">[Extracting architecture]</text>
+          <text x="82" y="162" fill="#a855f7" fontSize="10" fontFamily="var(--font-mono, monospace)">[Extracting architecture]</text>
         </g>
 
         {/* User bubble 2 */}
@@ -242,9 +242,9 @@ export function MemoryFlowSVG() {
 
         {/* AI bubble 2 */}
         <g className="chat-appear" style={{ animationDelay: "6s" }}>
-          <rect x="70" y="240" width="150" height="48" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
+          <rect x="70" y="240" width="185" height="48" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
           <text x="82" y="258" className="fill-foreground" fontSize="11">Updated config to JWT.</text>
-          <text x="82" y="270" fill="#a855f7" fontSize="10" fontFamily="var(--font-mono, monospace)">[Extracting tech-context]</text>
+          <text x="82" y="272" fill="#a855f7" fontSize="10" fontFamily="var(--font-mono, monospace)">[Extracting tech-context]</text>
         </g>
 
         <rect x="70" y="310" width="210" height="24" rx="12" className="fill-secondary stroke-border" strokeWidth="1" />

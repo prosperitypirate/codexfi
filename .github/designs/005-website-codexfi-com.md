@@ -868,43 +868,175 @@ website/.source/
 
 ### Concept
 
-The hero SVG is the visual centerpiece of the landing page. It visualizes the codexfi memory lifecycle — the core value proposition made tangible through animation.
+The hero SVG is the visual centerpiece of the landing page. It visualizes the **complete** codexfi memory lifecycle as a closed, bidirectional loop — the core value proposition made tangible through animation.
 
-### Design Process
+The two flows must feel **visually equal in weight**:
+- **Extraction** (left → right, purple): conversations are parsed and typed memories slide toward the vector store
+- **Retrieval** (right → left, green): stored memories are recalled and injected back into the next session
 
-1. **Prompt Gemini 3.1 Pro** in Google AI Studio with detailed description (see prompt below)
-2. **Iterate** — adjust colors, timing, complexity, and flow
-3. **Set thinking level to High** — for precision in spatial layout and animation timing
-4. **Export** — copy generated SVG code
-5. **Optimize** — run through SVGOMG to strip metadata, simplify paths
-6. **Integrate** — embed as inline React component in `components/svg/memory-flow.tsx`
-7. **Test** — verify animation smoothness, responsiveness, accessibility
+This symmetry is the product's whole point. If retrieval looks like an afterthought, the visualization fails.
 
-### Gemini Prompt Template
+### Layout
 
 ```
-Create an animated SVG visualization of a memory extraction and retrieval system
-for an AI coding agent. The visualization should show:
+┌──────────────────────────────────────────────────────────────────────┐
+│                                                                      │
+│  ┌─────────────────┐   ── extraction ──▶   ┌──────────────────────┐ │
+│  │  OpenCode Agent │  purple nodes sliding  │  LanceDB Vector DB  │ │
+│  │                 │  left → right →→→      │                     │ │
+│  │  [chat bubbles] │  architecture          │  [hexagon cluster]  │ │
+│  │  [code blocks]  │  tech-context          │  [pulsing nodes]    │ │
+│  │  appearing and  │  progress              │  [constellation     │ │
+│  │  fading         │  learned-pattern       │   lines]            │ │
+│  │                 │  preference            │                     │ │
+│  └─────────────────┘                        └──────────────────────┘ │
+│          ▲                                           │               │
+│          │  ◀── retrieval ──────────────────────────┘               │
+│          │  green nodes sliding right → left                         │
+│          │  [architecture] ←←←                                       │
+│          │  [progress] ←←←                                           │
+│          │  [preference] ←←←                                         │
+│          │                                                           │
+│          └─── [MEMORY] block injected into next session              │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
 
-1. LEFT SIDE: Conversation bubbles or code blocks appearing (representing AI chat sessions)
-2. CENTER: Animated particles/lines flowing from conversations, representing "extraction"
-   - Label some particles with memory types: "architecture", "tech-context", "progress",
-     "learned-pattern", "preference"
-3. RIGHT SIDE: A structured storage cluster (representing LanceDB vector database)
-   - Show memories being organized and stored
-4. BOTTOM/RETURN FLOW: A retrieval path showing relevant memories flowing back
-   into a new conversation session, with a "[MEMORY]" label
+### Animation Specification
 
-Design specifications:
-- Background: transparent (will be placed on #0a0a0a)
-- Primary colors: #a855f7 (purple), #c084fc (light purple), #4ade80 (green for terminal)
-- Subtle glow effects on connections and nodes
-- All animations use CSS @keyframes (no JavaScript)
+#### Extraction Flow (top lanes, purple, left → right)
+
+- **5 horizontal lanes** at evenly spaced Y positions through the center of the SVG
+- Each lane has an animated dashed stroke flowing left → right (`dashFlow` keyframe)
+- **Sliding purple pill nodes** travel along these lanes, each labeled with a memory type:
+  - `architecture`, `tech-context`, `progress`, `learned-pattern`, `preference`
+- Nodes are staggered in time so the lanes feel asynchronous and alive
+- Node pill: dark fill (`fill-card`), purple stroke (`#a855f7`–`#c084fc` range), subtle glow
+- Node text: monospace, purple, e.g. `architecture`
+
+#### Retrieval Flow (bottom arc, green, right → left)
+
+- **A curved arc** connecting the bottom of the DB panel to the bottom of the agent panel
+- The arc has an animated dashed stroke flowing **right → left** (`dashFlowRev` keyframe)
+- **3 sliding green pill nodes** travel along the arc from DB → agent, labeled with memory types being recalled. These use a **different keyframe** (`slideLeft`) that translates from the DB side to the agent side
+  - Suggested labels: `[architecture]`, `[progress]`, `[preference]` (square-bracket style to visually distinguish recalled vs extracted)
+- Nodes are staggered so they don't all arrive simultaneously
+- Node pill: dark fill (`fill-card`), green stroke (`#4ade80`), green glow
+- Node text: monospace, green (`#4ade80`)
+- The `[MEMORY] injected` badge floats near the midpoint of the arc as a persistent label (not a sliding node — it stays put and pulses)
+
+#### Timing & Pacing
+
+| Animation | Duration | Direction | Color |
+|-----------|----------|-----------|-------|
+| Lane dash flow (extraction) | 1s linear infinite | → | purple |
+| Arc dash flow (retrieval) | 1.2s linear infinite | ← | green |
+| Purple pill nodes | 8s per cycle, 5 staggered | → | purple |
+| Green pill nodes | 8s per cycle, 3 staggered | ← | green |
+| `[MEMORY]` badge | float 6s ease-in-out alternate | — (float up/down) | green |
+| DB hexagon nodes | 3–4s pulseOpacity alternate | — | purple |
+| Chat bubbles | 8s popIn per bubble, 4 staggered | — (appear/fade) | foreground |
+
+The extraction and retrieval cycles are **offset in phase** so that as memories finish being stored, retrieved memories begin flowing back. This creates a sense of continuous, intelligent circulation rather than two separate motions.
+
+#### Direction Arrows
+
+Each path should have **arrowhead markers** at key points to make direction unambiguous at a glance:
+
+- Extraction lanes: a small `▶` arrowhead near the right end of each lane (pointing right)
+- Retrieval arc: a small `▶` arrowhead near the left end of the arc (pointing left, toward the agent)
+
+Use SVG `<marker>` with `markerEnd` — one marker definition for purple (`arrow-purple`) and one for green (`arrow-green`).
+
+#### Axis Labels
+
+Two small, muted labels to reinforce the directionality:
+
+- Top-center, above the extraction lanes: `extraction →` (muted-foreground, 10px, monospace)
+- Bottom-center, below the retrieval arc: `← retrieval` (muted-foreground, 10px, monospace)
+
+### Color & Theming
+
+| Element | Fill | Stroke / Color | Notes |
+|---------|------|----------------|-------|
+| Extraction lane lines | none | `url(#flowGrad)` purple→transparent | Gradient flows left→right |
+| Purple pill nodes | `fill-card` | `#a855f7` / `#c084fc` | Semantic fill for light/dark mode |
+| Purple pill text | — | `#a855f7` | Fixed brand color |
+| Retrieval arc line | none | `url(#retrievalGrad)` green→transparent | Gradient flows right→left |
+| Green pill nodes | `fill-card` | `#4ade80` | Semantic fill for light/dark mode |
+| Green pill text | — | `#4ade80` | Fixed brand color |
+| `[MEMORY]` badge | `fill-card` | `#4ade80` | Same as green pills |
+| Agent/DB panel backgrounds | `fill-card` | `stroke-border` | Semantic — adapts to light/dark |
+| Panel title bars | `fill-muted` | — | Semantic |
+| All text (non-accent) | `fill-foreground` / `fill-muted-foreground` | — | Semantic |
+
+**Hard rule**: No hardcoded `#111`, `#1a1a1a`, or `#0a0a0a` for any background/fill that needs to adapt to light mode. Use `fill-card`, `fill-muted`, `fill-secondary` Tailwind semantic classes. Only brand purples and greens are hardcoded.
+
+### Reduced Motion
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  .slide-node { opacity: 1; animation: none !important; }
+  .slide-node-retrieval { opacity: 1; animation: none !important; }
+  .chat-appear { opacity: 1; transform: none; animation: none !important; }
+  .flow-line, .retrieval-line { animation: none !important; }
+  .pulse, .pulse-alt, .float { animation: none !important; }
+}
+```
+
+For reduced motion, position the retrieval pill nodes statically at evenly spaced points along the arc so the diagram is still readable.
+
+### Gemini Prompt Template (Updated)
+
+```
+Create an animated SVG visualization of a bidirectional memory extraction and retrieval
+cycle for an AI coding agent called codexfi. The visualization must show TWO equal,
+opposing flows — extraction and retrieval — forming a closed loop.
+
+LAYOUT:
+- LEFT PANEL: "OpenCode Agent" — chat bubbles and code blocks appearing and fading
+- CENTER: Two animated flows connecting left and right panels
+- RIGHT PANEL: "LanceDB Vector Store" — hexagon cluster of pulsing embedding nodes
+
+EXTRACTION FLOW (left → right, top half, purple):
+- 5 horizontal dashed lanes with animated dash-offset flowing left-to-right
+- Sliding pill-shaped nodes travel each lane labeled with memory types:
+  "architecture", "tech-context", "progress", "learned-pattern", "preference"
+- Purple color scheme: #a855f7 to #c084fc
+- Staggered delays so lanes feel asynchronous
+- Small arrowhead marker at right end of each lane pointing →
+- Subtle axis label above center lanes: "extraction →" (muted, small)
+
+RETRIEVAL FLOW (right → left, bottom arc, green):
+- A smooth curved arc (quadratic bezier) connecting the bottom-right of the DB panel
+  to the bottom-left of the agent panel
+- Animated dashed stroke flowing right-to-left
+- 3 sliding green pill nodes travel the arc from DB → agent labeled:
+  "[architecture]", "[progress]", "[preference]"
+  (square brackets to visually distinguish recalled memories from extracted ones)
+- Green color: #4ade80
+- Staggered so they don't all arrive simultaneously
+- Arrowhead marker at left end of arc pointing ← toward the agent
+- A floating "[MEMORY] injected" badge near the midpoint of the arc (stays put, pulses/floats)
+- Subtle axis label below arc center: "← retrieval" (muted, small)
+
+The extraction and retrieval cycles should be offset in phase so memories flow continuously
+— as one cycle finishes, the other is mid-flight. This creates a sense of intelligent
+circulation, not two separate animations.
+
+DESIGN SPECIFICATIONS:
+- viewBox="0 0 1000 500" — no fixed pixel dimensions
+- Background: transparent (placed on a dark/light adaptive surface)
+- Panel fills: use CSS class "fill-card" (not hardcoded hex) so they work in light mode
+- Panel borders: use CSS class "stroke-border"
+- Text (non-accent): use "fill-foreground" and "fill-muted-foreground" CSS classes
+- ONLY hardcode colors for brand purple (#a855f7, #c084fc, #e879f9) and green (#4ade80)
+- All animations: CSS @keyframes only — no JavaScript
 - Smooth infinite loop with no visible restart seam
-- Use viewBox for responsive scaling, no fixed pixel dimensions
-- Include <title> element for accessibility
-- File should be under 50KB when optimized
+- Include <title> element and aria-label for accessibility
+- Respect prefers-reduced-motion: reduce — all animated elements should have a static fallback
 - Premium, sophisticated feel — not cartoon-like or generic
+- Target file size: <50KB
 ```
 
 ### Technical Integration
@@ -1294,22 +1426,22 @@ git revert <merge-commit-hash>
 **Goal**: Replace placeholder with Gemini-designed animated SVG  
 **Duration**: ~2 hours  
 **Dependencies**: Phase 2 complete  
-**Status**: PENDING  
+**Status**: DONE  
 
 **Deliverables:**
-- [ ] SVG designed in Google AI Studio with Gemini 3.1 Pro
-- [ ] SVG optimized with SVGOMG (<50KB)
-- [ ] `website/components/svg/memory-flow.tsx` — Final animated SVG component
-- [ ] Responsive behavior verified (desktop + mobile)
-- [ ] `prefers-reduced-motion` pauses all CSS animations
-- [ ] Accessibility: `role="img"`, `aria-label`, `<title>` present
+- [x] SVG designed in Google AI Studio with Gemini 3.1 Pro
+- [x] SVG optimized with SVGOMG (<50KB)
+- [x] `website/components/svg/memory-flow.tsx` — Final animated SVG component
+- [x] Responsive behavior verified (desktop + mobile)
+- [x] `prefers-reduced-motion` pauses all CSS animations
+- [x] Accessibility: `role="img"`, `aria-label`, `<title>` present
 
 **Success Criteria:**
-- Animation loops smoothly with no visible restart
-- File size <50KB
-- No jank or frame drops on mobile
-- Lighthouse Performance score maintained >90
-- Screen reader announces meaningful description
+- [x] Animation loops smoothly with no visible restart
+- [x] File size <50KB
+- [x] No jank or frame drops on mobile
+- [x] Lighthouse Performance score maintained >90
+- [x] Screen reader announces meaningful description
 
 ---
 
