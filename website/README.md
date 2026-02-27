@@ -36,13 +36,13 @@ Live at **[codexfi.com](https://codexfi.com)**.
 - **pnpm 9+** — install via `npm install -g pnpm` or `corepack enable`
 
 ```bash
-# From the repo root
-nvm use          # switches to Node 22 (reads website/.nvmrc)
-cd website
-pnpm install
-pnpm dev         # http://localhost:3000
+# Run from the website/ directory
+source ~/.nvm/nvm.sh && nvm use && pnpm install && pnpm dev
+# → http://localhost:3000
 ```
 
+> The `.nvmrc` lives in `website/` — `nvm use` must be run from that directory, not the repo root.
+>
 > If you don't have nvm, install Node 22 directly from [nodejs.org](https://nodejs.org/).
 
 ### Build
@@ -83,19 +83,11 @@ Do not push to main — branch + PR only.
 
 OpenCode's bash tool runs in a **non-interactive shell** — it does not source `~/.zshrc` or `~/.zprofile`. This means `nvm` and any PATH additions from your shell profile are not available by default.
 
-To ensure the correct Node version and pnpm are available, prefix commands like this:
+To ensure the correct Node version and pnpm are available, run from `website/`:
 
 ```bash
 source ~/.nvm/nvm.sh && nvm use && pnpm dev
 ```
-
-Or set `NVM_DIR` explicitly:
-
-```bash
-export NVM_DIR="$HOME/.nvm" && source "$NVM_DIR/nvm.sh" && nvm use 22 && pnpm install
-```
-
-This affects all contributors using non-interactive shells, not just OpenCode.
 
 ## Structure
 
