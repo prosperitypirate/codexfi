@@ -22,9 +22,9 @@ jobs:
 
     permissions:
       id-token: write      # Required for OpenCode GitHub App token exchange
-      contents: read       # Checkout
+      contents: write      # OpenCode agent needs write to post review commits
       pull-requests: write  # Post review comments on PRs
-      issues: write        # Post comments on issues
+      issues: read         # gh CLI can read issue context for /oc commands
 
     steps:
       - uses: actions/checkout@v6
