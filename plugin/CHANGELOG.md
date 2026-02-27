@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/prosperitypirate/codexfi/compare/v0.4.1...v0.4.2) (2026-02-27)
+
+
+### Bug Fixes
+
+* **plugin:** document CONFIG_FILES write-target contract ([218d308](https://github.com/prosperitypirate/codexfi/commit/218d3080c2bc872603349c8aaaa8be2be68544dc))
+
 ## [0.4.1](https://github.com/prosperitypirate/codexfi/compare/v0.4.0...v0.4.1) (2026-02-26)
 
 
