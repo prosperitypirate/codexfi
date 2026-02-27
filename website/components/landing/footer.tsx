@@ -66,7 +66,15 @@ export function Footer() {
         </div>
 
         <div className="mt-10 border-t border-border pt-6 text-center text-xs text-muted-foreground">
-          &copy; {new Date().getFullYear()} codexfi &middot; MIT License
+          &copy; {new Date().getFullYear()} codexfi &middot; MIT License &middot; by{" "}
+          <a
+            href="https://prosperitypirate.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="transition-colors hover:text-foreground"
+          >
+            ProsperityPirate
+          </a>
         </div>
       </div>
     </footer>
