@@ -3,7 +3,7 @@
 **Feature**: Build and deploy codexfi.com — landing page + documentation site  
 **Issue**: #67  
 **Branch**: `feature/website`  
-**Status**: IN PROGRESS (Phase 1 complete)  
+**Status**: IN PROGRESS (Phase 2 complete)  
 **Created**: February 26, 2026  
 **Updated**: February 26, 2026  
 **Estimated Duration**: ~2 weeks across 5 phases  
@@ -258,8 +258,8 @@ The SVG hero animation will be **designed externally** using Gemini 3.1 Pro in G
 | Border | `#2a2a2a` | Subtle borders, dividers |
 | Text primary | `#f5f5f5` | Headings, body text |
 | Text secondary | `#a0a0a0` | Descriptions, captions |
-| Accent primary | `#3b82f6` to `#60a5fa` | CTAs, links, highlights (blue) |
-| Accent glow | `#3b82f6` at 20% opacity | Glow effects behind cards, hero elements |
+| Accent primary | `#a855f7` to `#c084fc` | CTAs, links, highlights (purple gradient) |
+| Accent glow | `#a855f7` at 20% opacity | Glow effects behind cards, hero elements |
 | Code green | `#4ade80` | Terminal prompts, success states |
 
 **Typography**:
@@ -373,8 +373,9 @@ A responsive grid of feature cards, each with an icon, title, and short descript
 
 **Scroll Animation:**
 - Cards fade in and slide up as they enter the viewport
-- Staggered timing (`staggerChildren: 0.1`) for sequential reveal
-- `useInView` with `{ once: true }` — animate once, don't re-trigger
+- Index-based delay (`delay: i * 0.07`) for sequential stagger reveal
+- `whileInView` with `viewport={{ once: true }}` — animate once, don't re-trigger
+- CSS `transition-[border-color,box-shadow]` for hover effects (NOT `transition-all` — conflicts with Motion transforms)
 
 #### 4. How It Works
 
@@ -836,6 +837,7 @@ website/
   lib/
     source.ts                       # Fumadocs source loader
     layout.shared.ts                # Shared layout options
+    animations.ts                   # Motion animation variants (fadeInUp, staggerContainer, scaleIn)
     utils.ts                        # cn() utility (shadcn/ui)
   public/
     favicon.ico
@@ -895,7 +897,7 @@ for an AI coding agent. The visualization should show:
 
 Design specifications:
 - Background: transparent (will be placed on #0a0a0a)
-- Primary colors: #3b82f6 (blue), #60a5fa (light blue), #4ade80 (green for terminal)
+- Primary colors: #a855f7 (purple), #c084fc (light purple), #4ade80 (green for terminal)
 - Subtle glow effects on connections and nodes
 - All animations use CSS @keyframes (no JavaScript)
 - Smooth infinite loop with no visible restart seam
@@ -965,9 +967,9 @@ Tailwind CSS v4 uses **CSS-first configuration** — no `tailwind.config.ts` fil
   /* Custom colors for codexfi dark theme */
   /* Note: uses --color-brand instead of --color-accent to avoid
      collision with shadcn/ui's accent token system */
-  --color-brand: #3b82f6;
-  --color-brand-light: #60a5fa;
-  --color-brand-glow: rgba(59, 130, 246, 0.2);
+  --color-brand: #a855f7;
+  --color-brand-light: #c084fc;
+  --color-brand-glow: rgba(168, 85, 247, 0.2);
   --color-surface: #1a1a1a;
   --color-surface-elevated: #1e1e1e;
   --color-terminal-green: #4ade80;
@@ -982,18 +984,28 @@ Tailwind CSS v4 uses **CSS-first configuration** — no `tailwind.config.ts` fil
 
 ### Animation Patterns (Motion)
 
-**Scroll reveal variant** — reusable across landing page sections:
+**Scroll reveal** — each element independently animated via `whileInView`:
 ```typescript
-// lib/animations.ts
+// Direct inline animation (preferred — avoids variant propagation issues)
+<motion.div
+  initial={{ opacity: 0, y: 20 }}
+  whileInView={{ opacity: 1, y: 0 }}
+  viewport={{ once: true }}
+  transition={{ duration: 0.4, delay: i * 0.07, ease: "easeOut" }}
+>
+```
+
+**Shared variants** — reusable across sections (`lib/animations.ts`):
+```typescript
 export const fadeInUp = {
   hidden: { opacity: 0, y: 30 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.6, ease: 'easeOut' } },
 };
 
+// Pure orchestrator — no opacity/transform of its own (prevents double-animation)
 export const staggerContainer = {
-  hidden: { opacity: 0 },
+  hidden: {},
   visible: {
-    opacity: 1,
     transition: { staggerChildren: 0.1 },
   },
 };
@@ -1004,26 +1016,25 @@ export const scaleIn = {
 };
 ```
 
-**Usage pattern:**
+**Usage pattern** — prefer independent `whileInView` per element over parent variant propagation:
 ```tsx
-import { motion, useInView } from 'motion/react';
+import { motion } from 'motion/react';
 
-function Section({ children }) {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: '-100px' });
-
-  return (
-    <motion.section
-      ref={ref}
-      initial="hidden"
-      animate={isInView ? 'visible' : 'hidden'}
-      variants={staggerContainer}
-    >
-      {children}
-    </motion.section>
-  );
-}
+// Each card manages its own animation with index-based delay
+{items.map((item, i) => (
+  <motion.div
+    key={item.id}
+    initial={{ opacity: 0, y: 20 }}
+    whileInView={{ opacity: 1, y: 0 }}
+    viewport={{ once: true }}
+    transition={{ duration: 0.4, delay: i * 0.07, ease: "easeOut" }}
+  >
+    {/* content */}
+  </motion.div>
+))}
 ```
+
+> **Important**: Do NOT use `useRef` + `useInView` + `animate={isInView ? ...}` pattern — it causes animation flickering. Do NOT use `transition-all` CSS class on Motion-animated elements — it conflicts with Motion's transform animations and causes a secondary "shift" after the animation completes. Use specific CSS transitions like `transition-[border-color,box-shadow]` instead.
 
 ### Reduced Motion Support
 
@@ -1102,6 +1113,9 @@ function AnimatedComponent() {
 | 15 | Node.js version | 22+ | Required by Fumadocs v16. Installed via nvm. |
 | 16 | Custom color token naming | `--color-brand-*` (not `--color-accent-*`) | Avoids collision with shadcn/ui's `--accent` token system in `@theme inline` block. |
 | 17 | Source import strategy | tsconfig path alias (`collections/server`) | Webpack cannot resolve `fumadocs-mdx:collections/server` namespace. tsconfig alias `collections/*` → `.source/*` works reliably. |
+| 18 | Brand color | Purple gradient (`#a855f7` → `#c084fc`) | User preference. Purple gradient conveys a more unique identity than blue. Applied via `--color-brand-*` tokens and `.text-gradient-brand` CSS utility. |
+| 19 | Animation approach | Independent `whileInView` per element (not parent variant propagation) | Parent `staggerContainer` + child variant propagation caused flicker and secondary "shift" animations. Independent `whileInView` with index-based delay is explicit and predictable. |
+| 20 | CSS transitions on animated elements | Specific property transitions only (`transition-[border-color,box-shadow]`) | `transition-all` CSS class conflicts with Motion's transform/opacity animations, causing a secondary visual shift after Motion completes. Always use specific CSS transitions on Motion-animated elements. |
 
 ---
 
@@ -1211,28 +1225,39 @@ git revert <merge-commit-hash>
 **Goal**: Complete landing page with placeholder SVG, feature grid, and install CTA  
 **Duration**: ~4 hours  
 **Dependencies**: Phase 1 complete  
-**Status**: PENDING  
+**Status**: DONE  
 
 **Deliverables:**
-- [ ] `website/app/(home)/page.tsx` — Landing page
-- [ ] `website/app/(home)/layout.tsx` — Home layout (HomeLayout from Fumadocs)
-- [ ] `website/components/landing/hero.tsx` — Hero section with tagline + placeholder SVG
-- [ ] `website/components/landing/features.tsx` — Feature grid with icons
-- [ ] `website/components/landing/how-it-works.tsx` — Three-step workflow
-- [ ] `website/components/landing/install-block.tsx` — Terminal-style install CTA
-- [ ] `website/components/landing/footer.tsx` — Site footer
-- [ ] `website/components/svg/memory-flow.tsx` — Placeholder SVG (replaced in Phase 4)
-- [ ] Motion scroll animations on all sections
-- [ ] Responsive design (mobile, tablet, desktop)
-- [ ] `prefers-reduced-motion` support
+- [x] `website/app/(home)/page.tsx` — Landing page composing Hero, Features, HowItWorks, Footer
+- [x] `website/app/(home)/layout.tsx` — Home layout (HomeLayout from Fumadocs) — already done in Phase 1
+- [x] `website/components/landing/hero.tsx` — Hero section with purple gradient tagline + placeholder SVG
+- [x] `website/components/landing/features.tsx` — 8-feature grid with Lucide icons and per-card scroll animation
+- [x] `website/components/landing/how-it-works.tsx` — Three-step workflow (Install, Code, Remember)
+- [x] `website/components/landing/install-block.tsx` — Terminal-style install CTA with copy-to-clipboard
+- [x] `website/components/landing/footer.tsx` — Site footer with Product/Resources/Community columns
+- [x] `website/components/svg/memory-flow.tsx` — Placeholder SVG (replaced in Phase 4)
+- [x] `website/lib/animations.ts` — Shared Motion animation variants
+- [x] Motion scroll animations on all sections (independent `whileInView` per element)
+- [x] Responsive design (mobile, tablet, desktop)
+- [x] `prefers-reduced-motion` support in SVG via `@media` query
+- [x] `geist@1.7.0` installed for GeistSans + GeistMono font variables
 
 **Success Criteria:**
-- Landing page renders with all sections
-- Scroll animations fire correctly
-- Mobile layout is usable
-- "Get Started" links to `/docs`
-- Install block has working copy-to-clipboard
-- Lighthouse Performance >90
+- [x] Landing page renders with all sections
+- [x] Scroll animations fire correctly (no flicker, no secondary shift)
+- [x] Mobile layout is usable
+- [x] "Get Started" links to `/docs`
+- [x] Install block has working copy-to-clipboard
+- [ ] Lighthouse Performance >90 (to verify after deployment)
+
+**Implementation Notes:**
+- Brand color changed from blue (`#3b82f6`) to purple gradient (`#a855f7` → `#c084fc` → `#e879f9`). Applied via `--color-brand-*` CSS custom properties and `.text-gradient-brand` utility class.
+- Animation approach evolved through two iterations:
+  1. Initial: `useRef` + `useInView` + `animate={isInView ? ...}` — caused flicker on scroll due to intersection observer toggling. Replaced with `whileInView` + `viewport={{ once: true }}`.
+  2. Second: Parent `staggerContainer` variant had `opacity: 0 → 1` causing a secondary "shift" after children completed their `fadeInUp`. Fixed by making `staggerContainer` a pure orchestrator (`hidden: {}`, no opacity). Then further simplified to independent `whileInView` per element with index-based delay — eliminates variant propagation entirely.
+  3. CSS `transition-all` on feature cards conflicted with Motion's transform animation, causing a second visual rise after animation. Replaced with `transition-[border-color,box-shadow]`.
+- Geist font package (`geist@1.7.0`) provides `GeistSans` and `GeistMono` font variables, loaded in `app/layout.tsx`.
+- Commit: `8da384b`
 
 ---
 
