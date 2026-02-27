@@ -1,6 +1,6 @@
 {
 	"name": "codexfi",
-	"version": "0.4.2",
+	"version": "0.4.3",
 	"description": "Persistent, semantic memory for AI coding agents — embedded LanceDB, zero Docker, one-command install",
 	"type": "module",
 	"main": "dist/index.js",

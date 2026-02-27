@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/prosperitypirate/codexfi/compare/v0.4.2...v0.4.3) (2026-02-27)
+
+
+### Bug Fixes
+
+* **plugin:** improve install UX — unicode rendering fix, sequential provider setup, dynamic version ([#79](https://github.com/prosperitypirate/codexfi/issues/79)) ([fbc9c88](https://github.com/prosperitypirate/codexfi/commit/fbc9c882dca1211fbbaba89293a5e42c45815d0e))
+
 ## [0.4.2](https://github.com/prosperitypirate/codexfi/compare/v0.4.1...v0.4.2) (2026-02-27)
 
 
