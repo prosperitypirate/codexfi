@@ -254,7 +254,7 @@ export function banner(version: string): void {
 	console.log();
 	console.log(
 		cyanBold("  codexfi") + dim(` v${version}`) +
-		dim(" -- persistent memory for AI coding agents")
+		dim(" - persistent memory for AI coding agents")
 	);
 	hr(60);
 }
