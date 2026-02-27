@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { motion } from "motion/react";
 import { ArrowRight, ExternalLink } from "lucide-react";
 import { fadeInUp, staggerContainer } from "@/lib/animations";
@@ -17,6 +18,25 @@ export function Hero() {
         variants={staggerContainer}
         className="flex max-w-4xl flex-col items-center"
       >
+        {/* Exclusively for OpenCode badge */}
+        <motion.a
+          variants={fadeInUp}
+          href="https://opencode.ai"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="mb-8 inline-flex items-center gap-2 rounded-full border border-brand/40 bg-brand/10 px-4 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-brand/20"
+        >
+          <Image
+            src="https://opencode.ai/favicon.ico"
+            alt="OpenCode"
+            width={16}
+            height={16}
+            className="rounded-sm"
+            unoptimized
+          />
+          Exclusively for OpenCode
+        </motion.a>
+
         <motion.h1
           variants={fadeInUp}
           className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"
