@@ -24,9 +24,10 @@ export function Hero() {
           href="https://opencode.ai"
           target="_blank"
           rel="noopener noreferrer"
+          aria-label="Exclusively for OpenCode"
           className="mb-8 inline-flex items-center gap-3 rounded-full border border-border bg-muted/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
         >
-          <span className="text-xs uppercase tracking-widest text-muted-foreground/70">Exclusively for</span>
+          <span aria-hidden="true" className="text-xs uppercase tracking-widest text-muted-foreground/70">Exclusively for</span>
           <OpenCodeWordmark height={16} width={89} />
         </motion.a>
 

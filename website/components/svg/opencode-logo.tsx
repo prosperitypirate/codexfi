@@ -11,15 +11,8 @@ export function OpenCodeLogo(props: SVGProps<SVGSVGElement>) {
       aria-label="OpenCode"
       {...props}
     >
-      <g clipPath="url(#opencode-clip)">
-        <path d="M24 32H8V16H24V32Z" fill="#4B4646" />
-        <path d="M24 8H8V32H24V8ZM32 40H0V0H32V40Z" fill="#F1ECEC" />
-      </g>
-      <defs>
-        <clipPath id="opencode-clip">
-          <rect width="32" height="40" fill="white" />
-        </clipPath>
-      </defs>
+      <path className="fill-neutral-200 dark:fill-[#4B4646]" d="M24 32H8V16H24V32Z" />
+      <path className="fill-neutral-800 dark:fill-[#F1ECEC]" d="M24 8H8V32H24V8ZM32 40H0V0H32V40Z" />
     </svg>
   );
 }
