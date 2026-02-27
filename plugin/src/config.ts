@@ -40,7 +40,7 @@ export function validateId(value: string, fieldName = "id"): string {
 }
 
 // ── API credentials ─────────────────────────────────────────────────────────────
-// Environment variables take precedence; config file (~/.config/opencode/memory.jsonc)
+// Environment variables take precedence; config file (~/.config/opencode/codexfi.jsonc)
 // is the fallback. This lets power users use env vars while the install command
 // stores keys in the config file for "just works" onboarding.
 // NOTE: We use `||` (not `??`) so empty strings from env vars fall through to config.

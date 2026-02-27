@@ -14,9 +14,6 @@ export const CONFIG_DIR = join(homedir(), ".config", "opencode");
 const CONFIG_FILES = [
 	join(CONFIG_DIR, "codexfi.jsonc"),
 	join(CONFIG_DIR, "codexfi.json"),
-	// Legacy fallback — check old config name for seamless migration
-	join(CONFIG_DIR, "memory.jsonc"),
-	join(CONFIG_DIR, "memory.json"),
 ];
 
 interface MemoryConfig {
@@ -155,7 +152,7 @@ export const PLUGIN_CONFIG = {
  * Check if the plugin is configured — requires VOYAGE_API_KEY for embeddings.
  *
  * Checks environment variables first (power users / CI), then falls back to
- * the config file at ~/.config/opencode/memory.jsonc (set by `install` command).
+ * the config file at ~/.config/opencode/codexfi.jsonc (set by `install` command).
  */
 export function isConfigured(): boolean {
 	return !!(process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey);
@@ -172,7 +169,7 @@ export interface ApiKeyUpdate {
 }
 
 /**
- * Write API keys to ~/.config/opencode/memory.jsonc.
+ * Write API keys to ~/.config/opencode/codexfi.jsonc.
  *
  * Reads the existing config file (if any) to preserve non-key settings,
  * merges in the new keys, and writes a well-commented JSONC file.
@@ -185,7 +182,7 @@ export function writeApiKeys(keys: ApiKeyUpdate): void {
 	const existing = loadConfig();
 	const merged: MemoryConfig = { ...existing, ...keys };
 
-	const configPath = join(CONFIG_DIR, "memory.jsonc");
+	const configPath = CONFIG_FILES[0];
 	writeFileSync(configPath, generateConfigJsonc(merged), "utf-8");
 }
 
@@ -197,7 +194,7 @@ export function getConfigPath(): string {
 	for (const path of CONFIG_FILES) {
 		if (existsSync(path)) return path;
 	}
-	return CONFIG_FILES[0]; // default: memory.jsonc
+	return CONFIG_FILES[0]; // default: codexfi.jsonc
 }
 
 /**
