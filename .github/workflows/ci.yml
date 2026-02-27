@@ -96,3 +96,22 @@ jobs:
       - name: Skip — no plugin changes
         if: steps.changes.outputs.plugin != 'true'
         run: echo "No plugin/testing changes detected — skipping tests"
+
+  # ── Status gate ────────────────────────────────────────────────────────────
+  # Always runs and always reports a status to GitHub. This is the single
+  # required check in branch protection. Build/Test are allowed to skip (e.g.
+  # on release-please PRs that only touch package.json/CHANGELOG.md) without
+  # blocking the merge — but they must not have actually failed.
+  status:
+    name: CI
+    runs-on: ubuntu-latest
+    needs: [build, test]
+    if: always()
+    steps:
+      - name: Verify build and test passed or were skipped
+        run: |
+          if [[ "${{ needs.build.result }}" == "failure" || "${{ needs.test.result }}" == "failure" ]]; then
+            echo "Build or Test failed — blocking merge"
+            exit 1
+          fi
+          echo "CI passed (build: ${{ needs.build.result }}, test: ${{ needs.test.result }})"
