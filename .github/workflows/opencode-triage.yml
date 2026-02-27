@@ -50,23 +50,17 @@ jobs:
           model: anthropic/claude-sonnet-4-6
           share: false
           prompt: |
-            Triage this GitHub issue for the codexfi project — a persistent memory
+            Review this issue for the codexfi project — a persistent memory
             plugin for OpenCode (embedded LanceDB + Voyage AI embeddings,
             TypeScript plugin with CLI and web dashboard).
 
-            Steps:
-            1. Read the issue title and body carefully.
-            2. Classify it as one of: bug, feature-request, question, docs, performance,
-               security, or invalid/duplicate.
-            3. Post a single helpful comment that:
-               - Acknowledges the issue in 1-2 sentences
-               - Adds a relevant label (use: bug, enhancement, question, documentation,
-                 performance, security, invalid, duplicate)
-               - If it's a bug: ask for reproduction steps if missing, and point to the
-                 relevant component (plugin/, backend/, frontend/, or memory server)
-               - If it's a feature request: briefly assess feasibility given the
-                 architecture (self-hosted LanceDB, Voyage AI embeddings, OpenCode plugin SDK)
-               - If it's a question: answer it directly if you can from the codebase,
-                 otherwise point to the relevant file
-               - If invalid/spam/duplicate: politely close with a brief explanation
-            4. Do not over-explain. Keep the comment concise and useful.
+            If the issue is a bug with clear reproduction steps, point to the
+            relevant component (plugin/, website/) and add the `bug` label.
+
+            If the issue is a question you can answer directly from the codebase,
+            provide a concise answer and add the `question` label.
+
+            If the issue is spam, a duplicate, or invalid, add the appropriate
+            label (invalid, duplicate) and briefly explain why.
+
+            Otherwise, do not comment.
