@@ -62,10 +62,6 @@ export function DocsTestIsolation() {
       </defs>
 
       <g fontFamily="var(--font-mono, monospace)">
-        {/* Above pipeline: repeats indicator */}
-        <text x="490" y="20" fontSize="12" className="fill-muted-foreground" opacity="0.3">↺</text>
-        <text x="510" y="20" fontSize="12" className="fill-muted-foreground" opacity="0.3">↺</text>
-        <text x="530" y="20" fontSize="12" className="fill-muted-foreground" opacity="0.3">↺</text>
 
         {/* Bounding Box below pipeline */}
         <rect x="10" y="85" width="540" height="45" rx="6" className="fill-none stroke-border" strokeDasharray="4 3" opacity="0.6" />
