@@ -1,3 +1,7 @@
+/**
+ * Animated diagram of all 11 memory types organized by project scope versus user scope.
+ * @component
+ */
 export function DocsMemoryTaxonomy() {
   return (
     <svg viewBox="0 0 600 280" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A map of all 11 memory types organized by project scope versus user scope.">

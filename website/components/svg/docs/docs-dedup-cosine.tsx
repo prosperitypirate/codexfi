@@ -1,3 +1,7 @@
+/**
+ * Animated diagram demonstrating the cosine similarity check for deduplicating new memories.
+ * @component
+ */
 export function DocsDedupCosine() {
   return (
     <svg viewBox="0 0 480 180" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram demonstrating the cosine similarity check for deduplicating new memories.">

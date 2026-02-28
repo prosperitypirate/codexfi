@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing how progress and session-summary memory types age automatically over time.
+ * @component
+ */
 export function DocsAgingRules() {
   return (
     <svg viewBox="0 0 560 200" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing how progress and session-summary memory types age automatically over time.">

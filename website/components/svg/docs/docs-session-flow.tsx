@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing the full hook flow from user message through memory retrieval, LLM call, and auto-save storage.
+ * @component
+ */
 export function DocsSessionFlow() {
   return (
     <svg viewBox="0 0 680 320" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="The full hook flow from user message through memory retrieval, LLM call, and auto-save storage.">

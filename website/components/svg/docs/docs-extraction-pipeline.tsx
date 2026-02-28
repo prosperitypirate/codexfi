@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing the 7-step pipeline from message snapshot to extraction, embedding, and storage.
+ * @component
+ */
 export function DocsExtractionPipeline() {
   const steps = [
     { y: 40, n: 1, name: "Message Snapshot", sub: "last 8 messages", color: "#c084fc" },

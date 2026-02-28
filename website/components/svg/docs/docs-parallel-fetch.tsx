@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing four simultaneous database fetches fanning out from a user message on Turn 1.
+ * @component
+ */
 export function DocsParallelFetch() {
   return (
     <svg viewBox="0 0 520 220" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing four simultaneous database fetches fanning out from a user message on Turn 1.">

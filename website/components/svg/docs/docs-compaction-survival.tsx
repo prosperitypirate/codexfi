@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing that the memory block in the system prompt survives when the conversation history is truncated during compaction.
+ * @component
+ */
 export function DocsCompactionSurvival() {
   return (
     <svg viewBox="0 0 520 200" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing that the memory block in the system prompt survives when the conversation history is truncated during compaction.">

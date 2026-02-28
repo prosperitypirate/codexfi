@@ -1,3 +1,7 @@
+/**
+ * Animated diagram showing the perpetual loop of codexfi turning conversations into memories and back.
+ * @component
+ */
 export function DocsMemoryCycle() {
   return (
     <svg viewBox="0 0 640 160" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing the perpetual loop of codexfi turning conversations into memories and back.">

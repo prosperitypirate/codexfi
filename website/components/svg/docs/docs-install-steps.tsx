@@ -1,3 +1,7 @@
+/**
+ * Animated terminal window showing the three-step codexfi installation process.
+ * @component
+ */
 export function DocsInstallSteps() {
   return (
     <svg viewBox="0 0 560 130" width="100%" className="mx-auto w-full max-w-2xl" role="img" aria-label="A terminal window showing the three-step codexfi installation process.">

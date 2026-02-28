@@ -1,3 +1,7 @@
+/**
+ * Animated comparison chart of extraction speeds across Anthropic, xAI, and Google providers.
+ * @component
+ */
 export function DocsProviderSpeed() {
   return (
     <svg viewBox="0 0 520 160" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A comparison of extraction speeds across Anthropic, xAI, and Google providers.">

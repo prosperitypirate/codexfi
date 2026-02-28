@@ -1,5 +1,3 @@
-import React from "react";
-
 const IconAutomatic = () => (
   <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 42L42 22" className="stroke-[#a855f7]" strokeWidth="3" />
@@ -95,6 +93,10 @@ const IconPrivacy = () => (
   </svg>
 );
 
+/**
+ * A responsive 3x3 grid of bespoke, animated SVG feature cards for codexfi.
+ * @component
+ */
 export function DocsKeyFeatures() {
   const features = [
     {
