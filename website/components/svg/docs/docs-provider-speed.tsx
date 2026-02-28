@@ -40,7 +40,7 @@ export function DocsProviderSpeed() {
       </defs>
 
       {/* Card 1: Anthropic */}
-      <rect x="10" y="15" width="150" height="130" rx="10" className="fill-card stroke-border" strokeWidth="1.5" />
+      <rect x="10" y="15" width="150" height="130" rx="10" className="fill-card stroke-[#4ade80]" strokeWidth="2" />
       <text x="25" y="45" fontSize="12" fontWeight="600" fontFamily="var(--font-mono, monospace)" className="fill-foreground">Anthropic</text>
       <text x="25" y="59" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">claude-haiku-4-5</text>
       <text x="25" y="90" fontSize="18" fontWeight="700" fontFamily="var(--font-mono, monospace)" fill="#a855f7">~14s</text>
@@ -54,7 +54,7 @@ export function DocsProviderSpeed() {
       <rect x="25" y="100" height="6" rx="3" fill="#a855f7" className="bar-anthropic-ps" />
 
       {/* Card 2: xAI */}
-      <rect x="185" y="15" width="150" height="130" rx="10" className="fill-card stroke-[#4ade80]" strokeWidth="2" />
+      <rect x="185" y="15" width="150" height="130" rx="10" className="fill-card stroke-border" strokeWidth="1.5" />
       <text x="200" y="45" fontSize="12" fontWeight="600" fontFamily="var(--font-mono, monospace)" className="fill-foreground">xAI</text>
       <text x="200" y="59" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">grok-4-1-fast</text>
       <text x="200" y="90" fontSize="22" fontWeight="700" fontFamily="var(--font-mono, monospace)" fill="#4ade80">~5s</text>
