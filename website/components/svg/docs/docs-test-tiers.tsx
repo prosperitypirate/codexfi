@@ -17,24 +17,40 @@ export function DocsTestTiers() {
           <polygon points="0 0, 6 2, 0 4" className="fill-muted-foreground" />
         </marker>
         <style>{`
+          .panel-tt {
+            transform-box: fill-box;
+          }
+          
           @media (prefers-reduced-motion: no-preference) {
             .panel-tt {
-              animation: fadeIn-tt 0.5s ease-out forwards;
               opacity: 0;
             }
+            .panel-1 { animation: fadeIn1-tt 0.5s ease-out forwards; animation-delay: 0s; }
+            .panel-2 { animation: fadeIn2-tt 0.5s ease-out forwards; animation-delay: 0.2s; }
+            .panel-3 { animation: fadeIn3-tt 0.5s ease-out forwards; animation-delay: 0.4s; }
+            
             .glow-pulse-tt {
-              animation: glowPulse-tt 3s ease-in-out infinite alternate;
-              animation-delay: 0.9s; /* Start after fade-in completes */
+              animation: fadeIn3-tt 0.5s ease-out forwards, glowPulse-tt 3s ease-in-out infinite alternate;
+              animation-delay: 0.4s, 0.9s;
             }
+            
             .arrow-draw-tt {
               animation: drawArrow-tt 0.5s ease-out forwards;
               stroke-dasharray: 40;
               stroke-dashoffset: 40;
             }
             
-            @keyframes fadeIn-tt {
+            @keyframes fadeIn1-tt {
               from { opacity: 0; transform: translateY(5px); }
               to { opacity: 1; transform: translateY(0); }
+            }
+            @keyframes fadeIn2-tt {
+              from { opacity: 0; transform: translate(190px, 5px); }
+              to { opacity: 1; transform: translate(190px, 0); }
+            }
+            @keyframes fadeIn3-tt {
+              from { opacity: 0; transform: translate(380px, 5px); }
+              to { opacity: 1; transform: translate(380px, 0); }
             }
             @keyframes glowPulse-tt {
               from { filter: drop-shadow(0 0 2px rgba(168, 85, 247, 0.3)); }
@@ -46,7 +62,9 @@ export function DocsTestTiers() {
           }
           
           @media (prefers-reduced-motion: reduce) {
-            .panel-tt { opacity: 1; transform: translateY(0); }
+            .panel-1 { opacity: 1; transform: translate(0, 0); }
+            .panel-2 { opacity: 1; transform: translate(190px, 0); }
+            .panel-3 { opacity: 1; transform: translate(380px, 0); }
             .arrow-draw-tt { stroke-dasharray: none; }
           }
         `}</style>
@@ -54,7 +72,7 @@ export function DocsTestTiers() {
 
       <g fontFamily="var(--font-mono, monospace)">
         {/* Panel 1: Unit */}
-        <g className="panel-tt" style={{ animationDelay: '0s' }}>
+        <g className="panel-tt panel-1">
           <rect x="0" y="0" width="160" height="110" rx="10" className="fill-card stroke-border" strokeWidth="1.5" />
           <text x="80" y="28" fontSize="10" fontWeight="700" letterSpacing="1.5" className="fill-muted-foreground" textAnchor="middle">UNIT</text>
           
@@ -70,7 +88,7 @@ export function DocsTestTiers() {
         <line x1="166" y1="55" x2="184" y2="55" className="stroke-border arrow-draw-tt" strokeWidth="1.5" markerEnd="url(#arrowhead-tt)" style={{ animationDelay: '0.6s' }} />
 
         {/* Panel 2: Integration */}
-        <g className="panel-tt" transform="translate(190, 0)" style={{ animationDelay: '0.2s' }}>
+        <g className="panel-tt panel-2">
           <rect x="0" y="0" width="160" height="110" rx="10" className="fill-card" stroke="#c084fc" strokeWidth="1.5" />
           <text x="80" y="28" fontSize="10" fontWeight="700" letterSpacing="1.5" fill="#c084fc" textAnchor="middle">INTEGRATION</text>
           
@@ -86,7 +104,7 @@ export function DocsTestTiers() {
         <line x1="356" y1="55" x2="374" y2="55" className="stroke-border arrow-draw-tt" strokeWidth="1.5" markerEnd="url(#arrowhead-tt)" style={{ animationDelay: '0.7s' }} />
 
         {/* Panel 3: E2E */}
-        <g className="panel-tt glow-pulse-tt" transform="translate(380, 0)" style={{ animationDelay: '0.4s' }}>
+        <g className="panel-tt panel-3 glow-pulse-tt">
           <rect x="0" y="0" width="160" height="110" rx="10" className="fill-card" stroke="#a855f7" strokeWidth="2" filter="url(#glow-tt)" />
           <text x="80" y="28" fontSize="10" fontWeight="700" letterSpacing="1.5" fill="#a855f7" textAnchor="middle">E2E</text>
           
