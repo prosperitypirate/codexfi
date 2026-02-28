@@ -1,7 +1,8 @@
 name: opencode-triage
 
 on:
-  workflow_dispatch: # disabled — enable manually if needed
+  issues:
+    types: [opened]
 
 jobs:
   # Gate: check account age before allocating a runner for the triage job
@@ -44,22 +45,47 @@ jobs:
 
       - uses: anomalyco/opencode/github@latest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         with:
-          model: anthropic/claude-sonnet-4-6
+          model: xai/grok-4-1-fast-non-reasoning
           share: false
           prompt: |
-            Review this issue for the codexfi project — a persistent memory
-            plugin for OpenCode (embedded LanceDB + Voyage AI embeddings,
-            TypeScript plugin with CLI and web dashboard).
+            You are triaging a new GitHub issue for the codexfi project.
 
-            If the issue is a bug with clear reproduction steps, point to the
-            relevant component (plugin/, website/) and add the `bug` label.
+            ## Project context
+            codexfi is a persistent memory plugin for OpenCode (the AI coding agent).
+            It embeds LanceDB + Voyage AI embeddings, runs as a TypeScript plugin
+            with a CLI and a web dashboard (codexfi.com).
 
-            If the issue is a question you can answer directly from the codebase,
-            provide a concise answer and add the `question` label.
+            Key components:
+            - plugin/src/           — TypeScript plugin (OpenCode integration, memory store)
+            - plugin/src/cli/       — CLI commands (install, status, stats, list, search)
+            - website/              — Next.js web dashboard
+            - .github/workflows/    — CI/CD
 
-            If the issue is spam, a duplicate, or invalid, add the appropriate
-            label (invalid, duplicate) and briefly explain why.
+            ## Instructions
 
-            Otherwise, do not comment.
+            ### Bug reports
+            - WITH clear repro steps: read the codebase, identify the likely affected
+              file/component, add `bug` label, comment with your finding.
+            - WITHOUT repro steps: add `bug` label, ask for OS, Bun/Node version,
+              OpenCode version, exact error/stack trace, and steps to reproduce.
+
+            ### Feature requests
+            - Add `enhancement` label, acknowledge the request, note the relevant
+              component it would touch.
+
+            ### Questions
+            - Read the codebase to find an accurate answer. Add `question` label,
+              provide a concise answer with file references where relevant.
+
+            ### Duplicates / spam / invalid
+            - Search existing open AND closed issues for duplicates first.
+            - Duplicate: add `duplicate` label, link the original.
+            - Spam or off-topic: add `invalid` label, one sentence explanation.
+
+            ### Ambiguous
+            - If none of the above apply, do not comment and do not label.
+
+            ## Tone
+            Concise and helpful. One short paragraph per response. Assume good faith.

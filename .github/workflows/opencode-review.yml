@@ -43,25 +43,55 @@ jobs:
             Review this pull request for the codexfi project (a persistent memory
             plugin for OpenCode using embedded LanceDB + Voyage AI embeddings).
 
-            Check for:
+            ## Code quality
             - Correctness and logic bugs
             - TypeScript type safety (plugin/ uses @opencode-ai/plugin SDK)
-            - Memory system correctness: embedding storage, retrieval thresholds,
-              memory type taxonomy, session-summary aging rules
-            - Security issues (secrets, injection, auth)
-            - Performance concerns (LanceDB query efficiency, embedding batch sizes)
+            - Unused imports, dead code, or accidentally left-in variables
             - Missing error handling or edge cases
             - Consistency with existing patterns in the codebase
 
-            Also check PR hygiene and flag as Warning if any of these are missing:
-            - At least one label applied (bug, enhancement, memory-quality, chore, ci, backend, frontend, plugin, benchmark, security, documentation, research)
+            ## Project-specific correctness
+            - Memory system: embedding storage, retrieval thresholds, memory type
+              taxonomy, session-summary aging rules
+            - LanceDB query efficiency and embedding batch sizes
+            - Plugin hook correctness (chat.message, event hooks in package.json)
+
+            ## Security
+            - Hardcoded secrets, API keys, or tokens in source
+            - Injection vulnerabilities, unsafe eval, prototype pollution
+            - GitHub Actions supply chain: flag any third-party action using @latest
+              or a branch ref (not pinned to a commit SHA) that has sensitive
+              permissions (id-token: write, contents: write, or secrets access)
+
+            ## Test coverage
+            - Tests live in testing/src/unit/ and testing/src/integration/
+            - If the PR adds or changes logic in plugin/src/, flag if no corresponding
+              test exists. New exported functions should have unit tests.
+
+            ## Breaking changes
+            - Exported TypeScript types or function signatures
+            - CLI command names, flags, or output format
+            - Plugin hook interface (opencode.type, hooks array in package.json)
+            - New or bumped dependencies in package.json
+
+            ## Accessibility (website/ changes only)
+            - Missing alt attributes on images
+            - Missing ARIA labels on interactive elements
+            - Keyboard navigation issues
+
+            ## Documentation
+            - Exported functions or types lacking JSDoc
+            - README or CHANGELOG updates needed for user-visible changes
+
+            ## PR hygiene
+            Flag as Warning if missing:
+            - At least one label applied (bug, enhancement, memory-quality, chore, ci,
+              backend, frontend, plugin, benchmark, security, documentation, research)
             - A related issue linked (e.g. "Closes #N") — not required for chore/ci/docs PRs
             - PR description is not empty
 
-            Post a concise review comment on the PR with findings grouped by severity:
-            **Critical**, **Warning**, **Suggestion**. Skip sections with no findings.
-            If the PR looks good, say so briefly.
+            Post findings grouped by severity: **Critical**, **Warning**, **Suggestion**.
+            Skip empty sections. If the PR looks good, say so briefly.
 
-            IMPORTANT: Do not include any preamble about GitHub token permissions,
-            authentication status, or environment limitations. Post the review
-            content directly without any meta-commentary about tooling.
+            IMPORTANT: No preamble about token permissions or environment limitations.
+            Post review content directly without any meta-commentary about tooling.
