@@ -103,7 +103,7 @@ export default function OgImage() {
               fontSize: 20,
             }}
           >
-            bunx codexfi install
+            curl -fsSL https://codexfi.com/install | bash
           </span>
         </div>
       </div>
