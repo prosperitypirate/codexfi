@@ -13,6 +13,7 @@ import { DocsExtractionPipeline } from "@/components/svg/docs/docs-extraction-pi
 import { DocsProviderSpeed } from "@/components/svg/docs/docs-provider-speed";
 import { DocsInstallSteps } from "@/components/svg/docs/docs-install-steps";
 import { DocsDedupCosine } from "@/components/svg/docs/docs-dedup-cosine";
+import { DocsKeyFeatures } from "@/components/svg/docs/docs-key-features";
 
 const customComponents = {
   ...defaultMdxComponents,
@@ -26,6 +27,7 @@ const customComponents = {
   DocsProviderSpeed,
   DocsInstallSteps,
   DocsDedupCosine,
+  DocsKeyFeatures,
 };
 
 export default async function Page(props: {
