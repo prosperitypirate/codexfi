@@ -29,24 +29,33 @@ export function DocsE2eScenarioMap() {
           <feComposite in="SourceGraphic" in2="blur" operator="over" />
         </filter>
         <style>{`
+          .card-esm {
+            /* Using transition instead of animation for simple fade-in to avoid transform override issues entirely,
+               or applying the animation to the opacity only, not the transform.
+               Actually, the issue is that transform: translateY(4px) overrides the inline translate(x, y). 
+               Let's drop the translation entirely and just use opacity for the fade-in, it's safer and still looks good.
+             */
+          }
+          
           @media (prefers-reduced-motion: no-preference) {
             .card-esm {
-              animation: fadeInCard-esm 0.4s ease-out forwards;
+              animation: fadeInOpacity-esm 0.4s ease-out forwards;
               opacity: 0;
             }
             .warn-glow-esm {
-              animation: glowAmber-esm 2.5s ease-in-out infinite alternate;
-              animation-delay: 0.8s;
+              animation: fadeInOpacity-esm 0.4s ease-out forwards, glowAmber-esm 2.5s ease-in-out infinite alternate;
+              animation-delay: 0.65s, 0.8s;
             }
             .summary-esm {
-              animation: fadeInCard-esm 0.5s ease-out forwards;
+              animation: fadeInOpacity-esm 0.5s ease-out forwards;
               opacity: 0;
             }
             
-            @keyframes fadeInCard-esm {
-              from { opacity: 0; transform: translateY(4px); }
-              to { opacity: 1; transform: translateY(0); }
+            @keyframes fadeInOpacity-esm {
+              from { opacity: 0; }
+              to { opacity: 1; }
             }
+            
             @keyframes glowAmber-esm {
               from { filter: drop-shadow(0 0 2px rgba(245, 158, 11, 0.3)); }
               to { filter: drop-shadow(0 0 6px rgba(245, 158, 11, 0.7)); }
@@ -56,7 +65,6 @@ export function DocsE2eScenarioMap() {
           @media (prefers-reduced-motion: reduce) {
             .card-esm, .summary-esm {
               opacity: 1;
-              transform: translateY(0);
             }
           }
         `}</style>
