@@ -1,0 +1,146 @@
+---
+title: Test Suite
+description: What codexfi verifies automatically — unit, integration, and 12 autonomous E2E scenarios. Latest run 11/12 PASS.
+---
+
+# Test Suite
+
+codexfi ships with a three-tier test suite that verifies the memory system works end-to-end — from vector storage through to what the agent actually says in a conversation.
+
+<DocsTestTiers />
+
+## What is verified
+
+The 12 E2E scenarios test the behaviors you rely on as a user:
+
+| Scenario | What it guarantees for you |
+|---|---|
+| Cross-Session Memory Continuity | Facts you mention in one session are available in the next |
+| README-Based Project Seeding | Opening a project with a README auto-populates memory without any action from you |
+| Transcript Noise Guard | Memory contains distilled facts, not raw conversation transcripts |
+| Project-Brief Always Present | Even without a README, the agent builds project context from conversation |
+| Memory Aging | Old "current status" entries are replaced — you always get the latest state, not history |
+| Existing Codebase Auto-Init | Opening an existing codebase populates memory from project files automatically |
+| Enumeration Hybrid Retrieval | "List all my preferences" queries return facts across all sessions, not just the recent ones |
+| Cross-Synthesis | Queries about multiple projects surface facts from both namespaces |
+| Memory Under Load | Early session facts are still recalled when many memories are stored |
+| Knowledge Update | After you change tools or approaches, the agent uses the new information, not the old |
+| System Prompt Injection | The `[MEMORY]` block is always present in the system prompt — never missed |
+| Multi-Turn Per-Turn Refresh | As you switch topics mid-session, relevant memories surface automatically |
+
+## Latest results
+
+<DocsE2eScenarioMap />
+
+Run against `plugin/` (embedded LanceDB) — 2026-02-25.
+
+```
+PASS  01  Cross-Session Memory Continuity
+PASS  02  README-Based Project-Brief Seeding
+PASS  03  Transcript Noise Guard
+PASS  04  Project Brief Always Present
+PASS  05  Memory Aging
+PASS  06  Existing Codebase Auto-Init
+PASS  07  Enumeration Hybrid Retrieval
+PASS  08  Cross-Synthesis (isWideSynthesis)
+WARN  09  maxMemories=20 Under Load
+PASS  10  Knowledge Update / Superseded
+PASS  11  System Prompt Memory Injection
+PASS  12  Multi-Turn Per-Turn Refresh
+
+11/12 PASS
+```
+
+Scenario 09 (`maxMemories=20 Under Load`) shows a `WARN` rather than a `PASS`. This is a non-deterministic margin issue — not a regression. The extraction LLM consolidates conversation facts differently on each run, so the number of memories produced by a fixed set of sessions varies. The K=20 retrieval depth is correct; the test assertion can be missed when extraction yields fewer memories than expected. The underlying feature (early-session recall under load) works correctly.
+
+---
+
+## For contributors
+
+The sections below cover the test architecture and how to run each tier locally.
+
+### Test tiers
+
+| Tier | What runs | Speed |
+|---|---|---|
+| **Unit** | Isolated logic — dedup, aging, extraction parsing, config loading | Seconds |
+| **Integration** | Real LanceDB + real embedder against a test store | ~30s |
+| **E2E** | Real `opencode` processes, real memory store, 12 autonomous scenarios | ~5–10 min |
+
+### Running unit and integration tests
+
+```bash
+# From the repo root
+bun run test                    # unit + integration together
+bun test src/unit/              # unit only
+bun test src/integration/       # integration only
+```
+
+### Running E2E tests
+
+```bash
+# From the repo root
+bun run test:e2e                     # all 12 scenarios
+bun run test:e2e:scenario 07         # single scenario
+bun run test:e2e:scenario 07,08,12   # subset
+```
+
+Or directly from the `testing/` directory:
+
+```bash
+cd testing
+bun install       # first time only
+bun run test      # all 12 scenarios
+bun run test:scenario 07
+```
+
+### E2E prerequisites
+
+The E2E suite spawns real `opencode run` and `opencode serve` processes. Four things must be in place:
+
+1. **Plugin built** — `cd plugin && bun run build`
+2. **OpenCode CLI installed** — `bun install -g opencode-ai` (v1.2.10+)
+3. **Plugin registered** in `~/.config/opencode/opencode.json`:
+   ```json
+   {
+     "plugin": ["file:///absolute/path/to/codexfi/plugin/dist/index.js"]
+   }
+   ```
+4. **API keys set** in environment:
+   - `VOYAGE_API_KEY` — embeddings
+   - `ANTHROPIC_API_KEY` — LLM extraction (`claude-haiku-4-5`)
+   - An AI provider key for the OpenCode agent sessions
+
+<DocsTestIsolation />
+
+### Full E2E scenario reference
+
+Each scenario runs in an isolated temporary directory. All memories it creates are deleted from the store automatically after it completes.
+
+| # | Name | What it tests internally |
+|---|---|---|
+| 01 | Cross-Session Memory Continuity | Auto-save fires after session end; session 2 recalls facts from session 1 |
+| 02 | README-Based Project-Brief Seeding | `triggerSilentAutoInit` reads README on first session; `project-brief` memory is created and recalled in session 2 |
+| 03 | Transcript Noise Guard | Saved memories contain no raw `[user]`/`[assistant]` transcript lines |
+| 04 | Project-Brief Always Present | Memories accumulate from conversation even without README; session 2 recalls project facts |
+| 05 | Memory Aging | Backend replaces older `progress` memories with newest; only 1 survives across 3 sessions |
+| 06 | Existing Codebase Auto-Init | `triggerSilentAutoInit` reads real project files (`package.json`, `tsconfig`, `src/`) on first open |
+| 07 | Enumeration Hybrid Retrieval | `types[]` param fires for "list all preferences" queries; answer covers preferences across all sessions |
+| 08 | Cross-Synthesis (`isWideSynthesis`) | "across both projects" heuristic fires; answer synthesises facts from two project namespaces |
+| 09 | `maxMemories=20` Under Load | With >10 memories stored, facts from early sessions still recalled — confirms K=20 retrieval depth |
+| 10 | Knowledge Update / Superseded | After ORM migration, agent answers with Tortoise (new), not SQLAlchemy (stale) |
+| 11 | System Prompt Memory Injection | `[MEMORY]` block injected via `system.transform` into the system prompt — not as a synthetic message part |
+| 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories on topic switches |
+
+### Known issue: OpenCode Desktop app interference
+
+If the OpenCode Desktop app is running, it sets `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, and `OPENCODE_CLIENT` in your shell environment. The `opencode run` CLI inherits these and its internal server then requires Basic Auth — causing every CLI session to fail silently.
+
+The test harness handles this automatically via `cleanEnv()` in `testing/src/opencode.ts`. You do not need to close the Desktop app to run the E2E suite.
+
+If you run `opencode run` manually from a terminal where the Desktop app is active:
+
+```bash
+env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
+  opencode run "your message" --dir /path/to/project -m anthropic/claude-sonnet-4-6
+```

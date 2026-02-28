@@ -15,6 +15,12 @@ import { DocsInstallSteps } from "@/components/svg/docs/docs-install-steps";
 import { DocsDedupCosine } from "@/components/svg/docs/docs-dedup-cosine";
 import { DocsKeyFeatures } from "@/components/svg/docs/docs-key-features";
 import { RelevantToTaskCallout } from "@/components/docs/relevant-to-task-callout";
+import { DocsBenchmarkScoreboard } from "@/components/svg/docs/docs-benchmark-scoreboard";
+import { DocsBenchmarkPipeline } from "@/components/svg/docs/docs-benchmark-pipeline";
+import { DocsBenchmarkDataset } from "@/components/svg/docs/docs-benchmark-dataset";
+import { DocsTestTiers } from "@/components/svg/docs/docs-test-tiers";
+import { DocsE2eScenarioMap } from "@/components/svg/docs/docs-e2e-scenario-map";
+import { DocsTestIsolation } from "@/components/svg/docs/docs-test-isolation";
 
 const customComponents = {
   ...defaultMdxComponents,
@@ -30,6 +36,12 @@ const customComponents = {
   DocsDedupCosine,
   DocsKeyFeatures,
   RelevantToTaskCallout,
+  DocsBenchmarkScoreboard,
+  DocsBenchmarkPipeline,
+  DocsBenchmarkDataset,
+  DocsTestTiers,
+  DocsE2eScenarioMap,
+  DocsTestIsolation,
 };
 
 export default async function Page(props: {

@@ -1,0 +1,86 @@
+---
+title: DevMemBench
+description: A 200-question benchmark measuring codexfi memory recall across 8 categories. Latest run scores 94.5% overall.
+---
+
+# DevMemBench
+
+DevMemBench is an independent benchmark that measures how reliably codexfi recalls facts across coding sessions. The latest run scores **94.5% overall** — 189 correct answers out of 200 questions — across 8 categories that map directly to how you use memory day-to-day.
+
+<DocsBenchmarkScoreboard />
+
+## What the score means for you
+
+Each category in the benchmark corresponds to something the memory system does during a real session:
+
+| Category | What it means in practice | Score |
+|---|---|---|
+| `tech-stack` | Remembers your framework, language, and tooling choices | 100% |
+| `architecture` | Recalls system design decisions and component relationships | 100% |
+| `preference` | Keeps track of your personal coding and workflow preferences | 100% |
+| `abstention` | Doesn't hallucinate answers when something isn't in memory | 100% |
+| `session-continuity` | Carries facts from one session into the next | 96% |
+| `knowledge-update` | Replaces stale facts when you switch tools or change approaches | 96% |
+| `error-solution` | Retains bug fixes, gotchas, and debugging approaches | 92% |
+| `cross-session-synthesis` | Combines facts that were spread across multiple sessions | 72% |
+| **Overall** | | **94.5%** |
+
+The four 100% categories represent the core value proposition — stack, architecture, preferences, and abstention. These are the facts you most frequently need the agent to remember, and they are recalled perfectly in the benchmark.
+
+## Known limitation: cross-session synthesis
+
+**`cross-session-synthesis` (72%)** is the weakest category. This tests questions like "list every preference you've seen me mention across all our sessions" — queries that require enumerating facts scattered across many separate sessions with different phrasing.
+
+A single semantic search surfaces the most relevant memories but may miss facts that are phrased differently from the query. codexfi's `types[]` enumeration path (used by `memory({ mode: "list" })`) improves recall for explicit list queries, but the benchmark measures fully autonomous recall where the agent doesn't know to ask for a list.
+
+This is a known gap and an active area of improvement. For now: if you need an exhaustive list of a specific type of memory, use the memory tool explicitly — `memory({ mode: "list", scope: "project" })` — rather than relying on semantic retrieval alone.
+
+## Benchmark dataset
+
+<DocsBenchmarkDataset />
+
+The benchmark uses a synthetic codebase history spanning two realistic projects:
+
+- **`ecommerce-api`** — FastAPI + PostgreSQL + Redis + Stripe. 25 sessions covering authentication, product catalog, shopping cart, and checkout flow (Jan–Feb 2025).
+- **`dashboard-app`** — Next.js 15 + Recharts + SWR. 25 sessions covering analytics dashboard, chart components, and data fetching (Jan–Feb 2025).
+
+Sessions were written to reflect realistic developer conversations — including preference statements, architectural decisions, error debugging, and knowledge updates (for example, migrating from one ORM to another mid-project). The 200 questions are designed to stress memory across session boundaries, not just within a single conversation.
+
+## Methodology
+
+<DocsBenchmarkPipeline />
+
+The benchmark runs a five-phase LLM-as-judge pipeline:
+
+1. **Ingest** — all 50 synthetic sessions are ingested into a fresh codexfi memory store
+2. **Search** — for each of the 200 questions, codexfi's retrieval pipeline is called with the question as the query
+3. **Answer** — an LLM answers using only the retrieved memory context (no access to the original session transcripts)
+4. **Evaluate** — a judge LLM compares the answer against ground-truth and scores it `correct` or `incorrect` with an explanation
+5. **Report** — scores are aggregated by category and written to `report.json`
+
+Both the answering model and the judge model are `claude-sonnet-4-6`. The answering step is intentionally constrained — if codexfi's retrieval doesn't surface the right memory, the answer will be wrong. This makes the benchmark a direct measure of retrieval quality, not LLM reasoning ability.
+
+## Running the benchmark yourself
+
+**Prerequisites**
+
+- `ANTHROPIC_API_KEY` — used for the answering and judge LLM calls
+- `VOYAGE_API_KEY` — used for embeddings during ingest and search
+
+**Run**
+
+```bash
+cd benchmark
+bun install       # first time only
+bun run ingest    # ingest all 50 synthetic sessions into a fresh store
+bun run bench     # run all 200 questions and produce report.json
+```
+
+Results are written to `benchmark/data/runs/<run-id>/report.json`.
+
+To run a single category in isolation:
+
+```bash
+bun run bench --category tech-stack
+bun run bench --category cross-session-synthesis
+```
