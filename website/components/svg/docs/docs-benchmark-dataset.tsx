@@ -10,6 +10,13 @@ export function DocsBenchmarkDataset() {
       <title>DevMemBench Datasets</title>
       <defs>
         <style>{`
+          .card-left-bd {
+            transform-box: fill-box;
+          }
+          .card-right-bd {
+            transform-box: fill-box;
+          }
+          
           @media (prefers-reduced-motion: no-preference) {
             .card-left-bd {
               animation: slideInLeft-bd 0.6s ease-out forwards;
@@ -18,7 +25,7 @@ export function DocsBenchmarkDataset() {
             }
             .card-right-bd {
               animation: slideInRight-bd 0.6s ease-out forwards;
-              transform: translateX(20px);
+              transform: translate(340px, 0); /* 320 + 20 */
               opacity: 0;
             }
             .tag-bd {
@@ -31,8 +38,8 @@ export function DocsBenchmarkDataset() {
               to { transform: translateX(0); opacity: 1; }
             }
             @keyframes slideInRight-bd {
-              from { transform: translateX(20px); opacity: 0; }
-              to { transform: translateX(0); opacity: 1; }
+              from { transform: translate(340px, 0); opacity: 0; }
+              to { transform: translate(320px, 0); opacity: 1; }
             }
             @keyframes fadeInTag-bd {
               from { opacity: 0; transform: translateY(2px); }
@@ -41,8 +48,12 @@ export function DocsBenchmarkDataset() {
           }
           
           @media (prefers-reduced-motion: reduce) {
-            .card-left-bd, .card-right-bd {
+            .card-left-bd {
               transform: translateX(0);
+              opacity: 1;
+            }
+            .card-right-bd {
+              transform: translate(320px, 0);
               opacity: 1;
             }
             .tag-bd {
@@ -89,7 +100,7 @@ export function DocsBenchmarkDataset() {
         <text x="280" y="80" fontSize="14" fontWeight="700" className="fill-muted-foreground" textAnchor="middle" opacity="0.4">VS</text>
 
         {/* Right Card: dashboard-app */}
-        <g className="card-right-bd" transform="translate(320, 0)">
+        <g className="card-right-bd">
           <rect x="0" y="0" width="240" height="140" rx="10" className="fill-card" stroke="#c084fc" strokeWidth="1.5" />
           <path d="M 0 10 A 10 10 0 0 1 10 0 L 230 0 A 10 10 0 0 1 240 10 L 240 4 L 0 4 Z" fill="#c084fc" opacity="0.4" />
           
