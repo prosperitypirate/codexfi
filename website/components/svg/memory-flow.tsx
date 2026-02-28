@@ -260,7 +260,7 @@ export function MemoryFlowSVG() {
         <text x="825" y="55" textAnchor="middle" className="fill-foreground" fontSize="12" fontWeight="600">LanceDB Vector Store</text>
 
         {/* Hexagon Grid Cluster (Embeddings) */}
-        <g transform="translate(760, 110)">
+        <g transform="translate(787, 117.5)">
           {/* Hexagon points: M 0 -20 L 17.32 -10 L 17.32 10 L 0 20 L -17.32 10 L -17.32 -10 Z */}
           {[
             { cx: 0, cy: 0, cl: "pulse" },
