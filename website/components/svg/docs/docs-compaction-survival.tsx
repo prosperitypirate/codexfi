@@ -73,7 +73,7 @@ export function DocsCompactionSurvival() {
       {/* EVENT Column */}
       <g className="compaction-text-cs">
         <text x="260" y="96" fontSize="12" fontWeight="600" fontFamily="var(--font-mono, monospace)" fill="#e879f9" textAnchor="middle" alignmentBaseline="middle">COMPACTION</text>
-        <text x="260" y="112" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">context window truncated</text>
+        <text x="260" y="124" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">context window truncated</text>
       </g>
       
       {/* Event Arrows */}
