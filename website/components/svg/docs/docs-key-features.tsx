@@ -1,7 +1,7 @@
 import React from "react";
 
 const IconAutomatic = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground" strokeLinecap="round" strokeLinejoin="round">
     <path d="M22 42L42 22" className="stroke-[#a855f7]" strokeWidth="3" />
     <path d="M18 46l4 4" strokeWidth="3" />
     <g className="kf-sparkle-1 text-[#4ade80]">
@@ -17,7 +17,7 @@ const IconAutomatic = () => (
 );
 
 const IconSelfHosted = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-foreground">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 text-foreground">
     <rect x="12" y="18" width="40" height="24" rx="2" className="stroke-border" />
     <path d="M8 46h48l-4-4H12z" className="stroke-border fill-muted" />
     <g className="kf-db-pulse">
@@ -30,7 +30,7 @@ const IconSelfHosted = () => (
 );
 
 const IconEmbeddings = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-8 h-8 text-foreground">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-12 h-12 text-foreground">
     <path d="M20 20l-8 12 8 12" className="stroke-[#c084fc]" />
     <path d="M44 20l8 12-8 12" className="stroke-[#c084fc]" />
     <rect x="26" y="26" width="12" height="12" rx="2" className="stroke-[#a855f7]" />
@@ -39,7 +39,7 @@ const IconEmbeddings = () => (
 );
 
 const IconProviders = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground">
     <circle cx="16" cy="18" r="4" className="stroke-[#c084fc]" />
     <circle cx="16" cy="32" r="4" className="stroke-[#4ade80]" />
     <circle cx="16" cy="46" r="4" className="stroke-[#a855f7]" />
@@ -53,7 +53,7 @@ const IconProviders = () => (
 );
 
 const IconTyped = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground">
     <rect x="14" y="16" width="36" height="8" rx="4" className="fill-card stroke-[#a855f7] kf-type-1" />
     <rect x="14" y="28" width="28" height="8" rx="4" className="fill-card stroke-[#e879f9] kf-type-2" />
     <rect x="14" y="40" width="32" height="8" rx="4" className="fill-card stroke-[#c084fc] kf-type-3" />
@@ -61,7 +61,7 @@ const IconTyped = () => (
 );
 
 const IconDedup = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground">
     <rect x="16" y="20" width="20" height="24" rx="4" className="stroke-border kf-dedup-left" />
     <rect x="28" y="20" width="20" height="24" rx="4" className="stroke-[#4ade80] fill-card kf-dedup-right" />
     <path d="M33 32 L 36 35 L 42 27" className="stroke-[#4ade80] kf-dedup-check" strokeLinecap="round" strokeLinejoin="round" />
@@ -69,7 +69,7 @@ const IconDedup = () => (
 );
 
 const IconVersioning = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground" strokeLinecap="round" strokeLinejoin="round">
     <path d="M16 20h12l6 6v14a2 2 0 01-2 2H16a2 2 0 01-2-2V22a2 2 0 012-2z" className="stroke-muted-foreground kf-vers-old" />
     <path d="M30 24h12l6 6v14a2 2 0 01-2 2H30a2 2 0 01-2-2V26a2 2 0 012-2z" className="fill-card stroke-[#f59e0b] kf-vers-new" />
     <path d="M22 36 L 28 36 M 26 34 L 28 36 L 26 38" className="stroke-[#f59e0b] kf-vers-arrow" />
@@ -77,7 +77,7 @@ const IconVersioning = () => (
 );
 
 const IconCompaction = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground" strokeLinecap="round">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground" strokeLinecap="round">
     <rect x="18" y="16" width="28" height="12" rx="3" className="fill-card stroke-[#a855f7] kf-compact-mem" />
     <path d="M26 22h12" className="stroke-[#a855f7] kf-compact-mem" />
     <line x1="20" y1="36" x2="44" y2="36" className="stroke-muted-foreground kf-compact-line-1" />
@@ -87,7 +87,7 @@ const IconCompaction = () => (
 );
 
 const IconPrivacy = () => (
-  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-8 h-8 text-foreground" strokeLinecap="round" strokeLinejoin="round">
+  <svg viewBox="0 0 64 64" fill="none" stroke="currentColor" strokeWidth="2" className="w-12 h-12 text-foreground" strokeLinecap="round" strokeLinejoin="round">
     <path d="M18 32l-6-6 6-6" className="stroke-border" />
     <path d="M46 32l6-6-6-6" className="stroke-border" />
     <rect x="24" y="30" width="16" height="12" rx="2" className="fill-card stroke-[#4ade80]" />
@@ -145,7 +145,7 @@ export function DocsKeyFeatures() {
   ];
 
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 my-8">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6 my-8">
       <style>{`
         @media (prefers-reduced-motion: no-preference) {
           .kf-sparkle-1 { animation: pulse-opacity-kf 1.5s infinite alternate; animation-delay: 0s; }
@@ -225,14 +225,14 @@ export function DocsKeyFeatures() {
       {features.map((f, i) => (
         <div 
           key={i} 
-          className="group relative flex flex-col gap-4 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-sm transition-all duration-300 hover:border-border/80 hover:shadow-md hover:bg-card/80"
+          className="group relative flex flex-row items-start gap-4 sm:gap-5 rounded-xl border border-border bg-card p-5 sm:p-6 text-card-foreground shadow-sm transition-all duration-300 hover:border-border/80 hover:shadow-md hover:bg-card/80"
         >
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg border border-border bg-muted/50 transition-colors group-hover:bg-muted">
+          <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/50 transition-colors group-hover:bg-muted">
             {f.icon}
           </div>
-          <div>
-            <h3 className="font-semibold leading-tight mb-1.5">{f.title}</h3>
-            <p className="text-sm text-muted-foreground leading-snug">{f.desc}</p>
+          <div className="flex flex-col pt-1">
+            <h3 className="font-semibold leading-tight mb-2 text-base">{f.title}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
           </div>
         </div>
       ))}
