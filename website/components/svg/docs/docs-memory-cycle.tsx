@@ -11,11 +11,11 @@ export function DocsMemoryCycle() {
           <stop offset="0%" stopColor="#a855f7" />
           <stop offset="100%" stopColor="#c084fc" />
         </linearGradient>
-        <marker id="arrow-return-mc" markerWidth="6" markerHeight="6" refX="2" refY="3" orient="auto-start-reverse">
-          <polygon points="0,0 6,3 0,6" fill="#4ade80" opacity="0.5" />
-        </marker>
         <marker id="arrow-flow-mc" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
           <polygon points="0,0 6,3 0,6" fill="#c084fc" />
+        </marker>
+        <marker id="arrow-return-mc" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
+          <polygon points="0,0 6,3 0,6" fill="#4ade80" opacity="0.5" />
         </marker>
         <style>{`
           .flow-line-mc { stroke-dasharray: 8 6; }
@@ -50,8 +50,8 @@ export function DocsMemoryCycle() {
         `}</style>
       </defs>
       
-      {/* Return Arc */}
-      <path className="return-arc-mc" d="M 570,88 Q 570,140 500,140 L 140,140 Q 60,140 60,88" fill="none" stroke="#4ade80" strokeWidth="2" strokeOpacity="0.5" markerStart="url(#arrow-return-mc)" />
+      {/* Return Arc (from [MEMORY] to Conversation) */}
+      <path className="return-arc-mc" d="M 570,88 Q 570,140 500,140 L 140,140 Q 60,140 60,94" fill="none" stroke="#4ade80" strokeWidth="2" strokeOpacity="0.5" markerEnd="url(#arrow-return-mc)" />
       
       {/* Flow Lines */}
       <line x1="110" y1="70" x2="155" y2="70" stroke="url(#grad-mc)" strokeWidth="2" className="flow-line-mc" markerEnd="url(#arrow-flow-mc)" />
