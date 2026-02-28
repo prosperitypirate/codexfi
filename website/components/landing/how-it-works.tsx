@@ -9,7 +9,7 @@ const steps = [
     icon: Terminal,
     title: "Install",
     description: "One command. Works with OpenCode. No configuration needed.",
-    code: "bunx codexfi install",
+    code: "curl -fsSL https://codexfi.com/install | bash",
   },
   {
     number: "2",

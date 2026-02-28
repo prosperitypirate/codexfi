@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Check, Copy } from "lucide-react";
 
-const INSTALL_COMMAND = "bunx codexfi install";
+const INSTALL_COMMAND = "curl -fsSL https://codexfi.com/install | bash";
 
 export function InstallBlock() {
   const [copied, setCopied] = useState(false);

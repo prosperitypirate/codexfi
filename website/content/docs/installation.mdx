@@ -12,7 +12,6 @@ codexfi installs as a single command. It registers itself with OpenCode, prompts
 ## Prerequisites
 
 - [OpenCode](https://opencode.ai) installed and working
-- [Bun](https://bun.sh) runtime (used by the plugin at runtime)
 - A [Voyage AI](https://dash.voyageai.com/api-keys) API key for embeddings
 - At least one extraction provider API key:
   - [Anthropic](https://console.anthropic.com/) (default, most consistent)
@@ -21,7 +20,15 @@ codexfi installs as a single command. It registers itself with OpenCode, prompts
 
 ## Install
 
-Run the installer:
+Run the one-liner:
+
+```bash
+curl -fsSL https://codexfi.com/install | bash
+```
+
+This handles everything: installs [Bun](https://bun.sh) if it isn't already present, then runs the codexfi installer.
+
+If you already have Bun installed, you can run the installer directly:
 
 ```bash
 bunx codexfi install

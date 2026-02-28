@@ -66,10 +66,10 @@ export function DocsInstallSteps() {
       {/* Line 1 */}
       <text x="20" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)">
         <tspan fill="#4ade80">$</tspan>
-        <tspan fill="#c084fc"> bunx codexfi install</tspan>
+        <tspan fill="#c084fc"> curl -fsSL https://codexfi.com/install | bash</tspan>
       </text>
       <g className="cursor-wrapper-is">
-        <text x="175" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)" fill="#4ade80" className="cursor-blink-is"> ▊</text>
+        <text x="366" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)" fill="#4ade80" className="cursor-blink-is"> ▊</text>
       </g>
 
       {/* Line 2 */}
