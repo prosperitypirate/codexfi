@@ -1,7 +1,8 @@
 name: opencode-triage
 
 on:
-  workflow_dispatch: # disabled — enable manually if needed
+  issues:
+    types: [opened]
 
 jobs:
   # Gate: check account age before allocating a runner for the triage job
@@ -44,9 +45,9 @@ jobs:
 
       - uses: anomalyco/opencode/github@latest
         env:
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
         with:
-          model: anthropic/claude-sonnet-4-6
+          model: xai/grok-4-1-fast-non-reasoning
           share: false
           prompt: |
             Review this issue for the codexfi project — a persistent memory
