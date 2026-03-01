@@ -39,7 +39,7 @@ OpenCode starts every session from scratch. No memory of past decisions, establi
 ## Install
 
 ```bash
-bunx codexfi install
+curl -fsSL https://codexfi.com/install | bash
 ```
 
 <picture>
