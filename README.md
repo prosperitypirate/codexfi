@@ -4,7 +4,7 @@
 
 **Persistent memory for [OpenCode](https://opencode.ai) AI agents.**
 
-> *The best memory system is the one that just works. No Docker. No Python. No frontend servers. Just `bunx codexfi install` and you're done.*
+> *The best memory system is the one that just works. No Docker. No Python. No frontend servers. Just `curl -fsSL https://codexfi.com/install | bash` and you're done.*
 
 <br/>
 
@@ -44,7 +44,7 @@ bunx codexfi install
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-install-dark.svg">
-  <img src=".github/assets/readme-install-light.svg" alt="Terminal command: bunx codexfi install" width="100%">
+  <img src=".github/assets/readme-install-light.svg" alt="Terminal command: curl -fsSL https://codexfi.com/install | bash" width="100%">
 </picture>
 
 

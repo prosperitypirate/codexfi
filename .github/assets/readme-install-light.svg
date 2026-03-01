@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 120" width="100%" role="img" aria-label="Terminal command: bunx codexfi install">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 120" width="100%" role="img" aria-label="Terminal command: curl -fsSL https://codexfi.com/install | bash">
   <title>Install codexfi</title>
   <defs>
     <style>
@@ -27,7 +27,7 @@
     </style>
     <clipPath id="type-clip-ins-light">
       <rect x="48" y="38" width="0" height="20">
-        <animate attributeName="width" values="0;200;200;0" keyTimes="0;0.2;0.9;1" dur="6s" repeatCount="indefinite" />
+        <animate attributeName="width" values="0;360;360;0" keyTimes="0;0.2;0.9;1" dur="6s" repeatCount="indefinite" />
       </rect>
     </clipPath>
   </defs>
@@ -43,9 +43,9 @@
 
   <!-- Prompt -->
   <text x="28" y="54" fill="#16a34a" font-size="13">$</text>
-  <text x="48" y="54" fill="#111111" font-size="13" font-weight="500" clip-path="url(#type-clip-ins-light)">bunx codexfi install</text>
+  <text x="48" y="54" fill="#111111" font-size="13" font-weight="500" clip-path="url(#type-clip-ins-light)">curl -fsSL https://codexfi.com/install | bash</text>
   
-  <rect x="220" y="42" width="8" height="14" fill="#7c3aed" class="blink cursor" />
+  <rect x="385" y="42" width="8" height="14" fill="#7c3aed" class="blink cursor" />
 
   <!-- Output -->
   <text x="28" y="74" fill="#16a34a" font-size="11" class="out1">  ✓ Voyage AI key saved</text>
