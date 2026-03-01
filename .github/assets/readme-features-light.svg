@@ -48,8 +48,8 @@
   </g>
   <g class="card" style="animation-delay: 0.32s;">
     <rect x="298" y="104" width="274" height="82" rx="10" fill="#f9fafb" stroke="#e5e7eb" stroke-width="1" />
-    <rect x="298" y="104" width="3" height="82" rx="1.5" fill="#16a34a" class="bar" style="animation-delay: 0.42000000000000004s;" />
-    <text x="320" y="142" fill="#16a34a" font-size="18" text-anchor="middle" class="icon" style="animation-delay: 0.52s;">⊘</text>
+    <rect x="298" y="104" width="3" height="82" rx="1.5" fill="#9333ea" class="bar" style="animation-delay: 0.42000000000000004s;" />
+    <text x="320" y="142" fill="#9333ea" font-size="18" text-anchor="middle" class="icon" style="animation-delay: 0.52s;">⊘</text>
     <text x="342" y="136" fill="#111111" font-size="12" font-weight="600">Compaction-Proof</text>
     <text x="342" y="154" fill="#6b7280" font-size="10">lives in system prompt · never lost</text>
   </g>
