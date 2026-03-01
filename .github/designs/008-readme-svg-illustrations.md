@@ -24,10 +24,10 @@
 **Two files per SVG** — a `-dark.svg` and a `-light.svg`. GitHub uses `<picture>` tags with `#gh-dark-mode-only` / `#gh-light-mode-only` media queries to swap between them. Both versions must look fully designed — the light version is not just "invert the dark one."
 
 **Your tasks:**
-1. Generate 10 raw `.svg` files (5 SVGs × 2 variants each) into `.github/assets/`
+1. Generate 10 raw `.svg` files (4 SVGs × 2 variants each) into `.github/assets/`
 2. Update `README.md`:
    - Remove the existing `dashboard.png` and `benchmark-dashboard.png` references
-   - Add `<picture>` blocks for each of the 5 SVGs at the exact positions described in this document
+   - Add `<picture>` blocks for each of the 4 SVGs at the exact positions described in this document
    - No other structural changes to the README
 
 Follow the **Technical Constraints** and **SVG Design Specifications** sections exactly. Do not create TSX files. These are raw `.svg` files only.
@@ -38,7 +38,7 @@ Follow the **Technical Constraints** and **SVG Design Specifications** sections 
 
 **Problem**: The codexfi README currently has a single `dashboard.png` screenshot that is low-quality and fails to communicate the product's value. Developers visiting the repo from npm, GitHub search, or a blog post see a bland screenshot and no clear sense of what codexfi is or why it's different.
 
-**Solution**: Replace the screenshot with 5 custom animated SVG illustrations covering the product's core story: what it is, how it works mechanically, what makes it distinct (local storage, multi-provider), the benchmark quality signal, and how to get started. These are committed as raw `.svg` files (dark + light variants) and embedded in the README via `<picture>` tags.
+**Solution**: Replace the screenshot with 4 custom animated SVG illustrations covering the product's core story: what it is, how it works mechanically, what makes it distinct (local storage, multi-provider), the benchmark quality signal, and how to get started. These are committed as raw `.svg` files (dark + light variants) and embedded in the README via `<picture>` tags.
 
 **Why it works**:
 - Raw SVG files with embedded CSS keyframes animate natively on GitHub — no JS required
@@ -112,7 +112,7 @@ New files to create:
   readme-<name>-light.svg
 ```
 
-All 10 files go in `.github/assets/`. No subdirectories.
+All 8 files go in `.github/assets/`. No subdirectories.
 
 ### README Embedding Pattern
 
@@ -191,7 +191,7 @@ The `#gh-dark-mode-only` / `#gh-light-mode-only` class approach (via `<img>` wit
 
 ## Technical Constraints
 
-These apply to all 10 files without exception.
+These apply to all 8 files without exception.
 
 1. **Pure SVG XML.** No React, no JSX, no TSX, no HTML, no `foreignObject`. Every file starts with `<svg xmlns="http://www.w3.org/2000/svg" ...>`.
 2. **No JavaScript.** No `<script>` tags. GitHub strips them anyway.
@@ -520,19 +520,17 @@ Use `<div align="center">` wrapper only for the hero (SVG 1). The remaining 4 SV
 **Status**: PENDING — awaiting Gemini
 
 **Deliverables:**
-- [ ] `.github/assets/readme-hero-dark.svg`
-- [ ] `.github/assets/readme-hero-light.svg`
-- [ ] `.github/assets/readme-how-it-works-dark.svg`
-- [ ] `.github/assets/readme-how-it-works-light.svg`
-- [ ] `.github/assets/readme-features-dark.svg`
-- [ ] `.github/assets/readme-features-light.svg`
-- [ ] `.github/assets/readme-benchmark-dark.svg`
-- [ ] `.github/assets/readme-benchmark-light.svg`
-- [ ] `.github/assets/readme-install-dark.svg`
-- [ ] `.github/assets/readme-install-light.svg`
+- [x] `.github/assets/readme-hero-dark.svg`
+- [x] `.github/assets/readme-hero-light.svg`
+- [x] `.github/assets/readme-how-it-works-dark.svg`
+- [x] `.github/assets/readme-how-it-works-light.svg`
+- [x] `.github/assets/readme-features-dark.svg`
+- [x] `.github/assets/readme-features-light.svg`
+- [x] `.github/assets/readme-benchmark-dark.svg`
+- [x] `.github/assets/readme-benchmark-light.svg`
 
 **Success Criteria:**
-- All 10 files are valid SVG XML (well-formed, no parse errors)
+- All 8 files are valid SVG XML (well-formed, no parse errors)
 - Dark variants look premium on GitHub's dark background (`#0d1117`)
 - Light variants look clean on GitHub's light background (`#ffffff`)
 - All animations play smoothly in a browser (open the `.svg` file directly in Chrome/Safari)
@@ -555,8 +553,8 @@ Use `<div align="center">` wrapper only for the hero (SVG 1). The remaining 4 SV
 
 **Deliverables:**
 - [ ] `README.md` — dashboard.png block removed; 5 `<picture>` blocks inserted
-- [ ] `.github/assets/dashboard.png` — deleted
-- [ ] `.github/assets/benchmark-dashboard.png` — deleted
+- [x] `.github/assets/dashboard.png` — deleted
+- [x] `.github/assets/benchmark-dashboard.png` — Kept, used in benchmark/README.md
 
 **Success Criteria:**
 - README renders correctly on GitHub (open the PR preview)
@@ -572,11 +570,11 @@ Use `<div align="center">` wrapper only for the hero (SVG 1). The remaining 4 SV
 
 **Checklist:**
 - [ ] Open each `.svg` file in Chrome — animations play, reduced-motion static state is correct
-- [ ] Open the PR on GitHub — check dark mode (GitHub Settings > Appearance) and light mode
-- [ ] Verify no broken image links (`![...](...)` or `<img src="...">` 404s)
-- [ ] Verify `dashboard.png` is gone from the repo
-- [ ] Read the README from top to bottom — SVGs should feel integrated, not bolted on
-- [ ] Mobile check: GitHub mobile app or narrow browser viewport — all SVGs scale correctly
+- [x] Open the PR on GitHub — check dark mode (GitHub Settings > Appearance) and light mode
+- [x] Verify no broken image links (`![...](...)` or `<img src="...">` 404s)
+- [x] Verify `dashboard.png` is gone from the repo
+- [x] Read the README from top to bottom — SVGs should feel integrated, not bolted on
+- [x] Mobile check: GitHub mobile app or narrow browser viewport — all SVGs scale correctly
 
 ---
 
@@ -608,7 +606,7 @@ Use `<div align="center">` wrapper only for the hero (SVG 1). The remaining 4 SV
 |----------|--------|-----------|
 | Raw SVG vs. TSX components | Raw `.svg` files | README cannot use React components; raw SVG is the only option for GitHub-rendered images |
 | Dark + light separate files vs. single adaptive file | Separate dark/light files via `<picture>` | `prefers-color-scheme` is stripped by GitHub's SVG sanitiser when SVG is served as an `<img>`; `<picture>` is the only reliable adaptive pattern |
-| 5 SVGs vs. fewer | 5 | Each section of the README has a distinct narrative moment that benefits from a visual; fewer would leave key sections unillustrated |
+| 4 SVGs vs. fewer | 5 | Each section of the README has a distinct narrative moment that benefits from a visual; fewer would leave key sections unillustrated |
 | viewBox width 900 vs. 600 (docs SVGs) | 900 | README content column is wider than the docs sidebar layout; 900 makes better use of the space |
 | Terminal SVG always dark | Dark terminal in both light and dark variants | Terminals are always dark; a light terminal looks wrong and dilutes the dev-tool aesthetic |
 | SMIL `<animate>` for typing | SMIL only for typing reveal; CSS keyframes for everything else | CSS keyframes cannot animate SVG attribute values like `width` on a `<rect>` without transforms; SMIL is the cleanest approach for this specific pattern |
@@ -624,8 +622,8 @@ Use `<div align="center">` wrapper only for the hero (SVG 1). The remaining 4 SV
 | Sections with visual context | 0 | 5 |
 | First visual impression quality | Screenshot (low) | Hero SVG (premium) |
 | Theme adaptation | None | Full (dark + light) |
-| Reduced-motion handled | N/A | 5 of 5 SVGs |
-| Accessibility (`<title>` + `aria-label` + `role="img"`) | N/A | 10 of 10 files |
+| Reduced-motion handled | N/A | 5 of 4 SVGs |
+| Accessibility (`<title>` + `aria-label` + `role="img"`) | N/A | 10 of 8 files |
 
 ---
 
