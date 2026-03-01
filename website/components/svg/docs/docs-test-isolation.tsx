@@ -1,3 +1,7 @@
+/**
+ * Animated 4-phase lifecycle diagram showing per-test tmp-dir isolation: setup, run, assert, cleanup.
+ * @component
+ */
 export function DocsTestIsolation() {
   return (
     <svg

@@ -1,3 +1,7 @@
+/**
+ * Animated bar chart showing DevMemBench scores across 8 categories with a 94.5% overall progress ring.
+ * @component
+ */
 export function DocsBenchmarkScoreboard() {
   return (
     <svg

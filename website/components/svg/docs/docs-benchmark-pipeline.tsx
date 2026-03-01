@@ -1,3 +1,7 @@
+/**
+ * Animated diagram of the 5-phase DevMemBench pipeline: Ingest, Search, Answer, Evaluate, Report.
+ * @component
+ */
 export function DocsBenchmarkPipeline() {
   return (
     <svg

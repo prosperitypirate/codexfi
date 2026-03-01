@@ -1,3 +1,7 @@
+/**
+ * Grid map of all 12 E2E test scenarios showing pass/warn status, with amber highlight on scenario 09.
+ * @component
+ */
 export function DocsE2eScenarioMap() {
   const scenarios = [
     { num: '01', title: 'Cross-Session', status: 'PASS', col: 0, row: 0 },

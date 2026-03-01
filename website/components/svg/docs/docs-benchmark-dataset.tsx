@@ -1,3 +1,7 @@
+/**
+ * Side-by-side cards showing the two synthetic codebases used in DevMemBench: ecommerce-api and dashboard-app.
+ * @component
+ */
 export function DocsBenchmarkDataset() {
   return (
     <svg

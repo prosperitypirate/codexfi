@@ -1,3 +1,7 @@
+/**
+ * Three-panel diagram showing the Unit, Integration, and E2E test tier architecture.
+ * @component
+ */
 export function DocsTestTiers() {
   return (
     <svg
