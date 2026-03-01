@@ -44,7 +44,7 @@
   <rect width="100%" height="100%" fill="url(#grid-dark)" />
 
   <!-- Center Ambient Glow -->
-  <circle cx="450" cy="150" r="180" fill="url(#core-glow-dark)" opacity="0.6" class="anim-pulse" style="animation: pulse-ambient 4s ease-in-out infinite alternate;" />
+  <circle cx="450" cy="150" r="180" fill="url(#core-glow-dark)" opacity="0.6" class="anim-pulse" style="animation: pulse-ambient 6s ease-in-out infinite alternate;" />
 
   <!-- Base Track -->
   <path d="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" fill="none" stroke="#1a1a1a" stroke-width="2" />
@@ -55,7 +55,7 @@
   <!-- Animated Glowing Track Line -->
   <g class="reduced-hidden">
     <path d="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" fill="none" stroke="url(#flow-grad-dark)" stroke-width="3" stroke-dasharray="250 1178" stroke-linecap="round" filter="url(#glow-dark)">
-      <animate attributeName="stroke-dashoffset" from="1428" to="0" dur="8s" repeatCount="indefinite" />
+      <animate attributeName="stroke-dashoffset" from="1428" to="0" dur="16s" repeatCount="indefinite" />
     </path>
   </g>
 
@@ -66,27 +66,27 @@
 
   <!-- Central Core (Agent Brain) -->
   <circle cx="450" cy="150" r="45" fill="#111111" stroke="#2a2a2a" stroke-width="2" />
-  <circle cx="450" cy="150" r="38" fill="none" stroke="#a855f7" stroke-width="1" stroke-dasharray="6 4" class="anim-spin" style="transform-origin: 450px 150px; animation: spin-core 15s linear infinite;" />
+  <circle cx="450" cy="150" r="38" fill="none" stroke="#a855f7" stroke-width="1" stroke-dasharray="6 4" class="anim-spin" style="transform-origin: 450px 150px; animation: spin-core 24s linear infinite;" />
   <text x="450" y="154" fill="#f0f0f0" font-size="12" font-weight="700" letter-spacing="2" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" text-anchor="middle">AGENT</text>
 
   <!-- Moving Data Tags -->
   <g class="reduced-hidden">
     <g>
-      <animateMotion dur="12s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="0s" />
+      <animateMotion dur="20s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="0s" />
       <g transform="translate(-50, -12)">
         <rect width="100" height="24" rx="12" fill="#111111" stroke="#a855f7" stroke-width="1" />
         <text x="50" y="16" fill="#f0f0f0" font-size="10" font-weight="500" class="mono" text-anchor="middle">architecture</text>
       </g>
     </g>
     <g>
-      <animateMotion dur="12s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="-4s" />
+      <animateMotion dur="20s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="-6.66s" />
       <g transform="translate(-45, -12)">
         <rect width="90" height="24" rx="12" fill="#111111" stroke="#e879f9" stroke-width="1" />
         <text x="45" y="16" fill="#f0f0f0" font-size="10" font-weight="500" class="mono" text-anchor="middle">preference</text>
       </g>
     </g>
     <g>
-      <animateMotion dur="12s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="-8s" />
+      <animateMotion dur="20s" repeatCount="indefinite" path="M 150 150 A 100 100 0 0 1 250 50 L 650 50 A 100 100 0 0 1 750 150 A 100 100 0 0 1 650 250 L 250 250 A 100 100 0 0 1 150 150 Z" begin="-13.33s" />
       <g transform="translate(-55, -12)">
         <rect width="110" height="24" rx="12" fill="#111111" stroke="#4ade80" stroke-width="1" />
         <text x="55" y="16" fill="#f0f0f0" font-size="10" font-weight="500" class="mono" text-anchor="middle">error-solution</text>
