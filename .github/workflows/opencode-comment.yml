@@ -1,28 +1,26 @@
-name: opencode-review
+name: opencode-comment
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
-
-  # issue_comment / pull_request_review_comment triggers are disabled —
-  # the bot lacks write permission to post issue comments
-  # issue_comment:
-  #   types: [created]
-  # pull_request_review_comment:
-  #   types: [created]
+  issue_comment:
+    types: [created]
 
 jobs:
   review:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
-    # Only run automatically on internal PRs (same repo, not a fork) from non-bot actors.
-    # Fork PRs are reviewed on-demand via /oc comment in opencode-comment.yml instead.
-    # Dependabot PRs are skipped — they're reviewed via CI checks and human approval.
+    # Only run when:
+    # 1. The comment is on a pull request (not a plain issue)
+    # 2. The comment contains /oc or /opencode
+    # 3. The commenter is the owner, a member, or a collaborator — not a random fork opener
     if: |
-      github.event.pull_request.draft == false &&
-      github.actor != 'dependabot[bot]' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+      github.event.issue.pull_request != null &&
+      (contains(github.event.comment.body, '/oc') || contains(github.event.comment.body, '/opencode')) &&
+      (
+        github.event.comment.author_association == 'OWNER' ||
+        github.event.comment.author_association == 'MEMBER' ||
+        github.event.comment.author_association == 'COLLABORATOR'
+      )
 
     permissions:
       id-token: write
