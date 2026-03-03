@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.5](https://github.com/prosperitypirate/codexfi/compare/v0.4.4...v0.4.5) (2026-03-03)
+
+
+### Bug Fixes
+
+* **plugin:** replace non-ASCII chars in generateConfigJsonc to prevent Bun bytecode corruption ([#97](https://github.com/prosperitypirate/codexfi/issues/97)) ([67e92e8](https://github.com/prosperitypirate/codexfi/commit/67e92e8a58aa2d6fc61179504febf3606dcb036a))
+
 ## [0.4.4](https://github.com/prosperitypirate/codexfi/compare/v0.4.3...v0.4.4) (2026-02-27)
 
 
