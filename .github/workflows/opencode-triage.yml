@@ -63,6 +63,11 @@ jobs:
             - website/              — Next.js web dashboard
             - .github/workflows/    — CI/CD
 
+            ## Hard constraints
+            NEVER create branches, commit code, or open pull requests.
+            Your only permitted actions are: read the codebase, post a comment
+            on the issue, and apply labels. Nothing else.
+
             ## Instructions
 
             ### Bug reports
