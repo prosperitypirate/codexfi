@@ -173,6 +173,33 @@ describe("writeApiKeys", () => {
 		expect(updated).toContain("sk-ant-updated");
 	});
 
+	test("written file contains only ASCII characters (no Bun bytecode corruption)", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writtenByTest.push(CODEXFI_JSONC);
+
+		writeApiKeys({
+			voyageApiKey: "pa-ascii-test",
+			anthropicApiKey: "sk-ant-ascii-test",
+			xaiApiKey: "xai-ascii-test",
+			googleApiKey: "google-ascii-test",
+		});
+
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		// Every character must be in the printable ASCII range (0x20–0x7E) or whitespace
+		// Non-ASCII would indicate Bun // @bun bytecode double-encoding corruption
+		for (let i = 0; i < content.length; i++) {
+			const code = content.charCodeAt(i);
+			const isAsciiPrintable = code >= 0x20 && code <= 0x7e;
+			const isWhitespace = code === 0x09 || code === 0x0a || code === 0x0d;
+			if (!isAsciiPrintable && !isWhitespace) {
+				throw new Error(
+					`Non-ASCII character found at position ${i}: U+${code.toString(16).toUpperCase().padStart(4, "0")} ` +
+					`(context: "${content.slice(Math.max(0, i - 10), i + 10).replace(/\n/g, "\\n")}")`
+				);
+			}
+		}
+	});
+
 	test("does not write memory.jsonc as a side-effect", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
 		writtenByTest.push(CODEXFI_JSONC);

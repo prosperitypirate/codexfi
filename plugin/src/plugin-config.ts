@@ -208,7 +208,7 @@ export function getConfigPath(): string {
 function generateConfigJsonc(config: MemoryConfig): string {
 	const lines: string[] = [];
 
-	lines.push("// Codexfi — plugin configuration");
+	lines.push("// Codexfi - plugin configuration");
 	lines.push("// Location: ~/.config/opencode/codexfi.jsonc");
 	lines.push("// Docs: https://github.com/prosperitypirate/codexfi");
 	lines.push("//");
@@ -217,12 +217,12 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("{");
 
 	// ── API Keys section ────────────────────────────────────────────────────────
-	lines.push("\t// ── API Keys ──────────────────────────────────────────────────────────");
+	lines.push("\t// -- API Keys ------------------------------------------------------------------");
 	lines.push("");
 	lines.push("\t// Required: Voyage AI embedding key (https://dash.voyageai.com/api-keys)");
 	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)},`);
 	lines.push("");
-	lines.push("\t// Extraction LLM key — at least one is required.");
+	lines.push("\t// Extraction LLM key - at least one is required.");
 	lines.push("\t// Default provider is Anthropic (Claude Haiku). Set EXTRACTION_PROVIDER");
 	lines.push("\t// env var to switch: \"anthropic\" | \"xai\" | \"google\"");
 	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
@@ -238,7 +238,7 @@ function generateConfigJsonc(config: MemoryConfig): string {
 			lines[lastIdx] += ",";
 		}
 		lines.push("");
-		lines.push("\t// ── Plugin Settings (only non-default values shown) ─────────────────");
+		lines.push("\t// -- Plugin Settings (only non-default values shown) -------------------");
 		for (let i = 0; i < overrides.length; i++) {
 			const trailing = i < overrides.length - 1 ? "," : "";
 			lines.push(`\t${overrides[i]}${trailing}`);
