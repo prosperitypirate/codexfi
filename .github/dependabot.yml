@@ -21,6 +21,14 @@ updates:
     labels:
       - "dependencies"
       - "plugin"
+    ignore:
+      # @lancedb/lancedb: pinned at 0.15.0 — darwin-x64 NAPI binary missing from all
+      # versions >= 0.24.1 due to upstream build bug. Upgrading would break Intel Mac users.
+      # Track: https://github.com/lancedb/lancedb/issues/2937
+      # To upgrade: confirm darwin-x64 is restored, remove this ignore rule, then run
+      # spike.ts + full test suite (unit + integration) before merging.
+      - dependency-name: "@lancedb/lancedb"
+        versions: ["*"]
 
   # Frontend (npm/bun) dependencies
   - package-ecosystem: "npm"
