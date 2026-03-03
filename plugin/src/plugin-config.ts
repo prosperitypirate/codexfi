@@ -1,5 +1,5 @@
 /**
- * Plugin-specific user configuration — loaded from ~/.config/opencode/codexfi.jsonc.
+  * Plugin-specific user configuration - loaded from ~/.config/opencode/codexfi.jsonc.
  *
  * API keys can be stored here as a fallback when environment variables aren't set.
  * Environment variables always take precedence over config file values.
@@ -19,17 +19,17 @@ const CONFIG_FILES = [
 ];
 
 interface MemoryConfig {
-	// ── API Keys (env vars override these) ──────────────────────────────────────
-	/** Voyage AI embedding key — required for all memory operations. */
+ 	// -- API Keys (env vars override these) -------------------------------------
+ 	/** Voyage AI embedding key - required for all memory operations. */
 	voyageApiKey?: string;
-	/** Anthropic API key — used for extraction when EXTRACTION_PROVIDER=anthropic. */
+ 	/** Anthropic API key - used for extraction when EXTRACTION_PROVIDER=anthropic. */
 	anthropicApiKey?: string;
-	/** xAI API key — used for extraction when EXTRACTION_PROVIDER=xai. */
+ 	/** xAI API key - used for extraction when EXTRACTION_PROVIDER=xai. */
 	xaiApiKey?: string;
-	/** Google API key — used for extraction when EXTRACTION_PROVIDER=google. */
+ 	/** Google API key - used for extraction when EXTRACTION_PROVIDER=google. */
 	googleApiKey?: string;
 
-	// ── Plugin Settings ─────────────────────────────────────────────────────────
+ 	// -- Plugin Settings ------------------------------------------------------
 	similarityThreshold?: number;
 	maxMemories?: number;
 	maxProjectMemories?: number;
@@ -98,11 +98,11 @@ function validateCompactionThreshold(value: number | undefined): number {
  * NOTE: Bun.JSONC.parse is declared in types but not available at runtime
  * in Bun <=1.2.x. We strip comments manually for reliable JSONC support.
  * This handles the common cases (line comments, block comments) but not
- * comments inside JSON string values — which is fine since our config file
+  * comments inside JSON string values - which is fine since our config file
  * only has comments on their own lines or after values.
  */
 function stripJsoncComments(text: string): string {
-	// Remove single-line comments (// ...) — only when not inside a string
+ 	// Remove single-line comments (// ...) - only when not inside a string
 	// Safe because our config never has // inside JSON string values
 	return text
 		.replace(/^\s*\/\/.*$/gm, "")       // full-line comments
@@ -112,12 +112,12 @@ function stripJsoncComments(text: string): string {
 function loadConfig(): MemoryConfig {
 	for (const path of CONFIG_FILES) {
 		try {
-			// Synchronous read at module init — ESM-safe import (no require())
+ 			// Synchronous read at module init - ESM-safe import (no require())
 			const text = readFileSync(path, "utf-8");
 			const stripped = stripJsoncComments(text);
 			return JSON.parse(stripped) as MemoryConfig;
 		} catch {
-			// File doesn't exist or invalid — try next
+ 			// File doesn't exist or invalid - try next
 		}
 	}
 	return {};
@@ -126,7 +126,7 @@ function loadConfig(): MemoryConfig {
 const fileConfig = loadConfig();
 
 export const PLUGIN_CONFIG = {
-	// API keys from config file — env vars override these in config.ts
+ 	// API keys from config file - env vars override these in config.ts
 	voyageApiKey: fileConfig.voyageApiKey ?? "",
 	anthropicApiKey: fileConfig.anthropicApiKey ?? "",
 	xaiApiKey: fileConfig.xaiApiKey ?? "",
@@ -151,7 +151,7 @@ export const PLUGIN_CONFIG = {
 };
 
 /**
- * Check if the plugin is configured — requires VOYAGE_API_KEY for embeddings.
+  * Check if the plugin is configured - requires VOYAGE_API_KEY for embeddings.
  *
  * Checks environment variables first (power users / CI), then falls back to
  * the config file at ~/.config/opencode/codexfi.jsonc (set by `install` command).
@@ -160,7 +160,7 @@ export function isConfigured(): boolean {
 	return !!(process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey);
 }
 
-// ── Config file writing (used by `install` command) ─────────────────────────────
+// -- Config file writing (used by `install` command) --------------------------
 
 /** Fields that `writeApiKeys()` can set in the config file. */
 export interface ApiKeyUpdate {
@@ -208,7 +208,7 @@ export function getConfigPath(): string {
 function generateConfigJsonc(config: MemoryConfig): string {
 	const lines: string[] = [];
 
-	lines.push("// Codexfi — plugin configuration");
+ 	lines.push("// Codexfi - plugin configuration");
 	lines.push("// Location: ~/.config/opencode/codexfi.jsonc");
 	lines.push("// Docs: https://github.com/prosperitypirate/codexfi");
 	lines.push("//");
@@ -216,20 +216,20 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("// always override values in this file.");
 	lines.push("{");
 
-	// ── API Keys section ────────────────────────────────────────────────────────
-	lines.push("\t// ── API Keys ──────────────────────────────────────────────────────────");
+	// -- API Keys section ------------------------------------------------------
+	lines.push("\t	// -- API Keys ----------------------------------------------------------");
 	lines.push("");
 	lines.push("\t// Required: Voyage AI embedding key (https://dash.voyageai.com/api-keys)");
 	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)},`);
 	lines.push("");
-	lines.push("\t// Extraction LLM key — at least one is required.");
+ 	lines.push("\t// Extraction LLM key - at least one is required.");
 	lines.push("\t// Default provider is Anthropic (Claude Haiku). Set EXTRACTION_PROVIDER");
 	lines.push("\t// env var to switch: \"anthropic\" | \"xai\" | \"google\"");
 	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
 	lines.push(`\t"xaiApiKey": ${jsonValue(config.xaiApiKey)},`);
 	lines.push(`\t"googleApiKey": ${jsonValue(config.googleApiKey)}`);
 
-	// ── Plugin settings (only include non-defaults) ─────────────────────────────
+	// -- Plugin settings (only include non-defaults) ----------------------------
 	const overrides = collectNonDefaults(config);
 	if (overrides.length > 0) {
 		// Need trailing comma on last API key line
@@ -238,7 +238,7 @@ function generateConfigJsonc(config: MemoryConfig): string {
 			lines[lastIdx] += ",";
 		}
 		lines.push("");
-		lines.push("\t// ── Plugin Settings (only non-default values shown) ─────────────────");
+		lines.push("\t// -- Plugin Settings (only non-default values shown) ------------------");
 		for (let i = 0; i < overrides.length; i++) {
 			const trailing = i < overrides.length - 1 ? "," : "";
 			lines.push(`\t${overrides[i]}${trailing}`);
@@ -258,7 +258,7 @@ function jsonValue(val: string | undefined | null): string {
 
 /**
  * Collect plugin settings that differ from defaults as "key": value strings.
- * This keeps the generated config file minimal — only user-customized values.
+  * This keeps the generated config file minimal - only user-customized values.
  */
 function collectNonDefaults(config: MemoryConfig): string[] {
 	const result: string[] = [];
