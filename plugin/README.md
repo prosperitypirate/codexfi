@@ -197,7 +197,7 @@ A 15-second cooldown handles OpenCode's double-fire of the completion event.
 |------|-----------------|
 | `project-brief` | Core project definition, goals, scope |
 | `architecture` | System design, patterns, component relationships |
-| `tech-context` | Stack, tools, build commands, constraints |
+| `tech-context` | Stack, languages, frameworks, key dependencies — not specific commands or tool paths (use `project-config`) |
 | `product-context` | Why the project exists, problems solved |
 | `progress` | Current state — only the latest entry survives |
 | `session-summary` | What was worked on; oldest condense into `learned-pattern` |
