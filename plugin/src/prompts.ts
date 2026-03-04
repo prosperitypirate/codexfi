@@ -39,7 +39,13 @@ Rules:
                         architecture, or implementation details; use "tech-context" and
                         "architecture" for those.
     "architecture"    — System design, patterns, component relationships, critical paths
-    "tech-context"    — Tech stack, setup, constraints, dependencies, tool preferences
+    "tech-context"    — Tech stack, languages, frameworks, key dependencies, and environment
+                        constraints. NOT for specific commands or tool paths — use
+                        "project-config" for those.
+    "project-config"  — Build/run/test commands, tool paths, env vars, and workflow
+                        preferences specific to this project (e.g. "run tests with
+                        bun test", "use /opt/homebrew/bin/gh for GitHub ops").
+                        Use for actionable config facts, not general architecture.
     "product-context" — Why the project exists, problems solved, UX goals
     "session-summary" — What was worked on this session, decisions made, next steps
     "progress"        — Project status / milestone snapshot: version shipped, features completed,
@@ -79,7 +85,11 @@ Extract facts for these categories:
                       files are entirely technical, derive a plain-language description. This
                       is the single most important memory; do NOT skip it.
   "architecture"    — How it's structured, key patterns, component relationships
-  "tech-context"    — Languages, frameworks, build/run/test commands, key dependencies
+  "tech-context"    — Languages, frameworks, key dependencies, and environment constraints.
+                      NOT for specific commands or tool paths — use "project-config" for those.
+  "project-config"  — Build/run/test commands and tool preferences found in
+                      package.json scripts, Makefiles, or config files (e.g.
+                      exact test commands, linter paths, env var names)
   "product-context" — Why it exists, what problem it solves, who it's for
 
 Rules:

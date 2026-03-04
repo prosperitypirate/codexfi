@@ -4,6 +4,7 @@
 
 import { describe, test, expect } from "bun:test";
 import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES } from "../../../plugin/src/config.js";
+import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
 
@@ -84,5 +85,35 @@ describe("constants", () => {
 		expect(STRUCTURAL_TYPES.has("session-summary")).toBe(false);
 		expect(STRUCTURAL_TYPES.has("progress")).toBe(false);
 		expect(STRUCTURAL_TYPES.has("conversation")).toBe(false);
+	});
+});
+
+// ── Extraction prompts ───────────────────────────────────────────────────────────
+
+describe("extraction prompts", () => {
+	test("EXTRACTION_SYSTEM includes project-config type", () => {
+		expect(EXTRACTION_SYSTEM).toContain('"project-config"');
+	});
+
+	test("INIT_EXTRACTION_SYSTEM includes project-config type", () => {
+		expect(INIT_EXTRACTION_SYSTEM).toContain('"project-config"');
+	});
+
+	test("EXTRACTION_SYSTEM includes all expected memory types", () => {
+		const expectedTypes = [
+			'"project-brief"',
+			'"architecture"',
+			'"tech-context"',
+			'"project-config"',
+			'"product-context"',
+			'"session-summary"',
+			'"progress"',
+			'"error-solution"',
+			'"preference"',
+			'"learned-pattern"',
+		];
+		for (const type of expectedTypes) {
+			expect(EXTRACTION_SYSTEM).toContain(type);
+		}
 	});
 });
