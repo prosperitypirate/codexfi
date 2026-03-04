@@ -65,7 +65,9 @@ jobs:
             - Injection vulnerabilities, unsafe eval, prototype pollution
             - GitHub Actions supply chain: flag any third-party action using @latest
               or a branch ref (not pinned to a commit SHA) that has sensitive
-              permissions (id-token: write, contents: write, or secrets access)
+              permissions (id-token: write, contents: write, or secrets access).
+              Exception: anomalyco/opencode is the canonical upstream action and
+              intentionally runs at @latest — do not flag it.
 
             ## Test coverage
             - Tests live in testing/src/unit/ and testing/src/integration/
