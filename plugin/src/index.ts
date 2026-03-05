@@ -209,6 +209,13 @@ function detectMemoryKeyword(text: string): boolean {
 	return MEMORY_KEYWORD_PATTERN.test(textWithoutCode);
 }
 
+// ── Disabled warning (injected into system prompt when plugin is not configured) ──
+// Defined in its own module (services/disabled-warning.ts) so it can be unit-tested
+// without importing this file's heavy native dependencies (@lancedb/lancedb etc.)
+
+import { buildDisabledWarning } from "./services/disabled-warning.js";
+export { buildDisabledWarning };
+
 // ── Per-session memory cache ────────────────────────────────────────────────────
 
 interface SessionMemoryCache {
@@ -367,7 +374,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 	}
 
 	if (!configured) {
-		log("Plugin disabled — VOYAGE_API_KEY not set");
+		log("Plugin disabled - VOYAGE_API_KEY not set");
 	} else {
 		// Fire-and-forget: register human-readable names (local JSON, not HTTP)
 		ensureInitialized()
@@ -434,7 +441,11 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 
 		// ── System prompt injection ──────────────────────────────────────────
 		"experimental.chat.system.transform": async (input, output) => {
-			if (!configured) return;
+			if (!configured) {
+				output.system.push(buildDisabledWarning());
+				log("system.transform: [MEMORY - DISABLED] warning injected");
+				return;
+			}
 
 			const sessionID = input.sessionID;
 			if (!sessionID) return;

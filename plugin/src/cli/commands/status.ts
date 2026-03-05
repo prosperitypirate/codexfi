@@ -3,6 +3,7 @@
  *
  * Verifies:
  *   - LanceDB database exists and is readable
+ *   - Config file (~/.config/opencode/codexfi.jsonc) exists
  *   - Required API keys are set
  *   - Plugin is registered in OpenCode config
  *   - Data directory permissions
@@ -19,6 +20,7 @@ import { homedir } from "node:os";
 import type { ParsedArgs } from "../args.js";
 import * as fmt from "../fmt.js";
 import { DATA_DIR, EXTRACTION_PROVIDER, VOYAGE_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY } from "../../config.js";
+import { CONFIG_DIR } from "../../plugin-config.js";
 
 // ── Check types ─────────────────────────────────────────────────────────────────
 
@@ -40,16 +42,19 @@ export async function run(args: ParsedArgs): Promise<void> {
 	// 2. LanceDB database
 	checks.push(checkDatabase());
 
-	// 3. Voyage AI key (embeddings)
+	// 3. Config file
+	checks.push(checkConfigFile());
+
+	// 4. Voyage AI key (embeddings)
 	checks.push(checkVoyageKey());
 
-	// 4. Extraction provider key
+	// 5. Extraction provider key
 	checks.push(checkExtractionKey());
 
-	// 5. Plugin registration
+	// 6. Plugin registration
 	checks.push(checkPluginRegistered());
 
-	// 6. Log file
+	// 7. Log file
 	checks.push(checkLogFile());
 
 	// JSON output
@@ -121,6 +126,22 @@ function checkDatabase(): CheckResult {
 	} catch {
 		return { name, status: "fail", detail: "unable to check database" };
 	}
+}
+
+export function checkConfigFile(): CheckResult {
+	const name = "Config file";
+	const candidates = [
+		join(CONFIG_DIR, "codexfi.jsonc"),
+		join(CONFIG_DIR, "codexfi.json"),
+	];
+	for (const p of candidates) {
+		if (existsSync(p)) return { name, status: "ok", detail: p };
+	}
+	return {
+		name,
+		status: "fail",
+		detail: `not found - run 'codexfi install' to create ${join(CONFIG_DIR, "codexfi.jsonc")}`,
+	};
 }
 
 function checkVoyageKey(): CheckResult {

@@ -5,7 +5,7 @@ description: Configure codexfi behavior with thresholds, limits, providers, and 
 
 # Configuration
 
-codexfi works out of the box with sensible defaults. All settings are optional and can be customized via a JSONC config file or environment variables.
+codexfi works out of the box with sensible defaults. All settings are optional and can be customized via a JSONC config file.
 
 ## Config file
 
@@ -14,9 +14,6 @@ The config file lives at `~/.config/opencode/codexfi.jsonc`. It is created autom
 ```jsonc
 // Codexfi — plugin configuration
 // Location: ~/.config/opencode/codexfi.jsonc
-//
-// Environment variables (VOYAGE_API_KEY, ANTHROPIC_API_KEY, etc.)
-// always override values in this file.
 {
   // ── API Keys ──────────────────────────────────────────────────────
   "voyageApiKey": "pa-...",
@@ -37,14 +34,28 @@ The config file lives at `~/.config/opencode/codexfi.jsonc`. It is created autom
 
 ## API keys
 
-| Key | Environment variable | Required | Purpose |
-|-----|---------------------|----------|---------|
-| `voyageApiKey` | `VOYAGE_API_KEY` | Yes | Voyage AI embeddings (`voyage-code-3`) |
-| `anthropicApiKey` | `ANTHROPIC_API_KEY` | One of three | Extraction via Claude Haiku 4.5 (default) |
-| `xaiApiKey` | `XAI_API_KEY` | One of three | Extraction via Grok 4.1 Fast |
-| `googleApiKey` | `GOOGLE_API_KEY` | One of three | Extraction via Gemini 3 Flash |
+| Key | Required | Purpose |
+|-----|----------|---------|
+| `voyageApiKey` | Yes | Voyage AI embeddings (`voyage-code-3`) |
+| `anthropicApiKey` | One of three | Extraction via Claude Haiku 4.5 (default) |
+| `xaiApiKey` | One of three | Extraction via Grok 4.1 Fast |
+| `googleApiKey` | One of three | Extraction via Gemini 3 Flash |
 
-Environment variables always override config file values. At minimum, you need `voyageApiKey` plus one extraction provider key.
+At minimum, you need `voyageApiKey` plus one extraction provider key.
+
+**API keys must be set in `codexfi.jsonc`.** The plugin does not read `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, or `GOOGLE_API_KEY` environment variables. If a key is missing from the config file, the plugin will disable itself rather than silently fail.
+
+## When the plugin is disabled
+
+If `voyageApiKey` is missing or `codexfi.jsonc` does not exist, the plugin disables itself and injects a `[MEMORY - DISABLED]` notice into the system prompt. The AI will proactively tell you what is wrong before responding to anything else:
+
+```
+[MEMORY - DISABLED]
+The codexfi memory plugin is installed but not configured.
+Run `bunx codexfi install` to set up your API keys and enable memory.
+```
+
+To fix this, run `bunx codexfi install` or manually add your keys to `~/.config/opencode/codexfi.jsonc`. Run `bunx codexfi status` to confirm the plugin is ready.
 
 ## Extraction provider
 

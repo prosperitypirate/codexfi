@@ -106,10 +106,15 @@ The E2E suite spawns real `opencode run` and `opencode serve` processes. Four th
      "plugin": ["file:///absolute/path/to/codexfi/plugin/dist/index.js"]
    }
    ```
-4. **API keys set** in environment:
-   - `VOYAGE_API_KEY` — embeddings
-   - `ANTHROPIC_API_KEY` — LLM extraction (`claude-haiku-4-5`)
-   - An AI provider key for the OpenCode agent sessions
+4. **API keys configured** in `~/.config/opencode/codexfi.jsonc`:
+   ```jsonc
+   {
+     "voyageApiKey": "pa-...",
+     "anthropicApiKey": "sk-ant-..."
+   }
+   ```
+   The plugin reads keys exclusively from `codexfi.jsonc` — setting `VOYAGE_API_KEY` or `ANTHROPIC_API_KEY` as environment variables is not sufficient. Run `bunx codexfi install` to create this file interactively, or create it manually.
+   An AI provider key for the OpenCode agent sessions is also required — set this via `ANTHROPIC_API_KEY` (or equivalent) in your shell environment for OpenCode's own model calls.
 
 <DocsTestIsolation />
 

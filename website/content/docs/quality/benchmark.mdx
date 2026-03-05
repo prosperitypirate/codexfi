@@ -64,8 +64,10 @@ Both the answering model and the judge model are `claude-sonnet-4-6`. The answer
 
 **Prerequisites**
 
-- `ANTHROPIC_API_KEY` — used for the answering and judge LLM calls
-- `VOYAGE_API_KEY` — used for embeddings during ingest and search
+- `ANTHROPIC_API_KEY` — used for the answering and judge LLM calls (set as an environment variable for the benchmark runner)
+- `VOYAGE_API_KEY` — used for embeddings during ingest and search (set as an environment variable for the benchmark runner)
+
+> These environment variables are read by the benchmark runner directly (`benchmark/src/`), not by the codexfi plugin. The plugin reads keys from `~/.config/opencode/codexfi.jsonc`. You need both: the config file for the plugin, and the env vars for the benchmark script.
 
 **Run**
 

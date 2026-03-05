@@ -13,9 +13,9 @@
  * ~/.cache/opencode/node_modules/. This means users always get the
  * latest version without manual updates.
  *
- * API key storage follows the established OpenCode ecosystem pattern:
+ * API key storage:
  *   - Keys are stored in a plugin-specific JSONC config file (~/.config/opencode/codexfi.jsonc)
- *   - Environment variables always take precedence over config file values
+ *   - Environment variables are NOT read by the plugin at runtime
  *   - Install command prompts interactively and writes to the config file
  *
  * Flags:
@@ -48,9 +48,9 @@ const OPENCODE_COMMAND_DIR = join(OPENCODE_CONFIG_DIR, "command");
 
 /** Extraction provider choices shown during install. */
 const PROVIDERS = [
-	{ key: "anthropic", label: "Anthropic", envVar: "ANTHROPIC_API_KEY", configKey: "anthropicApiKey" as const, hint: "sk-ant-..." },
-	{ key: "xai", label: "xAI (Grok)", envVar: "XAI_API_KEY", configKey: "xaiApiKey" as const, hint: "xai-..." },
-	{ key: "google", label: "Google (Gemini)", envVar: "GOOGLE_API_KEY", configKey: "googleApiKey" as const, hint: "AIza..." },
+	{ key: "anthropic", label: "Anthropic", configKey: "anthropicApiKey" as const, hint: "sk-ant-..." },
+	{ key: "xai", label: "xAI (Grok)", configKey: "xaiApiKey" as const, hint: "xai-..." },
+	{ key: "google", label: "Google (Gemini)", configKey: "googleApiKey" as const, hint: "AIza..." },
 ] as const;
 
 /**
@@ -322,13 +322,12 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 
 	// ── Voyage API key (required) ───────────────────────────────────────────────
 	const voyageFromFlag = getFlag(args, "voyage-key");
-	const voyageFromEnv = process.env.VOYAGE_API_KEY;
 	const voyageFromConfig = PLUGIN_CONFIG.voyageApiKey;
 
-	let voyageKey = voyageFromFlag || voyageFromEnv || voyageFromConfig || "";
+	let voyageKey = voyageFromFlag || voyageFromConfig || "";
 
 	if (voyageKey) {
-		const source = voyageFromFlag ? "flag" : voyageFromEnv ? "env" : "config";
+		const source = voyageFromFlag ? "flag" : "config";
 		fmt.success(`VOYAGE_API_KEY ${fmt.dim(`set (${maskKey(voyageKey)}) [${source}]`)}`);
 	} else {
 		fmt.warn(`VOYAGE_API_KEY ${fmt.dim("not set - required for embeddings")}`);
@@ -339,7 +338,7 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 		if (voyageKey) {
 			fmt.success(`VOYAGE_API_KEY ${fmt.dim(`saved (${maskKey(voyageKey)})`)}`);
 		} else {
-			fmt.warn("Skipped - plugin will be disabled until VOYAGE_API_KEY is set.");
+			fmt.warn("Skipped - plugin will be disabled until voyageApiKey is set in codexfi.jsonc.");
 		}
 	}
 	if (voyageKey) keys.voyageApiKey = voyageKey;
@@ -357,10 +356,9 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 	for (const p of PROVIDERS) {
 		const flagName = p.key + "-key";
 		const fromFlag = getFlag(args, flagName);
-		const fromEnv = process.env[p.envVar];
 		const fromConfig = PLUGIN_CONFIG[p.configKey];
-		const existing = fromFlag || fromEnv || fromConfig || "";
-		const source = fromFlag ? "flag" : fromEnv ? "env" : fromConfig ? "config" : "";
+		const existing = fromFlag || fromConfig || "";
+		const source = fromFlag ? "flag" : fromConfig ? "config" : "";
 
 		fmt.blank();
 
@@ -461,10 +459,9 @@ export async function run(args: ParsedArgs): Promise<void> {
 	fmt.hr(60);
 	fmt.blank();
 
-	const hasVoyage = !!(keys.voyageApiKey || process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey);
+	const hasVoyage = !!(keys.voyageApiKey || PLUGIN_CONFIG.voyageApiKey);
 	const hasExtraction = !!(
 		keys.anthropicApiKey || keys.xaiApiKey || keys.googleApiKey ||
-		process.env.ANTHROPIC_API_KEY || process.env.XAI_API_KEY || process.env.GOOGLE_API_KEY ||
 		PLUGIN_CONFIG.anthropicApiKey || PLUGIN_CONFIG.xaiApiKey || PLUGIN_CONFIG.googleApiKey
 	);
 
@@ -481,14 +478,6 @@ export async function run(args: ParsedArgs): Promise<void> {
 	if (!hasVoyage || !hasExtraction) {
 		fmt.info("Set missing API keys by re-running:");
 		fmt.info(`  ${fmt.dim("codexfi install")}`);
-		fmt.blank();
-		fmt.info("Or set environment variables in your shell:");
-		if (!hasVoyage) {
-			fmt.info(`  ${fmt.dim("export VOYAGE_API_KEY=pa-...")}`);
-		}
-		if (!hasExtraction) {
-			fmt.info(`  ${fmt.dim("export ANTHROPIC_API_KEY=sk-ant-...")}`);
-		}
 		fmt.blank();
 	}
 

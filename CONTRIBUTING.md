@@ -38,7 +38,9 @@ The core deliverable is the `plugin/` package. The `website/` directory is the d
 - [Bun](https://bun.sh/) — used for `plugin/` builds and CLI tooling
 - [pnpm](https://pnpm.io/) — used for `website/` (`npm` and `yarn` are not supported)
 - [OpenCode](https://opencode.ai/) — required to run the plugin end-to-end
-- A [Voyage AI](https://www.voyageai.com/) API key (`VOYAGE_API_KEY`) for embeddings
+- A [Voyage AI](https://www.voyageai.com/) API key and an extraction provider key — not required to build or typecheck, but needed any time the plugin actually runs:
+  - **Local dev sessions and E2E tests** (`testing/`): keys go in `~/.config/opencode/codexfi.jsonc` for the plugin (Voyage embeddings + extraction provider), plus `.env` or your shell for OpenCode's own model calls — see `testing/README.md`
+  - **Benchmark** (`benchmark/`): keys go in `benchmark/.env.local` (copy from `benchmark/.env.example`)
 
 ### Plugin
 
@@ -49,11 +51,23 @@ bun run build       # compiles plugin + CLI
 bun run typecheck   # TypeScript strict mode check
 ```
 
-To test the plugin in a real OpenCode session, install it into an OpenCode project:
+To test the plugin in a real OpenCode session using your **local build** (not the published npm version), point `~/.config/opencode/opencode.json` at the compiled output:
+
+```json
+{
+  "plugin": ["file:///absolute/path/to/codexfi/plugin/dist/index.js"]
+}
+```
+
+Then rebuild whenever you make changes:
 
 ```bash
-bunx codexfi install
+bun run build
 ```
+
+OpenCode picks up the new build on the next session start. To switch back to the published version, replace the `file://` path with `"codexfi"`.
+
+> **Note:** `bunx codexfi install` is useful for setting up API keys in `codexfi.jsonc` interactively, but it also writes `"codexfi"` (the npm package name) into `opencode.json`, overwriting your `file://` entry. If you run it, restore the `file://` path in `opencode.json` afterward.
 
 ### Website
 

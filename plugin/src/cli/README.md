@@ -80,23 +80,24 @@ codexfi install --no-tui --voyage-key pa-... --anthropic-key sk-ant-...
 Verifies database, API keys, plugin registration, and log file in one glance.
 
 ```
-$ codexfi status
+$ bunx codexfi status
 
 Status
 ──────────
   ✓ Data directory ~/.codexfi
   ✓ LanceDB database ~/.codexfi/lancedb
+  ✓ Config file ~/.config/opencode/codexfi.jsonc
   ✓ Voyage API key set (pa-PNK...)
   ✓ Extraction API key anthropic (sk-ant...)
   ✓ OpenCode plugin registered in opencode.json
   ✓ Log file ~/.codexfi.log
 
-  6/6 checks passed — system healthy.
+  7/7 checks passed — system healthy.
 ```
 
 ```bash
 # Machine-readable output for scripting
-codexfi status --json
+bunx codexfi status --json
 ```
 
 ---
@@ -300,7 +301,7 @@ src/cli/
     ├── list.ts             — formatted memory table with type colors
     ├── search.ts           — semantic search with similarity bars
     ├── stats.ts            — DB stats, type distribution, API costs
-    ├── status.ts           — health check (6 verifications)
+    ├── status.ts           — health check (7 verifications)
     ├── export.ts           — JSON/CSV export with RFC 4180 quoting
     ├── forget.ts           — delete by ID with prefix resolution
     └── dashboard.ts        — web dashboard launcher

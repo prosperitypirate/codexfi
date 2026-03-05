@@ -40,17 +40,16 @@ export function validateId(value: string, fieldName = "id"): string {
 }
 
 // ── API credentials ─────────────────────────────────────────────────────────────
-// Environment variables take precedence; config file (~/.config/opencode/codexfi.jsonc)
-// is the fallback. This lets power users use env vars while the install command
-// stores keys in the config file for "just works" onboarding.
-// NOTE: We use `||` (not `??`) so empty strings from env vars fall through to config.
+// codexfi.jsonc is the ONLY source of truth for API keys. Environment variables
+// are intentionally NOT read. Use `codexfi install` to store keys in the config
+// file at ~/.config/opencode/codexfi.jsonc.
 
 import { PLUGIN_CONFIG } from "./plugin-config.js";
 
-export const XAI_API_KEY = process.env.XAI_API_KEY || PLUGIN_CONFIG.xaiApiKey || "";
-export const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY || PLUGIN_CONFIG.googleApiKey || "";
-export const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || PLUGIN_CONFIG.anthropicApiKey || "";
-export const VOYAGE_API_KEY = process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey || "";
+export const XAI_API_KEY = PLUGIN_CONFIG.xaiApiKey ?? "";
+export const GOOGLE_API_KEY = PLUGIN_CONFIG.googleApiKey ?? "";
+export const ANTHROPIC_API_KEY = PLUGIN_CONFIG.anthropicApiKey ?? "";
+export const VOYAGE_API_KEY = PLUGIN_CONFIG.voyageApiKey ?? "";
 
 /** Data directory — default follows XDG convention outside project directory. */
 export const DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEMORY_DIR ?? `${homedir()}/.codexfi`;

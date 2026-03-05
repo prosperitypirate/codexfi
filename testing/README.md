@@ -26,10 +26,16 @@ bun install -g opencode-ai
 }
 ```
 
-**4. API keys set in environment**
-- `VOYAGE_API_KEY` — required for embeddings (voyage-code-3)
-- `ANTHROPIC_API_KEY` — required for extraction (claude-haiku-4-5)
-- An AI provider for the OpenCode agent (e.g. Anthropic API key in config)
+**4. API keys in `~/.config/opencode/codexfi.jsonc`**
+
+The plugin reads keys from `codexfi.jsonc` — env vars are not read by the plugin. Run `bunx codexfi install` or create the file manually:
+```jsonc
+{
+  "voyageApiKey": "pa-...",
+  "anthropicApiKey": "sk-ant-..."
+}
+```
+An AI provider key for the OpenCode agent sessions is also required — set this in your shell or `.env` (e.g. `ANTHROPIC_API_KEY`) for OpenCode's own model calls.
 
 ## Running
 

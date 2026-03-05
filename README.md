@@ -42,7 +42,15 @@ OpenCode starts every session from scratch. No memory of past decisions, establi
 curl -fsSL https://codexfi.com/install | bash
 ```
 
-The installer prompts for API keys, registers the plugin, and you're done. Start any OpenCode session and you'll see a `[MEMORY]` block confirming it's active.
+The installer prompts for API keys, registers the plugin, and you're done.
+
+To verify everything is configured correctly before your first session:
+
+```bash
+bunx codexfi status
+```
+
+Once a session runs, proof it's working: start a second session and ask the agent about something from the first — it will know.
 
 ### Prerequisites
 

@@ -46,14 +46,16 @@ bun run build
 
 ### 2. Set API keys
 
-```bash
-# Required — embeddings
-export VOYAGE_API_KEY=pa-...
+Run the installer to store your keys in `~/.config/opencode/codexfi.jsonc`:
 
-# Required — extraction (pick one)
-export ANTHROPIC_API_KEY=sk-ant-...    # default, most consistent
-# export XAI_API_KEY=...               # fastest
-# export GOOGLE_API_KEY=...            # native JSON mode
+```bash
+bunx codexfi install
+```
+
+Or pass keys directly for non-interactive setup:
+
+```bash
+bunx codexfi install --no-tui --voyage-key pa-... --anthropic-key sk-ant-...
 ```
 
 ### 3. Register with OpenCode
@@ -68,7 +70,7 @@ Add to `~/.config/opencode/opencode.json`:
 
 ### 4. Start a session
 
-Open any project in OpenCode. The `[MEMORY]` block appears in context from the first message. Memories auto-save after every assistant turn.
+Open any project in OpenCode. Memory is silently injected into system context every turn — you won't see it, but the agent does. Memories auto-save after every assistant turn.
 
 **That's it.** No Docker. No Python. No separate server.
 
@@ -250,10 +252,17 @@ E2E: 11/12 scenarios pass. See [benchmark/README.md](../benchmark/README.md) for
 
 ## Configuration
 
-Optional config at `~/.config/opencode/codexfi.jsonc`:
+Config file at `~/.config/opencode/codexfi.jsonc` (created by `codexfi install`):
 
 ```jsonc
 {
+  // ── API Keys (required) ───────────────────────────────────────────
+  "voyageApiKey": "pa-...",         // Voyage AI — embeddings (required)
+  "anthropicApiKey": "sk-ant-...",  // Anthropic — extraction (pick one)
+  // "xaiApiKey": "xai-...",        // xAI — extraction (fastest)
+  // "googleApiKey": "AIza...",     // Google — extraction (native JSON)
+
+  // ── Behaviour ─────────────────────────────────────────────────────
   // Minimum similarity score for retrieval (default: 0.45)
   "similarityThreshold": 0.45,
 
@@ -273,6 +282,8 @@ Optional config at `~/.config/opencode/codexfi.jsonc`:
   // "keywordPatterns": ["bookmark this", "save for later"]
 }
 ```
+
+The extraction provider can be switched via the `EXTRACTION_PROVIDER` environment variable (`anthropic` / `xai` / `google`).
 
 ---
 

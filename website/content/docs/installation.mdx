@@ -51,7 +51,7 @@ The installer interactively prompts for:
 1. **Voyage AI key** (required) — used for all embedding operations
 2. **Extraction provider key** (required) — choose from Anthropic, xAI, or Google
 
-Keys are stored in `~/.config/opencode/codexfi.jsonc`. Environment variables always take precedence over config file values.
+Keys are stored in `~/.config/opencode/codexfi.jsonc`.
 
 ## Non-interactive install
 
@@ -73,31 +73,29 @@ Available flags:
 | `--xai-key <key>` | Set xAI API key |
 | `--google-key <key>` | Set Google API key |
 
-## Environment variables
-
-As an alternative to the config file, set API keys as environment variables in your shell profile:
-
-```bash
-# Required — embeddings
-export VOYAGE_API_KEY=pa-...
-
-# Required — extraction (pick one)
-export ANTHROPIC_API_KEY=sk-ant-...    # default provider
-# export XAI_API_KEY=...               # fastest
-# export GOOGLE_API_KEY=...            # native JSON mode
-```
-
-Environment variables override config file values.
-
 ## Verify installation
 
-After installing, restart OpenCode and open any project. You should see the `[MEMORY]` block appear in the system context from the first message.
-
-To check your configuration:
+After installing, verify your configuration:
 
 ```bash
 bunx codexfi status
 ```
+
+This runs 7 checks and reports the result of each:
+
+| # | Check | Passes when |
+|---|-------|-------------|
+| 1 | Data directory | `~/.codexfi/` exists and is readable/writable |
+| 2 | LanceDB database | database is initialized (warn if not yet — created on first session) |
+| 3 | Config file | `~/.config/opencode/codexfi.jsonc` exists |
+| 4 | Voyage API key | `voyageApiKey` is set in `codexfi.jsonc` |
+| 5 | Extraction API key | at least one of `anthropicApiKey`, `xaiApiKey`, `googleApiKey` is set |
+| 6 | OpenCode plugin | `"codexfi"` is registered in `opencode.json` |
+| 7 | Log file | `~/.codexfi.log` exists (warn if not — appears after first session) |
+
+A fresh install before the first OpenCode session will show checks 2 and 7 as warnings — this is normal. All others must pass.
+
+> **Migrating from environment variables?** As of v0.4.6, the plugin reads API keys exclusively from `codexfi.jsonc`. `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `GOOGLE_API_KEY` environment variables are no longer read by the plugin. Run `bunx codexfi install` to migrate your keys into the config file.
 
 ## First session setup
 
@@ -106,7 +104,7 @@ On the first session in any project, codexfi automatically reads common project 
 For a more thorough initial setup, use the `/memory-init` slash command in OpenCode. It guides the agent through:
 
 1. Checking existing memories
-2. Exploring the codebase (or asking founding questions for new projects)
+2. Exploring the codebase (or asking founding questions for empty projects)
 3. Saving structured memories across all categories
 4. Confirming what was stored
 

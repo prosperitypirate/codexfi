@@ -1,9 +1,9 @@
 /**
  * Plugin-specific user configuration — loaded from ~/.config/opencode/codexfi.jsonc.
  *
- * API keys can be stored here as a fallback when environment variables aren't set.
- * Environment variables always take precedence over config file values.
- * The `codexfi install` command prompts for keys and writes them here.
+ * API keys are stored in codexfi.jsonc only — environment variables are NOT read
+ * by the plugin at runtime. The `codexfi install` command prompts for keys and
+ * writes them here.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ const CONFIG_FILES = [
 ];
 
 interface MemoryConfig {
-	// ── API Keys (env vars override these) ──────────────────────────────────────
+	// ── API Keys (stored in config file only) ─────────────────────────────────────
 	/** Voyage AI embedding key — required for all memory operations. */
 	voyageApiKey?: string;
 	/** Anthropic API key — used for extraction when EXTRACTION_PROVIDER=anthropic. */
@@ -126,7 +126,7 @@ function loadConfig(): MemoryConfig {
 const fileConfig = loadConfig();
 
 export const PLUGIN_CONFIG = {
-	// API keys from config file — env vars override these in config.ts
+	// API keys from config file only — no env var fallback
 	voyageApiKey: fileConfig.voyageApiKey ?? "",
 	anthropicApiKey: fileConfig.anthropicApiKey ?? "",
 	xaiApiKey: fileConfig.xaiApiKey ?? "",
@@ -151,13 +151,14 @@ export const PLUGIN_CONFIG = {
 };
 
 /**
- * Check if the plugin is configured — requires VOYAGE_API_KEY for embeddings.
+ * Returns true if the plugin has the minimum configuration to operate.
  *
- * Checks environment variables first (power users / CI), then falls back to
- * the config file at ~/.config/opencode/codexfi.jsonc (set by `install` command).
+ * Checks for voyageApiKey in ~/.config/opencode/codexfi.jsonc only.
+ * Environment variables are not read for API keys — use `codexfi install`
+ * to store keys in the config file.
  */
 export function isConfigured(): boolean {
-	return !!(process.env.VOYAGE_API_KEY || PLUGIN_CONFIG.voyageApiKey);
+	return !!PLUGIN_CONFIG.voyageApiKey;
 }
 
 // ── Config file writing (used by `install` command) ─────────────────────────────
@@ -211,9 +212,6 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("// Codexfi - plugin configuration");
 	lines.push("// Location: ~/.config/opencode/codexfi.jsonc");
 	lines.push("// Docs: https://github.com/prosperitypirate/codexfi");
-	lines.push("//");
-	lines.push("// Environment variables (VOYAGE_API_KEY, ANTHROPIC_API_KEY, etc.)");
-	lines.push("// always override values in this file.");
 	lines.push("{");
 
 	// ── API Keys section ────────────────────────────────────────────────────────
