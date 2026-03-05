@@ -35,6 +35,16 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Fetch PR metadata
+        id: pr-meta
+        run: |
+          LABELS=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '[.labels[].name] | join(", ")' 2>/dev/null || echo "none")
+          ASSIGNEES=$(gh pr view ${{ github.event.pull_request.number }} --json assignees --jq '[.assignees[].login] | join(", ")' 2>/dev/null || echo "none")
+          echo "labels=${LABELS:-none}" >> "$GITHUB_OUTPUT"
+          echo "assignees=${ASSIGNEES:-none}" >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: anomalyco/opencode/github@latest
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -90,11 +100,17 @@ jobs:
             - README or CHANGELOG updates needed for user-visible changes
 
             ## PR hygiene
-            Flag as Warning if missing:
-            - At least one label applied (bug, enhancement, memory-quality, chore, ci,
-              backend, frontend, plugin, benchmark, security, documentation, research)
-            - A related issue linked (e.g. "Closes #N") — not required for chore/ci/docs PRs
-            - PR description is not empty
+            Current PR metadata (fetched via GitHub API):
+            - Labels: ${{ steps.pr-meta.outputs.labels }}
+            - Assignees: ${{ steps.pr-meta.outputs.assignees }}
+
+            Flag as Warning if:
+            - Labels is "none" (expected: at least one of bug, enhancement,
+              memory-quality, chore, ci, backend, frontend, plugin, benchmark,
+              security, documentation, research, website, dependencies)
+            - Assignees is "none" (every PR should have an assignee)
+            - A related issue is not linked (e.g. "Closes #N") — not required for chore/ci/docs PRs
+            - PR description is empty
 
             Post findings grouped by severity: **Critical**, **Warning**, **Suggestion**.
             Skip empty sections. If the PR looks good, say so briefly.
