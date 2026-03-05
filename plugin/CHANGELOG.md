@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.7](https://github.com/prosperitypirate/codexfi/compare/v0.4.6...v0.4.7) (2026-03-05)
+
+
+### Bug Fixes
+
+* **plugin:** remove env var fallbacks, surface disabled warning, add config-file check (v0.4.6 → v0.4.7) ([#112](https://github.com/prosperitypirate/codexfi/issues/112)) ([c26de3c](https://github.com/prosperitypirate/codexfi/commit/c26de3c2e4730bdce395a67930b13e3e1353cb19))
+
 ## [0.4.6](https://github.com/prosperitypirate/codexfi/compare/v0.4.5...v0.4.6) (2026-03-04)
 
 
