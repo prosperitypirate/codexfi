@@ -13,9 +13,9 @@
  * ~/.cache/opencode/node_modules/. This means users always get the
  * latest version without manual updates.
  *
- * API key storage follows the established OpenCode ecosystem pattern:
+ * API key storage:
  *   - Keys are stored in a plugin-specific JSONC config file (~/.config/opencode/codexfi.jsonc)
- *   - Environment variables always take precedence over config file values
+ *   - Environment variables are NOT read by the plugin at runtime
  *   - Install command prompts interactively and writes to the config file
  *
  * Flags:

@@ -1,9 +1,9 @@
 /**
  * Plugin-specific user configuration — loaded from ~/.config/opencode/codexfi.jsonc.
  *
- * API keys can be stored here as a fallback when environment variables aren't set.
- * Environment variables always take precedence over config file values.
- * The `codexfi install` command prompts for keys and writes them here.
+ * API keys are stored in codexfi.jsonc only — environment variables are NOT read
+ * by the plugin at runtime. The `codexfi install` command prompts for keys and
+ * writes them here.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -19,7 +19,7 @@ const CONFIG_FILES = [
 ];
 
 interface MemoryConfig {
-	// ── API Keys (env vars override these) ──────────────────────────────────────
+	// ── API Keys (stored in config file only) ─────────────────────────────────────
 	/** Voyage AI embedding key — required for all memory operations. */
 	voyageApiKey?: string;
 	/** Anthropic API key — used for extraction when EXTRACTION_PROVIDER=anthropic. */
@@ -126,7 +126,7 @@ function loadConfig(): MemoryConfig {
 const fileConfig = loadConfig();
 
 export const PLUGIN_CONFIG = {
-	// API keys from config file — env vars override these in config.ts
+	// API keys from config file only — no env var fallback
 	voyageApiKey: fileConfig.voyageApiKey ?? "",
 	anthropicApiKey: fileConfig.anthropicApiKey ?? "",
 	xaiApiKey: fileConfig.xaiApiKey ?? "",
