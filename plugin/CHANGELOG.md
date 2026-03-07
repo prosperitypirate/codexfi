@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/prosperitypirate/codexfi/compare/v0.4.7...v0.5.0) (2026-03-07)
+
+
+### Features
+
+* **memory:** fix auto-init extraction mode and Turn 1 visibility ([#115](https://github.com/prosperitypirate/codexfi/issues/115)) ([f505ff9](https://github.com/prosperitypirate/codexfi/commit/f505ff9e9d22d66f8eb1f86630e9aa9e78fe565c))
+
 ## [0.4.7](https://github.com/prosperitypirate/codexfi/compare/v0.4.6...v0.4.7) (2026-03-05)
 
 
