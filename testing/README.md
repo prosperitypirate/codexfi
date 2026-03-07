@@ -42,7 +42,7 @@ An AI provider key for the OpenCode agent sessions is also required — set this
 ```bash
 cd testing
 bun install       # first time only
-bun run test      # runs all 12 scenarios
+bun run test      # runs unit + integration tests
 ```
 
 Output is printed to stdout with ANSI colours. Each run is also saved to `results/` (gitignored).
@@ -55,9 +55,15 @@ bun run test:scenario 07       # single scenario
 bun run test:scenario 07,08    # multiple scenarios
 ```
 
-## Latest run results (2026-02-25) — plugin embedded rewrite
+To run the E2E scenarios:
+```bash
+bun run test:e2e               # all 13 scenarios
+bun run test:e2e:scenario 13   # single E2E scenario
+```
 
-Full run against `plugin/` (embedded LanceDB, no Docker backend). Extraction via xAI Grok (`grok-4-fast-non-reasoning`).
+## Latest run results (2026-03-07) — auto-init enrichment
+
+Full run of scenario 13 against `plugin/` (embedded LanceDB). Extraction via Anthropic Haiku (`claude-haiku-4-5`).
 
 ```
 PASS  01  Cross-Session Memory Continuity
@@ -68,15 +74,16 @@ PASS  05  Memory Aging
 PASS  06  Existing Codebase Auto-Init
 PASS  07  Enumeration Hybrid Retrieval
 PASS  08  Cross-Synthesis (isWideSynthesis)
-WARN  09  maxMemories=20 Under Load           ← 8/10 assertions, K=20 margin under 41 memories
+WARN  09  maxMemories=20 Under Load           <- 8/10 assertions, K=20 margin under 41 memories
 PASS  10  Knowledge Update / Superseded
 PASS  11  System Prompt Memory Injection
 PASS  12  Multi-Turn Per-Turn Refresh
+PASS  13  Auto-Init Turn 1 Visibility + Enrichment
 
-11/12 PASS (scenario 09 is known K=20 margin, not a regression)
+12/13 PASS (scenario 09 is known K=20 margin, not a regression)
 ```
 
-### Previous results (2026-02-22) — plugin-v1 with Docker backend
+### Previous results (2026-02-25) — plugin embedded rewrite
 
 Full run against plugin build from PR #44 (`feature/mid-session-retrieval` branch):
 
@@ -122,6 +129,23 @@ env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
 
 This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anomalyco/opencode/issues/14532.
 
+## Known issue: `codexfi.jsonc` deleted during E2E runs
+
+When the OpenCode desktop app is running and E2E tests spawn `opencode serve`, the config file `~/.config/opencode/codexfi.jsonc` gets silently deleted. The `opencode.json` file survives — only `codexfi.jsonc` is affected. Without it, `isConfigured()` returns false, the plugin is disabled, and all E2E tests fail with 0 memories.
+
+**Root cause:** Under investigation — likely OpenCode's TUI migration or serve process cleanup. The test harness does not reference or touch `codexfi.jsonc` (confirmed via grep). Tracked upstream at https://github.com/anomalyco/opencode/issues/16450.
+
+**Workaround:** Run the config monitor script in a separate terminal while running E2E tests. It watches for the file deletion and alerts you so you can restore it:
+```bash
+# Terminal 1: monitor for deletion
+bash testing/monitor-config.sh
+
+# Terminal 2 (when monitor reports deletion): restore config
+bunx codexfi install
+```
+
+The monitor script captures process snapshots at deletion time (`lsof`, `ps aux`) to help diagnose the root cause. If the file is deleted mid-test, re-run `bunx codexfi install` and restart the failed scenario.
+
 ## Scenarios
 
 | # | Name | What it tests |
@@ -138,6 +162,7 @@ This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anom
 | 10 | Knowledge Update / Superseded | After ORM migration, agent answers with the new ORM (Tortoise), not the stale one (SQLAlchemy); backend reflects superseded state |
 | 11 | System Prompt Memory Injection | [MEMORY] block is injected via `system.transform` into the system prompt (not as a synthetic message part); agent references seeded facts |
 | 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories as the user switches topics mid-session |
+| 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode, re-fetches memories for Turn 1 visibility, background enrichment fires after first response |
 
 ## Architecture
 
@@ -163,8 +188,10 @@ testing/
 │       ├── 09-max-memories.ts
 │       ├── 10-knowledge-update.ts
 │       ├── 11-system-prompt-injection.ts
-│       └── 12-multi-turn-refresh.ts
+│       ├── 12-multi-turn-refresh.ts
+│       └── 13-auto-init-turn1.ts
 ├── results/               — gitignored; JSON output of each run
+├── monitor-config.sh      — watches codexfi.jsonc for deletion (run in separate terminal)
 ├── package.json
 └── tsconfig.json
 ```

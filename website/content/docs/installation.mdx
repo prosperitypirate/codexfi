@@ -99,7 +99,9 @@ A fresh install before the first OpenCode session will show checks 2 and 7 as wa
 
 ## First session setup
 
-On the first session in any project, codexfi automatically reads common project files (`README.md`, `package.json`, `docker-compose.yml`, etc.) and extracts initial memories. This auto-initialization is silent and requires no user action.
+On the first session in any project, codexfi automatically reads 28 common project files (`README.md`, `package.json`, `Dockerfile`, `tsconfig.json`, monorepo configs, agent instructions, and more) plus recent git history, and extracts initial memories. These memories are available immediately on Turn 1 — the agent has project context from its very first response. After the first response, background enrichment adds directory structure and additional context.
+
+For empty directories with no project files, codexfi injects a `[MEMORY - NEW PROJECT]` hint into the system prompt so the agent knows to help you build from scratch.
 
 For a more thorough initial setup, use the `/memory-init` slash command in OpenCode. It guides the agent through:
 

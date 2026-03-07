@@ -13,7 +13,7 @@
  * structure with multiple file types to exercise the full auto-init pipeline.
  */
 
-import { createTestDir, runOpencode } from "../opencode.js";
+import { createTestDir, runOpencode, getServerLogs } from "../opencode.js";
 import { waitForMemories, getMemoriesForDir } from "../memory-api.js";
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
@@ -196,6 +196,10 @@ export async function run(): Promise<ScenarioResult> {
         pass: /typescript|node|pdfkit|stripe|vitest|zod|esm/i.test(allContent),
       },
       {
+        label: "project-brief memory created by auto-init",
+        pass: memories.some(m => m.metadata?.type === "project-brief"),
+      },
+      {
         label: "Session 2 recalls project name 'invoicekit'",
         pass: response.toLowerCase().includes("invoicekit"),
       },
@@ -208,6 +212,17 @@ export async function run(): Promise<ScenarioResult> {
         pass: /typescript|pdfkit|stripe|node/i.test(response),
       },
     ];
+
+    // ── Log-based assertions (Phase 5) ──────────────────────────────────────────
+    const logs = getServerLogs(dir);
+    assertions.push({
+      label: "Server logs confirm [MEMORY] injected on Turn 1",
+      pass: logs.some(l => l.includes("system.transform: [MEMORY] injected")),
+    });
+    assertions.push({
+      label: "Server logs confirm init mode used",
+      pass: logs.some(l => l.includes("auto-init: using init mode")),
+    });
 
     for (const a of assertions) {
       details.push(`  [${a.pass ? "✓" : "✗"}] ${a.label}`);

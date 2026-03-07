@@ -27,6 +27,7 @@ import { run as run09 } from "./scenarios/09-max-memories.js";
 import { run as run10 } from "./scenarios/10-knowledge-update.js";
 import { run as run11 } from "./scenarios/11-system-prompt-injection.js";
 import { run as run12 } from "./scenarios/12-multi-turn-refresh.js";
+import { run as run13 } from "./scenarios/13-auto-init-turn1.js";
 
 const BOLD  = "\x1b[1m";
 const CYAN  = "\x1b[36m";
@@ -47,6 +48,7 @@ const ALL_SCENARIOS: Array<{ id: string; fn: () => Promise<ScenarioResult> }> = 
   { id: "10", fn: run10 },
   { id: "11", fn: run11 },
   { id: "12", fn: run12 },
+  { id: "13", fn: run13 },
 ];
 
 async function main() {

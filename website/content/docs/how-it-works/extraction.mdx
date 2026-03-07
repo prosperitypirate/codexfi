@@ -91,7 +91,13 @@ Triggered every N turns (default: 5). Generates a high-level session summary cov
 
 ### Init mode
 
-Used during auto-initialization when a new project is detected. Reads project files (README, package.json, etc.) and extracts foundational facts about the project.
+Used during auto-initialization when a new project is detected. Reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions like AGENTS.md and CLAUDE.md, and more) plus the recent 20 git commits. Extracts foundational facts about the project using a specialized init extraction prompt.
+
+After init mode completes, memories are re-fetched immediately so they appear in the Turn 1 `[MEMORY]` block — the agent has project context from its very first response.
+
+### Background enrichment
+
+After the Turn 1 response is delivered, a separate enrichment pass fires in the background. It generates a directory tree of the project structure and extracts additional context from entry points and CI configuration files. This enriches the memory store without delaying the initial response.
 
 ## Extraction providers
 

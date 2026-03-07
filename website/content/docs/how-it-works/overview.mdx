@@ -36,7 +36,11 @@ On the first user message, four parallel fetches populate the memory cache:
 3. **Project list** — all structured project memories (brief, architecture, tech context, etc.)
 4. **Project semantic search** — project-scoped memories semantically similar to the message
 
-If zero project memories exist and the directory has code, **auto-initialization** kicks in silently. codexfi reads `README.md`, `package.json`, `docker-compose.yml`, and other common project files, then extracts initial memories.
+If zero project memories exist and the directory has code, **auto-initialization** kicks in silently. codexfi reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions, and more) plus the recent 20 git commits, then extracts initial memories using the init extraction mode. Memories are re-fetched immediately so they are visible in the Turn 1 `[MEMORY]` block.
+
+If zero project memories exist and the directory is empty, a `[MEMORY - NEW PROJECT]` hint is injected into the system prompt to guide the agent.
+
+After the Turn 1 response is delivered, **background enrichment** fires as a separate pass. It generates a directory tree and extracts additional context from entry points and CI configs — enriching the memory store without delaying the first response.
 
 ### Turn 2+ (semantic refresh)
 
@@ -105,9 +109,13 @@ plugin/src/
 ├── telemetry.ts      — cost tracking (CostLedger + ActivityLog)
 ├── plugin-config.ts  — user config from ~/.config/opencode/codexfi.jsonc
 └── services/
+    ├── auto-init-config.ts — init file list (28 files) and total char cap
     ├── auto-save.ts  — background extraction after assistant turns
     ├── compaction.ts — context window compaction handling
     ├── context.ts    — [MEMORY] block formatting
+    ├── directory-tree.ts — project tree generator for background enrichment
+    ├── disabled-warning.ts — warning hint when plugin is misconfigured
+    ├── fresh-project-hint.ts — [MEMORY - NEW PROJECT] hint for empty directories
     ├── privacy.ts    — <private> tag stripping
     └── tags.ts       — project/user tag computation
 ```

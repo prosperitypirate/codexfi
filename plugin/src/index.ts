@@ -28,6 +28,8 @@ import {
 	createAutoSaveHook, updateMessageCache,
 	updateAssistantTextBuffer, popAssistantText, injectFinalAssistantMessage,
 } from "./services/auto-save.js";
+import { generateDirectoryTree } from "./services/directory-tree.js";
+import { buildFreshProjectHint } from "./services/fresh-project-hint.js";
 
 import { isConfigured, PLUGIN_CONFIG } from "./plugin-config.js";
 import { log } from "./services/logger.js";
@@ -91,21 +93,12 @@ function detectExistingCodebase(directory: string): boolean {
 }
 
 // ── Project auto-init ───────────────────────────────────────────────────────────
+// IMPORTANT: These constants are NOT exported from index.ts because opencode
+// iterates all module exports and calls each as a plugin function. Non-function
+// exports (arrays, numbers) cause "fn is not a function" runtime errors.
+// Tests import from plugin/src/services/auto-init-config.ts instead.
 
-const INIT_FILES = [
-	{ name: "README.md",           maxChars: 3000 },
-	{ name: "README.rst",          maxChars: 3000 },
-	{ name: "package.json",        maxChars: 2000 },
-	{ name: "Cargo.toml",          maxChars: 2000 },
-	{ name: "go.mod",              maxChars: 1000 },
-	{ name: "pyproject.toml",      maxChars: 2000 },
-	{ name: "docker-compose.yml",  maxChars: 1500 },
-	{ name: "docker-compose.yaml", maxChars: 1500 },
-	{ name: "tsconfig.json",       maxChars: 1000 },
-	{ name: ".env.example",        maxChars: 500  },
-];
-
-const INIT_TOTAL_CHAR_CAP = 7000;
+import { INIT_FILES, INIT_TOTAL_CHAR_CAP } from "./services/auto-init-config.js";
 
 async function triggerSilentAutoInit(
 	directory: string,
@@ -127,6 +120,28 @@ async function triggerSilentAutoInit(
 		}
 	}
 
+	// ── Git log: recent commit history ─────────────────────────
+	if (totalChars < INIT_TOTAL_CHAR_CAP) {
+		try {
+			const { execSync } = await import("node:child_process");
+			const gitLog = execSync("git log --oneline -20 --no-decorate 2>/dev/null", {
+				cwd: directory,
+				encoding: "utf-8",
+				timeout: 3000,
+			}).trim();
+			if (gitLog) {
+				const allowed = INIT_TOTAL_CHAR_CAP - totalChars;
+				const truncatedLog = gitLog.slice(0, Math.min(allowed, 2000));
+				sections.push(`=== git log (recent) ===\n${truncatedLog}`);
+				totalChars += truncatedLog.length;
+			}
+		} catch (err) {
+			log("auto-init: git log skipped", {
+				reason: err instanceof Error ? err.message : String(err),
+			});
+		}
+	}
+
 	if (sections.length === 0) {
 		log("auto-init: no readable project files found, skipping");
 		return;
@@ -141,9 +156,11 @@ async function triggerSilentAutoInit(
 		chars: sanitized.length,
 	});
 
+	log("auto-init: using init mode");
 	const results = await store.ingest(
 		[{ role: "user", content: sanitized }],
 		tags.project,
+		{ mode: "init" },
 	);
 	log("auto-init: extraction done", { count: results.length });
 }
@@ -356,6 +373,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 	const tags = getTags(directory);
 	const displayNames = getDisplayNames(directory);
 	const sessionCaches = new Map<string, SessionMemoryCache>();
+	const enrichedSessions = new Set<string>();
+	const freshProjectSessions = new Set<string>();
 	const MAX_SESSION_CACHES = 100; // Prevent unbounded growth; LRU eviction below
 	const configured = isConfigured();
 	log("Plugin init", { directory, tags, displayNames, configured });
@@ -434,6 +453,137 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 			? createAutoSaveHook(tags, ctx.client)
 			: null;
 
+	// ── Background enrichment (Phase 3) ──────────────────────────────────────────
+	async function triggerBackgroundEnrichment(
+		sessionID: string,
+	): Promise<void> {
+		// Timestamp guard: record time before we start. If a per-turn refresh
+		// runs while we're doing the LLM call, it will update cache.lastRefreshAt.
+		// When we finish, we skip our cache update if the cache was refreshed
+		// during our run — the per-turn data is fresher.
+		const enrichmentStartedAt = Date.now();
+
+		const sections: string[] = [];
+		let totalChars = 0;
+		const ENRICHMENT_CHAR_CAP = 12000;
+
+		// ── 1. Directory tree (depth 3, excluding common noise) ────
+		try {
+			const tree = generateDirectoryTree(directory, 3);
+			if (tree) {
+				sections.push(`=== Directory Structure ===\n${tree}`);
+				totalChars += tree.length;
+			}
+		} catch {
+			log("enrichment: directory tree generation failed");
+		}
+
+		// ── 2. Entry-point files ───────────────────────────────────
+		const ENTRY_POINT_PATTERNS = [
+			"src/index.ts", "src/index.js", "src/main.ts", "src/main.js",
+			"src/app.ts", "src/app.js", "src/lib.ts", "src/lib.js",
+			"src/index.tsx", "src/App.tsx",
+			"main.go", "cmd/main.go",
+			"src/main.rs", "src/lib.rs",
+			"app.py", "main.py", "manage.py",
+			"index.ts", "index.js", "app.ts", "app.js",
+		];
+
+		for (const pattern of ENTRY_POINT_PATTERNS) {
+			if (totalChars >= ENRICHMENT_CHAR_CAP) break;
+			const filePath = join(directory, pattern);
+			if (!existsSync(filePath)) continue;
+			try {
+				const raw = readFileSync(filePath, "utf-8");
+				const truncated = raw.slice(0, 3000);
+				sections.push(`=== ${pattern} ===\n${truncated}`);
+				totalChars += truncated.length;
+			} catch {
+				continue;
+			}
+		}
+
+		// ── 3. CI config files ─────────────────────────────────────
+		const CI_PATTERNS = [
+			".github/workflows/ci.yml",
+			".github/workflows/ci.yaml",
+			".github/workflows/test.yml",
+			".github/workflows/build.yml",
+			".gitlab-ci.yml",
+			".circleci/config.yml",
+		];
+
+		for (const pattern of CI_PATTERNS) {
+			if (totalChars >= ENRICHMENT_CHAR_CAP) break;
+			const filePath = join(directory, pattern);
+			if (!existsSync(filePath)) continue;
+			try {
+				const raw = readFileSync(filePath, "utf-8");
+				const truncated = raw.slice(0, 2000);
+				sections.push(`=== ${pattern} ===\n${truncated}`);
+				totalChars += truncated.length;
+			} catch {
+				continue;
+			}
+		}
+
+		if (sections.length === 0) {
+			log("enrichment: no enrichment content found, skipping");
+			return;
+		}
+
+		const content = sections.join("\n\n");
+		const sanitized = stripPrivateContent(content);
+
+		log("enrichment: sending background enrichment for extraction", {
+			sections: sections.length,
+			chars: sanitized.length,
+		});
+
+		const results = await store.ingest(
+			[{ role: "user", content: sanitized }],
+			tags.project,
+			{ mode: "init" },
+		);
+
+		log("enrichment: extraction done", { count: results.length });
+
+		// ── 4. Update session cache (with timestamp guard) ───────────
+		const cache = sessionCaches.get(sessionID);
+		if (cache?.initialized) {
+			if (cache.lastRefreshAt && cache.lastRefreshAt > enrichmentStartedAt) {
+				log("enrichment: skipping cache update — per-turn refresh already ran", {
+					cacheRefreshedAt: cache.lastRefreshAt,
+					enrichmentStartedAt,
+				});
+				return;
+			}
+
+			const freshList = await listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories);
+			if (freshList.success && freshList.memories.length > 0) {
+				const byType: Record<string, StructuredMemory[]> = {};
+				for (const m of freshList.memories) {
+					const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
+					const key = memType || "other";
+					if (!byType[key]) byType[key] = [];
+					byType[key].push({
+						id: m.id,
+						memory: m.summary,
+						similarity: 1,
+						metadata: m.metadata as Record<string, unknown> | undefined,
+						createdAt: m.createdAt,
+					});
+				}
+				cache.structuredSections = byType;
+				cache.lastRefreshAt = Date.now();
+				log("enrichment: session cache updated with enriched data", {
+					types: Object.keys(byType).length,
+					total: freshList.memories.length,
+				});
+			}
+		}
+	}
+
 	return {
 		"experimental.chat.messages.transform": async (_input, output) => {
 			updateMessageCache(output.messages);
@@ -449,6 +599,14 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 
 			const sessionID = input.sessionID;
 			if (!sessionID) return;
+
+			// Fresh project hint (no codebase, no memories)
+			if (freshProjectSessions.has(sessionID)) {
+				output.system.push(buildFreshProjectHint(directory));
+				freshProjectSessions.delete(sessionID); // Only inject once
+				log("system.transform: [MEMORY - NEW PROJECT] hint injected", { sessionID });
+				return;
+			}
 
 			const cache = sessionCaches.get(sessionID);
 			if (!cache?.initialized) return;
@@ -525,7 +683,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 
 				if (isFirstMessage) {
 					// ── Turn 1: Full memory fetch + cache population ────────────
-					const [profileResult, userSearch, projectMemoriesList, projectSearch] = await Promise.all([
+					const [profileResult, userSearch, projectMemoriesList, initialProjectSearch] = await Promise.all([
 						getProfile(tags.user),
 						searchMemories(userMessage, tags.user, 0.1),
 						listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
@@ -533,9 +691,11 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 					]);
 
 					const profile = profileResult.success ? profileResult : null;
-					const allProjectMemories = projectMemoriesList.success
+					let allProjectMemories = projectMemoriesList.success
 						? projectMemoriesList.memories
 						: [];
+
+					let projectSearchFinal = initialProjectSearch;
 
 					// ── Auto-init: no project memory yet ────────────────────────
 					if (allProjectMemories.length === 0) {
@@ -543,6 +703,27 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							await triggerSilentAutoInit(directory, tags).catch(
 								(err) => log("auto-init: failed", { error: String(err) })
 							);
+
+							// Re-fetch freshly-written memories so Turn 1 sees them
+							const [freshList, freshSearch] = await Promise.all([
+								listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+								searchMemories(userMessage, tags.project, 0.15),
+							]);
+
+							if (freshList.success && freshList.memories.length > 0) {
+								allProjectMemories = freshList.memories;
+								log("auto-init: re-fetched memories for Turn 1", {
+									count: allProjectMemories.length,
+								});
+							}
+
+							// Update project semantic results with fresh search
+							if (freshSearch.results) {
+								projectSearchFinal = freshSearch;
+							}
+						} else {
+							// Fresh project — no files to init from
+							freshProjectSessions.add(input.sessionID);
 						}
 					}
 
@@ -576,7 +757,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 						})),
 					};
 					const projectResults: MemoriesResponseMinimal = {
-						results: (projectSearch.results || []).map((r) => ({
+						results: (projectSearchFinal.results || []).map((r) => ({
 							...r,
 							memory: r.memory,
 						})),
@@ -944,6 +1125,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 				const sessionInfo = props?.info as { id?: string } | undefined;
 				if (sessionInfo?.id) {
 					sessionCaches.delete(sessionInfo.id);
+					enrichedSessions.delete(sessionInfo.id);
+					freshProjectSessions.delete(sessionInfo.id);
 					log("event: session cache cleaned up", { sessionID: sessionInfo.id });
 				}
 			}
@@ -1004,6 +1187,18 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 					}
 
 					await autoSaveHook.onSessionIdle(info.sessionID as string);
+
+					// Background enrichment: fire once per session, after Turn 1 response
+					if (
+						!enrichedSessions.has(info.sessionID as string) &&
+						sessionCaches.get(info.sessionID as string)?.initialized
+					) {
+						enrichedSessions.add(info.sessionID as string);
+						// Fire-and-forget: do NOT await — this is the non-blocking guarantee
+						triggerBackgroundEnrichment(info.sessionID as string).catch(
+							(err) => log("enrichment: background enrichment failed", { error: String(err) })
+						);
+					}
 				}
 			}
 		},

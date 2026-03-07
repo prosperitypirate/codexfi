@@ -105,7 +105,7 @@ export function DocsTestTiers() {
             <text x="80" y="58" fontSize="10" fill="#a855f7" textAnchor="middle">5–10 min</text>
             
             <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real opencode</text>
-            <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">12 scenarios</text>
+            <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">13 scenarios</text>
           </g>
         </g>
 

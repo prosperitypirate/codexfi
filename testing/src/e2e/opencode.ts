@@ -9,12 +9,35 @@
  */
 
 import { randomUUID } from "crypto";
-import { mkdirSync, writeFileSync, existsSync } from "fs";
+import { mkdirSync, writeFileSync, existsSync, statSync, readFileSync } from "fs";
 import { join } from "path";
+import { homedir } from "os";
 import type { Subprocess } from "bun";
+
+const CODEXFI_LOG = join(homedir(), ".codexfi.log");
 
 const OPENCODE_BIN = "opencode"; // installed via `bun install -g opencode-ai`
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-6";
+
+// ── Log file tracking ─────────────────────────────────────────────────────────
+// The codexfi plugin writes logs to ~/.codexfi.log (not stderr).
+// We track the byte offset at server start and read new lines for assertions.
+
+/** Get current byte size of the codexfi log file */
+function getLogFileSize(): number {
+  try { return statSync(CODEXFI_LOG).size; } catch { return 0; }
+}
+
+/** Read log lines written after a given byte offset */
+function readLogsSince(offset: number): string[] {
+  try {
+    const content = readFileSync(CODEXFI_LOG, "utf-8");
+    const tail = content.slice(offset);
+    return tail.split("\n").filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 /** Sanitised env: strips desktop-app vars that break internal auth in run mode */
 function cleanEnv(): NodeJS.ProcessEnv {
@@ -200,6 +223,8 @@ export interface ServerHandle {
   port: number;
   proc: Subprocess;
   dir: string;
+  logs: string[];         // accumulated stderr lines (kept for backward compat)
+  logFileOffset: number;  // byte offset into ~/.codexfi.log at server start
 }
 
 /**
@@ -212,6 +237,9 @@ export async function startServer(
 ): Promise<ServerHandle> {
   const port = opts.port ?? 10_000 + Math.floor(Math.random() * 50_000);
   const timeoutMs = opts.timeoutMs ?? 30_000;
+
+  // Record log file position before server start — getServerLogs() reads from here
+  const logFileOffset = getLogFileSize();
 
   const proc = Bun.spawn(
     [OPENCODE_BIN, "serve", "--port", String(port), "--hostname", "127.0.0.1"],
@@ -226,12 +254,33 @@ export async function startServer(
   const url = `http://127.0.0.1:${port}`;
   const deadline = Date.now() + timeoutMs;
 
+  // Background stderr reader — kept for backward compat (opencode's own stderr)
+  const logs: string[] = [];
+  (async () => {
+    const reader = proc.stderr.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        logs.push(...lines.filter(Boolean));
+      }
+      if (buffer.trim()) logs.push(buffer.trim());
+    } catch {
+      // Server process exited — reader closed
+    }
+  })();
+
   // Poll health endpoint until server is ready
   while (Date.now() < deadline) {
     try {
       const res = await fetch(`${url}/global/health`);
       if (res.ok) {
-        return { url, port, proc, dir };
+        return { url, port, proc, dir, logs, logFileOffset };
       }
     } catch {
       // Server not ready yet
@@ -251,6 +300,16 @@ export async function stopServer(handle: ServerHandle): Promise<void> {
   } catch {
     // already dead
   }
+}
+
+/**
+ * Retrieve plugin logs written since the server started for this directory.
+ * Reads from ~/.codexfi.log (where the plugin writes), not stderr.
+ */
+export function getServerLogs(dir: string): string[] {
+  const handle = serverCache.get(dir);
+  if (!handle) return [];
+  return readLogsSince(handle.logFileOffset);
 }
 
 export interface ServerMessageResult {

@@ -141,7 +141,7 @@ All data stays on your machine. Outbound API calls go only to Voyage AI (embeddi
 
 - **[Plugin internals](./plugin/README.md)** — architecture, data flow, extraction providers, development setup
 - **[Benchmark](./benchmark/README.md)** — 94.5% on DevMemBench (200 questions, 8 categories)
-- **[E2E tests](./testing/README.md)** — 12 autonomous test scenarios
+- **[E2E tests](./testing/README.md)** — 13 autonomous test scenarios
 
 ---
 
