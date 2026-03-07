@@ -1,6 +1,6 @@
 ---
 title: Test Suite
-description: What codexfi verifies automatically — unit, integration, and 12 autonomous E2E scenarios. Latest run 11/12 PASS.
+description: What codexfi verifies automatically — unit, integration, and 13 autonomous E2E scenarios. Latest run 12/13 PASS.
 ---
 
 # Test Suite
@@ -11,7 +11,7 @@ codexfi ships with a three-tier test suite that verifies the memory system works
 
 ## What is verified
 
-The 12 E2E scenarios test the behaviors you rely on as a user:
+The 13 E2E scenarios test the behaviors you rely on as a user:
 
 | Scenario | What it guarantees for you |
 |---|---|
@@ -27,12 +27,13 @@ The 12 E2E scenarios test the behaviors you rely on as a user:
 | Knowledge Update | After you change tools or approaches, the agent uses the new information, not the old |
 | System Prompt Injection | The `[MEMORY]` block is always present in the system prompt — never missed |
 | Multi-Turn Per-Turn Refresh | As you switch topics mid-session, relevant memories surface automatically |
+| Auto-Init Turn 1 Visibility | Auto-init memories are visible on Turn 1 and background enrichment fires after the first response |
 
 ## Latest results
 
 <DocsE2eScenarioMap />
 
-Run against `plugin/` (embedded LanceDB) — 2026-02-25.
+Run against `plugin/` (embedded LanceDB) — 2026-03-07.
 
 ```
 PASS  01  Cross-Session Memory Continuity
@@ -47,8 +48,9 @@ WARN  09  maxMemories=20 Under Load
 PASS  10  Knowledge Update / Superseded
 PASS  11  System Prompt Memory Injection
 PASS  12  Multi-Turn Per-Turn Refresh
+PASS  13  Auto-Init Turn 1 Visibility + Enrichment
 
-11/12 PASS
+12/13 PASS
 ```
 
 Scenario 09 (`maxMemories=20 Under Load`) shows a `WARN` rather than a `PASS`. This is a non-deterministic margin issue — not a regression. The extraction LLM consolidates conversation facts differently on each run, so the number of memories produced by a fixed set of sessions varies. The K=20 retrieval depth is correct; the test assertion can be missed when extraction yields fewer memories than expected. The underlying feature (early-session recall under load) works correctly.
@@ -65,7 +67,7 @@ The sections below cover the test architecture and how to run each tier locally.
 |---|---|---|
 | **Unit** | Isolated logic — dedup, aging, extraction parsing, config loading | Seconds |
 | **Integration** | Real LanceDB + real embedder against a test store | ~30s |
-| **E2E** | Real `opencode` processes, real memory store, 12 autonomous scenarios | ~5–10 min |
+| **E2E** | Real `opencode` processes, real memory store, 13 autonomous scenarios | ~5–10 min |
 
 ### Running unit and integration tests
 
@@ -80,7 +82,7 @@ bun test src/integration/       # integration only
 
 ```bash
 # From the repo root
-bun run test:e2e                     # all 12 scenarios
+bun run test:e2e                     # all 13 scenarios
 bun run test:e2e:scenario 07         # single scenario
 bun run test:e2e:scenario 07,08,12   # subset
 ```
@@ -90,7 +92,8 @@ Or directly from the `testing/` directory:
 ```bash
 cd testing
 bun install       # first time only
-bun run test      # all 12 scenarios
+bun run test      # unit + integration tests
+bun run test:e2e  # all 13 scenarios
 bun run test:scenario 07
 ```
 
@@ -136,6 +139,7 @@ Each scenario runs in an isolated temporary directory. All memories it creates a
 | 10 | Knowledge Update / Superseded | After ORM migration, agent answers with Tortoise (new), not SQLAlchemy (stale) |
 | 11 | System Prompt Memory Injection | `[MEMORY]` block injected via `system.transform` into the system prompt — not as a synthetic message part |
 | 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories on topic switches |
+| 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode with 28 project files + git log; re-fetches memories for Turn 1 visibility; background enrichment fires after first response |
 
 ### Known issue: OpenCode Desktop app interference
 

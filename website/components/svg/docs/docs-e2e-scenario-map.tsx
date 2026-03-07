@@ -1,5 +1,5 @@
 /**
- * Grid map of all 12 E2E test scenarios showing pass/warn status, with amber highlight on scenario 09.
+ * Grid map of all 13 E2E test scenarios showing pass/warn status, with amber highlight on scenario 09.
  * @component
  */
 export function DocsE2eScenarioMap() {
@@ -16,15 +16,16 @@ export function DocsE2eScenarioMap() {
     { num: '10', title: 'Knowledge Update', status: 'PASS', col: 1, row: 2 },
     { num: '11', title: 'Prompt Injection', status: 'PASS', col: 2, row: 2 },
     { num: '12', title: 'Multi-Turn', status: 'PASS', col: 3, row: 2 },
+    { num: '13', title: 'Auto-Init Turn 1', status: 'PASS', col: 0, row: 3 },
   ];
 
   return (
     <svg
-      viewBox="0 0 600 260"
+      viewBox="0 0 600 336"
       width="100%"
       className="mx-auto w-full max-w-3xl"
       role="img"
-      aria-label="Grid of 12 E2E test scenarios showing 11 PASS and 1 WARN"
+      aria-label="Grid of 13 E2E test scenarios showing 12 PASS and 1 WARN"
     >
       <title>E2E Scenario Map</title>
       <defs>
@@ -103,8 +104,8 @@ export function DocsE2eScenarioMap() {
 
         {/* Summary Line */}
         <g className="summary-esm" style={{ animationDelay: '0.8s' }}>
-          <text x="0" y="250" fontSize="12" fontWeight="600" fill="#4ade80">11 / 12 PASS</text>
-          <text x="600" y="250" fontSize="9" className="fill-muted-foreground" textAnchor="end">scenario 09: non-deterministic</text>
+          <text x="0" y="326" fontSize="12" fontWeight="600" fill="#4ade80">12 / 13 PASS</text>
+          <text x="600" y="326" fontSize="9" className="fill-muted-foreground" textAnchor="end">scenario 09: non-deterministic</text>
         </g>
       </g>
     </svg>

@@ -79,6 +79,9 @@ Open any project in OpenCode. Memory is silently injected into system context ev
 ## Features
 
 - **Fully automatic** — memories save after every assistant turn with zero user action
+- **Turn 1 visibility** — auto-init reads 28 project files + recent git log and makes memories available immediately on the first turn
+- **Background enrichment** — after the first response, enriches with directory tree, entry points, and CI configs
+- **Fresh project detection** — empty directories get a `[MEMORY - NEW PROJECT]` hint to guide the agent
 - **Embedded storage** — LanceDB runs in-process at `~/.codexfi/lancedb/`
 - **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok (fastest), Google Gemini (native JSON) with automatic fallback
 - **Code-optimised embeddings** — Voyage `voyage-code-3` (1024 dims), purpose-built for code and technical content
@@ -113,13 +116,16 @@ src/
 ├── names.ts              — name registry JSON persistence
 ├── plugin-config.ts      — user-facing config from ~/.config/opencode/codexfi.jsonc
 └── services/
+    ├── auto-init-config.ts — init file list (28 files) and total char cap
     ├── auto-save.ts      — background extraction after assistant turns
     ├── compaction.ts     — context window compaction with memory injection
     ├── context.ts        — [MEMORY] block formatting for system.transform
-    ├── privacy.ts        — <private> tag stripping
-    ├── tags.ts           — project/user tag computation from directory hash
+    ├── directory-tree.ts — project tree generator for background enrichment
+    ├── disabled-warning.ts — warning hint when plugin is misconfigured
+    ├── fresh-project-hint.ts — [MEMORY - NEW PROJECT] hint for empty directories
     ├── logger.ts         — async file logger (no sync I/O)
-    └── types/index.ts    — plugin-specific TS types
+    ├── privacy.ts        — <private> tag stripping
+    └── tags.ts           — project/user tag computation from directory hash
 ```
 
 ### Data flow
@@ -127,7 +133,11 @@ src/
 ```
 User message → chat.message hook
   ├── Turn 1: 4 parallel fetches (profile, user search, project list, project search)
-  │   └── If zero project memories + existing codebase → silent auto-init from README/package.json/etc
+  │   ├── If zero project memories + existing codebase → silent auto-init
+  │   │   ├── Reads 28 project files + recent 20 git commits → extracts with init mode
+  │   │   └── Re-fetches memories so Turn 1 [MEMORY] block is populated
+  │   ├── If zero project memories + empty directory → [MEMORY - NEW PROJECT] hint injected
+  │   └── After Turn 1 response: background enrichment (directory tree, entry points, CI configs)
   └── Turns 2+: single semantic search refreshes "Relevant to Current Task"
 
   → system.transform injects [MEMORY] block into system prompt (every LLM call)
@@ -246,7 +256,7 @@ Overall           94.5%  (189/200)
 
 **Extractor:** `claude-haiku-4-5` · **Judge/Answer:** `claude-sonnet-4-6` · **Embeddings:** `voyage-code-3` · **K=20 retrieval**
 
-E2E: 11/12 scenarios pass. See [benchmark/README.md](../benchmark/README.md) for full results.
+E2E: 13 scenarios. See [benchmark/README.md](../benchmark/README.md) for full results.
 
 ---
 
