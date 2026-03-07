@@ -19,6 +19,9 @@ website/.source/
 # Logs
 *.log
 
+# Debug scripts
+monitor-config.sh
+
 
 # OS files
 .DS_Store

@@ -158,8 +158,8 @@ export const MIN_EXCHANGE_CHARS = 100;
 /** Last N messages for extraction. */
 export const MAX_MESSAGES = 8;
 
-/** Max chars read from project files for init. */
-export const INIT_TOTAL_CHAR_CAP = 7_000;
+/** Max chars read from project files for init. @deprecated Use INIT_TOTAL_CHAR_CAP from services/auto-init-config.ts */
+export const INIT_TOTAL_CHAR_CAP = 15_000;
 
 /** Minimum similarity threshold for search. */
 export const SIMILARITY_THRESHOLD = 0.55;
