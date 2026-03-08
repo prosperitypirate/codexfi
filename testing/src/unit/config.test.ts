@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
+import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
 import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
@@ -146,5 +146,15 @@ describe("EXTRACTION_PROVIDER", () => {
 	test("is a non-empty string", () => {
 		expect(typeof EXTRACTION_PROVIDER).toBe("string");
 		expect(EXTRACTION_PROVIDER.length).toBeGreaterThan(0);
+	});
+});
+
+describe("DEFAULT_EXTRACTION_PROVIDER", () => {
+	test("is 'anthropic'", () => {
+		expect(DEFAULT_EXTRACTION_PROVIDER).toBe("anthropic");
+	});
+
+	test("is a member of VALID_PROVIDERS", () => {
+		expect(VALID_PROVIDERS.has(DEFAULT_EXTRACTION_PROVIDER)).toBe(true);
 	});
 });

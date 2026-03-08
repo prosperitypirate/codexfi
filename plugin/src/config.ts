@@ -44,7 +44,7 @@ export function validateId(value: string, fieldName = "id"): string {
 // are intentionally NOT read. Use `codexfi install` to store keys in the config
 // file at ~/.config/opencode/codexfi.jsonc.
 
-import { PLUGIN_CONFIG } from "./plugin-config.js";
+import { PLUGIN_CONFIG, DEFAULT_EXTRACTION_PROVIDER } from "./plugin-config.js";
 
 export const XAI_API_KEY = PLUGIN_CONFIG.xaiApiKey ?? "";
 export const GOOGLE_API_KEY = PLUGIN_CONFIG.googleApiKey ?? "";
@@ -57,6 +57,8 @@ export const DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEM
 // ── Extraction provider ─────────────────────────────────────────────────────────
 
 export type ExtractionProvider = "anthropic" | "xai" | "google";
+
+export { DEFAULT_EXTRACTION_PROVIDER };
 
 export const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
 
@@ -78,12 +80,12 @@ export const EXTRACTION_PROVIDER: ExtractionProvider =
 		? (envProvider as ExtractionProvider)
 		: configProvider && VALID_PROVIDERS.has(configProvider)
 			? configProvider
-			: (() => {
-				if (envProvider) {
-					console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "anthropic".`);
-				}
-				return "anthropic" as ExtractionProvider;
-			})();
+		: (() => {
+			if (envProvider) {
+				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "${DEFAULT_EXTRACTION_PROVIDER}".`);
+			}
+			return DEFAULT_EXTRACTION_PROVIDER;
+		})();
 
 // ── Model identifiers ───────────────────────────────────────────────────────────
 

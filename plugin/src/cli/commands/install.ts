@@ -35,7 +35,7 @@ import { homedir } from "node:os";
 import type { ParsedArgs } from "../args.js";
 import { getFlag } from "../args.js";
 import * as fmt from "../fmt.js";
-import { VALID_PROVIDERS, EXTRACTION_PROVIDER } from "../../config.js";
+import { VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../config.js";
 import {
 	PLUGIN_CONFIG,
 	getConfigPath,
@@ -409,7 +409,7 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 	const providerFromFlag = getFlag(args, "provider");
 	const providerFromConfig = PLUGIN_CONFIG.extractionProvider;
 
-	/** Display provider choices with key-availability and active-provider markers. */
+	/** Display available providers with key-availability and active-provider markers. */
 	function showProviderChoices(): void {
 		fmt.info("Choose extraction provider:");
 		for (const p of PROVIDERS) {
@@ -420,7 +420,11 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 		}
 	}
 
-	/** Prompt user to pick a provider and return the selection. */
+	/**
+	 * Prompt user to pick an extraction provider interactively.
+	 * Shows available choices, then reads input. Defaults to DEFAULT_EXTRACTION_PROVIDER
+	 * if the user enters nothing or an invalid value.
+	 */
 	async function promptProviderChoice(): Promise<ApiKeyUpdate["extractionProvider"]> {
 		fmt.blank();
 		showProviderChoices();
@@ -430,8 +434,8 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 			fmt.success(`Extraction provider: ${fmt.cyan(choice)}`);
 			return choice as ApiKeyUpdate["extractionProvider"];
 		}
-		fmt.info(`Defaulting to ${fmt.cyan("anthropic")}`);
-		return "anthropic";
+		fmt.info(`Defaulting to ${fmt.cyan(DEFAULT_EXTRACTION_PROVIDER)}`);
+		return DEFAULT_EXTRACTION_PROVIDER;
 	}
 
 	if (providerFromFlag && VALID_PROVIDERS.has(providerFromFlag)) {
@@ -457,6 +461,19 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 			}
 		} else {
 			keys.extractionProvider = await promptProviderChoice();
+		}
+	}
+
+	// ── Warn if selected provider has no API key ──────────────────────────────
+	if (keys.extractionProvider) {
+		const selected = PROVIDERS.find((p) => p.key === keys.extractionProvider);
+		if (selected) {
+			const hasKey = !!(keys[selected.configKey] || PLUGIN_CONFIG[selected.configKey]);
+			if (!hasKey) {
+				fmt.blank();
+				fmt.warn(`Selected provider "${keys.extractionProvider}" has no API key configured.`);
+				fmt.info("Extraction will fail at runtime until a key is added to codexfi.jsonc.");
+			}
 		}
 	}
 

@@ -48,6 +48,13 @@ interface MemoryConfig {
 	turnSummaryInterval?: number;
 }
 
+/**
+ * Default extraction provider — single source of truth.
+ * Imported by config.ts for runtime resolution and used here for JSONC generation.
+ * Defined in plugin-config.ts (not config.ts) to avoid circular imports.
+ */
+export const DEFAULT_EXTRACTION_PROVIDER = "anthropic" as const;
+
 const DEFAULT_KEYWORD_PATTERNS = [
 	"remember",
 	"memorize",
@@ -237,7 +244,7 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("\t// -- Extraction Provider -----------------------------------------------------");
 	lines.push("\t// Which LLM provider to use for memory extraction.");
 	lines.push("\t// Options: \"anthropic\" (Claude Haiku) | \"xai\" (Grok) | \"google\" (Gemini)");
-	lines.push(`\t"extractionProvider": ${jsonValue(config.extractionProvider ?? "anthropic")}`);
+	lines.push(`\t"extractionProvider": ${jsonValue(config.extractionProvider ?? DEFAULT_EXTRACTION_PROVIDER)}`);
 
 	// ── Plugin settings (only include non-defaults) ─────────────────────────────
 	const overrides = collectNonDefaults(config);
