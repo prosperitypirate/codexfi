@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/prosperitypirate/codexfi/compare/v0.5.0...v0.5.1) (2026-03-08)
+
+
+### Bug Fixes
+
+* **config:** add extractionProvider field to codexfi.jsonc ([#122](https://github.com/prosperitypirate/codexfi/issues/122)) ([a0abd9c](https://github.com/prosperitypirate/codexfi/commit/a0abd9ca094e9d505fb0beb378ce137f7283c535)), closes [#121](https://github.com/prosperitypirate/codexfi/issues/121)
+
 ## [0.5.0](https://github.com/prosperitypirate/codexfi/compare/v0.4.7...v0.5.0) (2026-03-07)
 
 
