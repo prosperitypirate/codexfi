@@ -21,6 +21,10 @@ The config file lives at `~/.config/opencode/codexfi.jsonc`. It is created autom
   "xaiApiKey": "",
   "googleApiKey": "",
 
+  // ── Extraction Provider ───────────────────────────────────────────
+  // Which LLM to use for memory extraction: "anthropic" | "xai" | "google"
+  "extractionProvider": "anthropic",
+
   // ── Plugin Settings ───────────────────────────────────────────────
   "similarityThreshold": 0.45,
   "maxMemories": 20,
@@ -59,13 +63,17 @@ To fix this, run `bunx codexfi install` or manually add your keys to `~/.config/
 
 ## Extraction provider
 
-Set the extraction provider with the `EXTRACTION_PROVIDER` environment variable:
+Set the extraction provider in `codexfi.jsonc`:
 
-```bash
-export EXTRACTION_PROVIDER=anthropic  # default
-# export EXTRACTION_PROVIDER=xai      # fastest
-# export EXTRACTION_PROVIDER=google   # native JSON mode
+```jsonc
+{
+  "extractionProvider": "anthropic"  // "anthropic" | "xai" | "google"
+}
 ```
+
+You can also set the provider during `codexfi install` (interactive prompt or `--provider` flag). The `EXTRACTION_PROVIDER` environment variable can be used as an override for CI/testing.
+
+**Resolution order:** env var > config file > default (`"anthropic"`).
 
 | Provider | Model | Speed | Notes |
 |----------|-------|-------|-------|

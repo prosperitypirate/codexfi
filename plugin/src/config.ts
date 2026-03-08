@@ -90,7 +90,7 @@ export const EXTRACTION_PROVIDER: ExtractionProvider =
 // ── Model identifiers ───────────────────────────────────────────────────────────
 
 export const XAI_BASE_URL = "https://api.x.ai/v1";
-export const XAI_EXTRACTION_MODEL = "grok-4-fast-non-reasoning";
+export const XAI_EXTRACTION_MODEL = "grok-4-1-fast-non-reasoning";
 
 export const GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const GOOGLE_EXTRACTION_MODEL = "gemini-3-flash-preview";
