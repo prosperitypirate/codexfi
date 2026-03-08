@@ -60,7 +60,8 @@ For automated or agent-driven installs, pass keys directly:
 ```bash
 bunx codexfi install --no-tui \
   --voyage-key pa-... \
-  --anthropic-key sk-ant-...
+  --anthropic-key sk-ant-... \
+  --provider anthropic
 ```
 
 Available flags:
@@ -72,6 +73,7 @@ Available flags:
 | `--anthropic-key <key>` | Set Anthropic API key |
 | `--xai-key <key>` | Set xAI API key |
 | `--google-key <key>` | Set Google API key |
+| `--provider <name>` | Set extraction provider: `anthropic`, `xai`, or `google` |
 
 ## Verify installation
 

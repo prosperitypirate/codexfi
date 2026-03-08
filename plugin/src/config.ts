@@ -44,7 +44,7 @@ export function validateId(value: string, fieldName = "id"): string {
 // are intentionally NOT read. Use `codexfi install` to store keys in the config
 // file at ~/.config/opencode/codexfi.jsonc.
 
-import { PLUGIN_CONFIG } from "./plugin-config.js";
+import { PLUGIN_CONFIG, DEFAULT_EXTRACTION_PROVIDER } from "./plugin-config.js";
 
 export const XAI_API_KEY = PLUGIN_CONFIG.xaiApiKey ?? "";
 export const GOOGLE_API_KEY = PLUGIN_CONFIG.googleApiKey ?? "";
@@ -58,28 +58,39 @@ export const DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEM
 
 export type ExtractionProvider = "anthropic" | "xai" | "google";
 
-const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
+export { DEFAULT_EXTRACTION_PROVIDER };
+
+export const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
 
 /**
- * "anthropic" (default) — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
- * "xai"                 — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
- * "google"              — Gemini 3 Flash via native generateContent API
+ * Provider resolution order:
+ *   1. EXTRACTION_PROVIDER env var (override for CI/testing)
+ *   2. extractionProvider from codexfi.jsonc (user config)
+ *   3. "anthropic" (default)
+ *
+ * "anthropic" — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
+ * "xai"       — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
+ * "google"    — Gemini 3 Flash via native generateContent API
  */
 const envProvider = process.env.EXTRACTION_PROVIDER;
+const configProvider = PLUGIN_CONFIG.extractionProvider;
+
 export const EXTRACTION_PROVIDER: ExtractionProvider =
 	envProvider && VALID_PROVIDERS.has(envProvider)
 		? (envProvider as ExtractionProvider)
+		: configProvider && VALID_PROVIDERS.has(configProvider)
+			? configProvider
 		: (() => {
 			if (envProvider) {
-				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "anthropic".`);
+				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "${DEFAULT_EXTRACTION_PROVIDER}".`);
 			}
-			return "anthropic" as ExtractionProvider;
+			return DEFAULT_EXTRACTION_PROVIDER;
 		})();
 
 // ── Model identifiers ───────────────────────────────────────────────────────────
 
 export const XAI_BASE_URL = "https://api.x.ai/v1";
-export const XAI_EXTRACTION_MODEL = "grok-4-fast-non-reasoning";
+export const XAI_EXTRACTION_MODEL = "grok-4-1-fast-non-reasoning";
 
 export const GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const GOOGLE_EXTRACTION_MODEL = "gemini-3-flash-preview";

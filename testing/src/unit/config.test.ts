@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES } from "../../../plugin/src/config.js";
+import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
 import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
@@ -115,5 +115,46 @@ describe("extraction prompts", () => {
 		for (const type of expectedTypes) {
 			expect(EXTRACTION_SYSTEM).toContain(type);
 		}
+	});
+});
+
+// ── VALID_PROVIDERS & EXTRACTION_PROVIDER ───────────────────────────────────────
+
+describe("VALID_PROVIDERS", () => {
+	test("contains all three provider names", () => {
+		expect(VALID_PROVIDERS.has("anthropic")).toBe(true);
+		expect(VALID_PROVIDERS.has("xai")).toBe(true);
+		expect(VALID_PROVIDERS.has("google")).toBe(true);
+	});
+
+	test("does not contain invalid providers", () => {
+		expect(VALID_PROVIDERS.has("openai")).toBe(false);
+		expect(VALID_PROVIDERS.has("")).toBe(false);
+		expect(VALID_PROVIDERS.has("mistral")).toBe(false);
+	});
+
+	test("has exactly 3 entries", () => {
+		expect(VALID_PROVIDERS.size).toBe(3);
+	});
+});
+
+describe("EXTRACTION_PROVIDER", () => {
+	test("is one of the valid providers", () => {
+		expect(VALID_PROVIDERS.has(EXTRACTION_PROVIDER)).toBe(true);
+	});
+
+	test("is a non-empty string", () => {
+		expect(typeof EXTRACTION_PROVIDER).toBe("string");
+		expect(EXTRACTION_PROVIDER.length).toBeGreaterThan(0);
+	});
+});
+
+describe("DEFAULT_EXTRACTION_PROVIDER", () => {
+	test("is 'anthropic'", () => {
+		expect(DEFAULT_EXTRACTION_PROVIDER).toBe("anthropic");
+	});
+
+	test("is a member of VALID_PROVIDERS", () => {
+		expect(VALID_PROVIDERS.has(DEFAULT_EXTRACTION_PROVIDER)).toBe(true);
 	});
 });

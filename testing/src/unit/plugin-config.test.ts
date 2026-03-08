@@ -22,7 +22,7 @@ import { join } from "node:path";
 
 // We import the module after setting up preconditions.
 // The module is loaded once — all tests share the same module-level state.
-import { CONFIG_DIR, writeApiKeys, getConfigPath } from "../../../plugin/src/plugin-config.js";
+import { CONFIG_DIR, PLUGIN_CONFIG, writeApiKeys, getConfigPath } from "../../../plugin/src/plugin-config.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
@@ -242,5 +242,87 @@ describe("getConfigPath", () => {
 			const p = getConfigPath();
 			expect(p === CODEXFI_JSONC || p === CODEXFI_JSON).toBe(true);
 		}
+	});
+});
+
+// ── extractionProvider ───────────────────────────────────────────────────────────
+
+describe("PLUGIN_CONFIG.extractionProvider", () => {
+	test("is undefined or a valid provider string", () => {
+		const val = PLUGIN_CONFIG.extractionProvider;
+		if (val !== undefined) {
+			expect(["anthropic", "xai", "google"]).toContain(val);
+		} else {
+			expect(val).toBeUndefined();
+		}
+	});
+});
+
+describe("writeApiKeys with extractionProvider", () => {
+	let originalContent: string | null = null;
+
+	beforeAll(() => {
+		if (existsSync(CODEXFI_JSONC)) {
+			originalContent = readFileSync(CODEXFI_JSONC, "utf-8");
+		}
+	});
+
+	afterAll(() => {
+		if (originalContent !== null) {
+			writeFileSync(CODEXFI_JSONC, originalContent, "utf-8");
+		}
+		cleanupTestFiles();
+	});
+
+	test("written file includes extractionProvider field", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writtenByTest.push(CODEXFI_JSONC);
+
+		writeApiKeys({ voyageApiKey: "pa-provider-test", extractionProvider: "xai" });
+
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).toContain('"extractionProvider"');
+		expect(content).toContain('"xai"');
+	});
+
+	test("extractionProvider defaults to anthropic in generated config", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writtenByTest.push(CODEXFI_JSONC);
+
+		writeApiKeys({ voyageApiKey: "pa-default-provider-test" });
+
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).toContain('"extractionProvider"');
+		expect(content).toContain('"anthropic"');
+	});
+
+	test("extractionProvider comment references all three options", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writtenByTest.push(CODEXFI_JSONC);
+
+		writeApiKeys({ voyageApiKey: "pa-comment-test" });
+
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).toContain("anthropic");
+		expect(content).toContain("xai");
+		expect(content).toContain("google");
+		expect(content).toContain("Extraction Provider");
+	});
+
+	test("preserves extractionProvider when updating only API keys", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writtenByTest.push(CODEXFI_JSONC);
+
+		// Write initial config with xai provider
+		writeApiKeys({ voyageApiKey: "pa-preserve-1", extractionProvider: "xai" });
+
+		// Update only the API key — provider should be preserved
+		writeApiKeys({ voyageApiKey: "pa-preserve-2" });
+
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).toContain("pa-preserve-2");
+		// The config merges existing values — extractionProvider from the file
+		// gets preserved through the loadConfig() → merge path in writeApiKeys()
+		expect(content).toContain('"extractionProvider": "xai"');
 	});
 });

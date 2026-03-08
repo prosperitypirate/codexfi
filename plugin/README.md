@@ -272,6 +272,10 @@ Config file at `~/.config/opencode/codexfi.jsonc` (created by `codexfi install`)
   // "xaiApiKey": "xai-...",        // xAI — extraction (fastest)
   // "googleApiKey": "AIza...",     // Google — extraction (native JSON)
 
+  // ── Extraction Provider ───────────────────────────────────────────
+  // Which LLM to use for memory extraction: "anthropic" | "xai" | "google"
+  "extractionProvider": "anthropic",
+
   // ── Behaviour ─────────────────────────────────────────────────────
   // Minimum similarity score for retrieval (default: 0.45)
   "similarityThreshold": 0.45,
@@ -293,7 +297,7 @@ Config file at `~/.config/opencode/codexfi.jsonc` (created by `codexfi install`)
 }
 ```
 
-The extraction provider can be switched via the `EXTRACTION_PROVIDER` environment variable (`anthropic` / `xai` / `google`).
+Switch extraction provider by setting `"extractionProvider"` in `codexfi.jsonc` (or via the `codexfi install` command). The `EXTRACTION_PROVIDER` environment variable can still be used as an override for CI/testing.
 
 ---
 
