@@ -22,12 +22,16 @@ interface MemoryConfig {
 	// ── API Keys (stored in config file only) ─────────────────────────────────────
 	/** Voyage AI embedding key — required for all memory operations. */
 	voyageApiKey?: string;
-	/** Anthropic API key — used for extraction when EXTRACTION_PROVIDER=anthropic. */
+	/** Anthropic API key — used for extraction when extractionProvider is "anthropic". */
 	anthropicApiKey?: string;
-	/** xAI API key — used for extraction when EXTRACTION_PROVIDER=xai. */
+	/** xAI API key — used for extraction when extractionProvider is "xai". */
 	xaiApiKey?: string;
-	/** Google API key — used for extraction when EXTRACTION_PROVIDER=google. */
+	/** Google API key — used for extraction when extractionProvider is "google". */
 	googleApiKey?: string;
+
+	// ── Extraction Provider ──────────────────────────────────────────────────────
+	/** Primary extraction provider: "anthropic" | "xai" | "google". Default: "anthropic". */
+	extractionProvider?: "anthropic" | "xai" | "google";
 
 	// ── Plugin Settings ─────────────────────────────────────────────────────────
 	similarityThreshold?: number;
@@ -132,6 +136,9 @@ export const PLUGIN_CONFIG = {
 	xaiApiKey: fileConfig.xaiApiKey ?? "",
 	googleApiKey: fileConfig.googleApiKey ?? "",
 
+	// Extraction provider
+	extractionProvider: fileConfig.extractionProvider,
+
 	// Plugin settings
 	similarityThreshold: fileConfig.similarityThreshold ?? DEFAULTS.similarityThreshold,
 	maxMemories: fileConfig.maxMemories ?? DEFAULTS.maxMemories,
@@ -169,6 +176,7 @@ export interface ApiKeyUpdate {
 	anthropicApiKey?: string;
 	xaiApiKey?: string;
 	googleApiKey?: string;
+	extractionProvider?: "anthropic" | "xai" | "google";
 }
 
 /**
@@ -221,11 +229,15 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)},`);
 	lines.push("");
 	lines.push("\t// Extraction LLM key - at least one is required.");
-	lines.push("\t// Default provider is Anthropic (Claude Haiku). Set EXTRACTION_PROVIDER");
-	lines.push("\t// env var to switch: \"anthropic\" | \"xai\" | \"google\"");
+	lines.push("\t// Provider is set via extractionProvider below (default: \"anthropic\").");
 	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
 	lines.push(`\t"xaiApiKey": ${jsonValue(config.xaiApiKey)},`);
-	lines.push(`\t"googleApiKey": ${jsonValue(config.googleApiKey)}`);
+	lines.push(`\t"googleApiKey": ${jsonValue(config.googleApiKey)},`);
+	lines.push("");
+	lines.push("\t// -- Extraction Provider -----------------------------------------------------");
+	lines.push("\t// Which LLM provider to use for memory extraction.");
+	lines.push("\t// Options: \"anthropic\" (Claude Haiku) | \"xai\" (Grok) | \"google\" (Gemini)");
+	lines.push(`\t"extractionProvider": ${jsonValue(config.extractionProvider ?? "anthropic")}`);
 
 	// ── Plugin settings (only include non-defaults) ─────────────────────────────
 	const overrides = collectNonDefaults(config);

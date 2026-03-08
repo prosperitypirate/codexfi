@@ -61,20 +61,29 @@ export type ExtractionProvider = "anthropic" | "xai" | "google";
 const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
 
 /**
- * "anthropic" (default) — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
- * "xai"                 — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
- * "google"              — Gemini 3 Flash via native generateContent API
+ * Provider resolution order:
+ *   1. EXTRACTION_PROVIDER env var (override for CI/testing)
+ *   2. extractionProvider from codexfi.jsonc (user config)
+ *   3. "anthropic" (default)
+ *
+ * "anthropic" — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
+ * "xai"       — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
+ * "google"    — Gemini 3 Flash via native generateContent API
  */
 const envProvider = process.env.EXTRACTION_PROVIDER;
+const configProvider = PLUGIN_CONFIG.extractionProvider;
+
 export const EXTRACTION_PROVIDER: ExtractionProvider =
 	envProvider && VALID_PROVIDERS.has(envProvider)
 		? (envProvider as ExtractionProvider)
-		: (() => {
-			if (envProvider) {
-				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "anthropic".`);
-			}
-			return "anthropic" as ExtractionProvider;
-		})();
+		: configProvider && VALID_PROVIDERS.has(configProvider)
+			? configProvider
+			: (() => {
+				if (envProvider) {
+					console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "anthropic".`);
+				}
+				return "anthropic" as ExtractionProvider;
+			})();
 
 // ── Model identifiers ───────────────────────────────────────────────────────────
 

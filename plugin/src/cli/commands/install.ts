@@ -20,6 +20,7 @@
  *
  * Flags:
  *   --no-tui             Skip all interactive prompts (for LLM agent-driven installs)
+ *   --provider <name>    Set extraction provider: "anthropic" | "xai" | "google"
  *   --voyage-key <key>   Set Voyage API key directly
  *   --anthropic-key <key> Set Anthropic API key directly
  *   --xai-key <key>      Set xAI API key directly
@@ -313,9 +314,9 @@ function createSlashCommands(): void {
 // ── API key prompting ───────────────────────────────────────────────────────────
 
 /**
- * Resolve API keys from: CLI flags > env vars > config file > interactive prompt.
+ * Resolve API keys and extraction provider from: CLI flags > config file > interactive prompt.
  *
- * Returns the keys to be written to the config file (only non-empty values).
+ * Returns the keys and provider to be written to the config file.
  */
 async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 	const keys: ApiKeyUpdate = {};
@@ -401,6 +402,68 @@ async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
 		fmt.error("No extraction API key configured - at least one of Anthropic, xAI, or Google is required.");
 		fmt.info("Re-run `codexfi install` and provide at least one key.");
 		process.exit(1);
+	}
+
+	// ── Extraction provider selection ──────────────────────────────────────────
+	const providerFromFlag = getFlag(args, "provider");
+	const providerFromConfig = PLUGIN_CONFIG.extractionProvider;
+	const VALID_PROVIDERS = new Set(["anthropic", "xai", "google"]);
+
+	if (providerFromFlag && VALID_PROVIDERS.has(providerFromFlag)) {
+		keys.extractionProvider = providerFromFlag as ApiKeyUpdate["extractionProvider"];
+		fmt.success(`Extraction provider: ${fmt.cyan(providerFromFlag)} ${fmt.dim("[flag]")}`);
+	} else if (providerFromFlag) {
+		fmt.warn(`Invalid provider "${providerFromFlag}" — must be one of: anthropic, xai, google`);
+	}
+
+	if (!keys.extractionProvider) {
+		if (providerFromConfig && VALID_PROVIDERS.has(providerFromConfig)) {
+			// Already configured — ask to keep or change
+			fmt.blank();
+			console.log(`  Extraction provider: ${fmt.cyan(providerFromConfig)} ${fmt.dim("[config]")}`);
+			const keep = await ask(`  Keep this? ${fmt.dim("[Y/n]")}: `);
+
+			if (!keep || keep.toLowerCase() === "y" || keep.toLowerCase() === "yes") {
+				keys.extractionProvider = providerFromConfig;
+				fmt.success(`Extraction provider: ${fmt.cyan(providerFromConfig)}`);
+			} else {
+				// Prompt for new choice
+				fmt.blank();
+				fmt.info("Choose extraction provider:");
+				for (const p of PROVIDERS) {
+					const hasKey = !!(keys[p.configKey] || PLUGIN_CONFIG[p.configKey]);
+					const marker = hasKey ? fmt.dim(" (key set)") : fmt.dim(" (no key)");
+					console.log(`    ${fmt.cyan(p.key.padEnd(12))} ${p.label}${marker}`);
+				}
+				fmt.blank();
+				const choice = await ask(`  Provider ${fmt.dim("[anthropic/xai/google]")}: `);
+				if (choice && VALID_PROVIDERS.has(choice)) {
+					keys.extractionProvider = choice as ApiKeyUpdate["extractionProvider"];
+					fmt.success(`Extraction provider: ${fmt.cyan(choice)}`);
+				} else {
+					keys.extractionProvider = "anthropic";
+					fmt.info(`Defaulting to ${fmt.cyan("anthropic")}`);
+				}
+			}
+		} else {
+			// Not configured yet — prompt
+			fmt.blank();
+			fmt.info("Choose extraction provider:");
+			for (const p of PROVIDERS) {
+				const hasKey = !!(keys[p.configKey] || PLUGIN_CONFIG[p.configKey]);
+				const marker = hasKey ? fmt.dim(" (key set)") : fmt.dim(" (no key)");
+				console.log(`    ${fmt.cyan(p.key.padEnd(12))} ${p.label}${marker}`);
+			}
+			fmt.blank();
+			const choice = await ask(`  Provider ${fmt.dim("[anthropic/xai/google]")}: `);
+			if (choice && VALID_PROVIDERS.has(choice)) {
+				keys.extractionProvider = choice as ApiKeyUpdate["extractionProvider"];
+				fmt.success(`Extraction provider: ${fmt.cyan(choice)}`);
+			} else {
+				keys.extractionProvider = "anthropic";
+				fmt.info(`Defaulting to ${fmt.cyan("anthropic")}`);
+			}
+		}
 	}
 
 	return keys;
