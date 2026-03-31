@@ -7,7 +7,7 @@
 
 export type BenchEvent =
   | { type: "run_start";          runId: string; provider: string; judgeModel: string; sessions: number; questions: number }
-  | { type: "phase_start";        phase: "ingest" | "search" | "answer" | "evaluate" | "cleanup" | "done" }
+  | { type: "phase_start";        phase: "ingest" | "search" | "block-assembly" | "answer" | "evaluate" | "cleanup" | "done" }
   | { type: "ingest_session";     sessionId: string; added: number; updated: number; done: number; total: number; durationMs?: number }
   | { type: "search_question";    questionId: string; questionType: string; resultCount: number; topScore: number; done: number; total: number }
   | { type: "answer_question";    questionId: string; preview: string; done: number; total: number }

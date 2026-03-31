@@ -139,6 +139,13 @@ export interface AnswerPhaseResult {
   searchResults: SearchResult[];
 }
 
+export interface BlockQualityPhaseResult {
+  questionId: string;
+  /** The assembled [MEMORY] block used as system context for this question. */
+  block: string;
+  durationMs: number;
+}
+
 export interface EvaluationResult {
   questionId: string;
   questionType: string;
@@ -178,6 +185,8 @@ export interface BenchmarkReport {
   judgeModel: string;
   answeringModel: string;
   timestamp: string;
+  /** Pipeline mode: standard retrieval or block-quality (Tier 2) evaluation. */
+  mode: "retrieval" | "block-quality";
   summary: {
     totalQuestions: number;
     correctCount: number;
@@ -196,15 +205,15 @@ export interface BenchmarkReport {
   ingestTotalMs?: number;
   /** Total wall-clock time for the entire benchmark run in ms */
   totalDurationMs?: number;
-  /** Aggregate retrieval metrics */
+  /** Aggregate retrieval metrics (retrieval mode only) */
   retrieval?: AggregateRetrievalStats;
-  /** Per-category retrieval metrics */
+  /** Per-category retrieval metrics (retrieval mode only) */
   retrievalByType?: Record<string, AggregateRetrievalStats>;
 }
 
 // ── Checkpoint ──────────────────────────────────────────────────────────────────
 
-export type Phase = "ingest" | "search" | "answer" | "evaluate" | "report";
+export type Phase = "ingest" | "search" | "block-assembly" | "answer" | "evaluate" | "report";
 
 export interface Checkpoint {
   runId: string;
@@ -217,8 +226,12 @@ export interface Checkpoint {
   /** Total wall-clock time for the entire benchmark run in ms */
   totalDurationMs?: number;
   completedPhases: Phase[];
+  /** Pipeline mode — determines which phases run and how answers are generated. */
+  mode?: "retrieval" | "block-quality";
   ingestResult?: IngestResult;
   searchResults?: SearchPhaseResult[];
+  /** Assembled [MEMORY] blocks per question (block-quality mode only). */
+  blockQualityResults?: BlockQualityPhaseResult[];
   answerResults?: AnswerPhaseResult[];
   evaluations?: EvaluationResult[];
 }

@@ -41,6 +41,27 @@ ${abstentionInstruction}- If the context does not contain enough information to 
 Answer:`;
 }
 
+// ── Block-quality answer prompt (Tier 2 evaluation) ────────────────────────────
+
+/**
+ * User-turn prompt for block-quality mode.
+ *
+ * The [MEMORY] block is in the system prompt; this is just the question.
+ * Includes abstention guidance for questions about things never mentioned.
+ */
+export function buildBlockQualityAnswerPrompt(question: string, questionType?: string): string {
+  const abstentionInstruction = questionType === "abstention"
+    ? `IMPORTANT: This question asks whether something specific was mentioned or used. ` +
+      `If your memory context does NOT explicitly mention the specific technology/service/config ` +
+      `asked about, respond with exactly: "I don't know" — do NOT describe related technologies ` +
+      `or infer absence from what IS present.\n\n`
+    : "";
+
+  return `${abstentionInstruction}Question: ${question}
+
+Answer:`;
+}
+
 // ── Judge prompts by question type ──────────────────────────────────────────────
 
 export const DEFAULT_JUDGE_PROMPT = `You are evaluating whether an AI assistant's answer is correct.

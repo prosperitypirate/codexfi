@@ -76,11 +76,12 @@ import {
   reportPath,
 } from "./utils/checkpoint.js";
 import { OpencodeMemoryProvider } from "./providers/codexfi.js";
-import { runIngest }   from "./pipeline/ingest.js";
-import { runSearch }   from "./pipeline/search.js";
-import { runAnswer }   from "./pipeline/answer.js";
-import { runEvaluate } from "./pipeline/evaluate.js";
-import { runReport }   from "./pipeline/report.js";
+import { runIngest }        from "./pipeline/ingest.js";
+import { runSearch }        from "./pipeline/search.js";
+import { runBlockAssembly } from "./pipeline/block-quality.js";
+import { runAnswer }        from "./pipeline/answer.js";
+import { runEvaluate }      from "./pipeline/evaluate.js";
+import { runReport }        from "./pipeline/report.js";
 import { activateLiveMode, emit, isLiveMode } from "./live/emitter.js";
 import { startLiveServer }                    from "./live/server.js";
 
@@ -99,11 +100,14 @@ function loadDataset(): { sessions: UnifiedSession[]; questions: UnifiedQuestion
 // ── Commands ────────────────────────────────────────────────────────────────────
 
 async function cmdRun(args: string[]): Promise<void> {
-  const noCleanup = args.includes("--no-cleanup");
-  const ridIdx    = args.indexOf("-r");
-  const runId     = ridIdx !== -1 ? args[ridIdx + 1] : randomBytes(4).toString("hex");
-  const limitIdx  = args.indexOf("--limit");
-  const limit     = limitIdx !== -1 ? parseInt(args[limitIdx + 1]) : undefined;
+  const noCleanup  = args.includes("--no-cleanup");
+  const ridIdx     = args.indexOf("-r");
+  const runId      = ridIdx !== -1 ? args[ridIdx + 1] : randomBytes(4).toString("hex");
+  const limitIdx   = args.indexOf("--limit");
+  const limit      = limitIdx !== -1 ? parseInt(args[limitIdx + 1]) : undefined;
+  const modeIdx    = args.indexOf("--mode");
+  const modeArg    = modeIdx !== -1 ? args[modeIdx + 1] : "retrieval";
+  const isBlockQuality = modeArg === "block-quality";
 
   // Always start the live dashboard — opens browser automatically via server.ts.
   activateLiveMode();
@@ -119,6 +123,7 @@ async function cmdRun(args: string[]): Promise<void> {
   console.log(`\n  DevMemBench — Coding Assistant Memory Benchmark`);
   console.log(`  ${"─".repeat(48)}`);
   console.log(`  Run ID  : ${runId}`);
+  console.log(`  Mode    : ${isBlockQuality ? "block-quality (Tier 2)" : "retrieval (Tier 1)"}`);
   console.log(`  Provider: codexfi`);
   console.log(`  Judge   : ${config.judgeModel}`);
   console.log(`  Sessions: ${sessions.length}   Questions: ${questions.length}\n`);
@@ -138,6 +143,7 @@ async function cmdRun(args: string[]): Promise<void> {
       answeringModel: config.answeringModel,
       startedAt: new Date().toISOString(),
       completedPhases: [],
+      mode: isBlockQuality ? "block-quality" : "retrieval",
     };
     saveCheckpoint(cp);
   }
@@ -154,16 +160,27 @@ async function cmdRun(args: string[]): Promise<void> {
     log.info("Skipping ingest (already complete)");
   }
 
-  if (!isPhaseComplete(cp, "search")) {
-    emit({ type: "phase_start", phase: "search" });
-    await runSearch(provider, questions, cp);
+  if (isBlockQuality) {
+    // Block-quality mode: assemble [MEMORY] block per question instead of search
+    if (!isPhaseComplete(cp, "block-assembly")) {
+      emit({ type: "phase_start", phase: "block-assembly" });
+      await runBlockAssembly(questions, cp);
+    } else {
+      log.info("Skipping block assembly (already complete)");
+    }
   } else {
-    log.info("Skipping search (already complete)");
+    // Standard retrieval mode: per-question semantic search
+    if (!isPhaseComplete(cp, "search")) {
+      emit({ type: "phase_start", phase: "search" });
+      await runSearch(provider, questions, cp);
+    } else {
+      log.info("Skipping search (already complete)");
+    }
   }
 
   if (!isPhaseComplete(cp, "answer")) {
     emit({ type: "phase_start", phase: "answer" });
-    await runAnswer(questions, cp, config);
+    await runAnswer(questions, cp, config, isBlockQuality ? { blockOnly: true } : undefined);
   } else {
     log.info("Skipping answer (already complete)");
   }
@@ -320,14 +337,22 @@ function printHelp(): void {
   DevMemBench — Coding Assistant Memory Benchmark
 
   Usage:
-    bun run bench run                   Full pipeline (ingest → search → answer → evaluate → report)
-                                        Live dashboard auto-opens at http://localhost:4242
-    bun run bench run -r <id>           Named run (resumes if exists)
-    bun run bench run --no-cleanup      Keep ingested memories after run
-    bun run bench run --limit <n>       Run only first N questions
-    bun run bench status -r <id>        Check run progress
-    bun run bench serve -r <id>         Open results dashboard in browser
-    bun run bench list                  List all runs
+    bun run bench run                        Full pipeline (Tier 1: retrieval mode)
+                                             Live dashboard auto-opens at http://localhost:4242
+    bun run bench run --mode block-quality   Tier 2: block-quality evaluation
+                                             (ingest → block-assembly → answer → evaluate → report)
+    bun run bench run -r <id>                Named run (resumes if exists)
+    bun run bench run --no-cleanup           Keep ingested memories after run
+    bun run bench run --limit <n>            Run only first N questions
+    bun run bench status -r <id>             Check run progress
+    bun run bench serve -r <id>              Open results dashboard in browser
+    bun run bench list                       List all runs
+
+  Modes:
+    retrieval      (default) Tier 1: per-question semantic search → answer
+    block-quality  Tier 2: assembled [MEMORY] block as system context → answer
+                   Measures how well the formatted block serves an agent.
+                   Use before/after plugin changes to measure presentation quality.
 
   Environment variables:
     MEMORY_BACKEND_URL   Backend URL (default: http://localhost:8020)
