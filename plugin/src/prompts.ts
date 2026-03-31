@@ -64,6 +64,12 @@ Rules:
                         the conversation shows active implementation work (file edits, bash
                         commands, architectural decisions) — skip for questions, discussions, or
                         purely conversational turns.
+    "architecture-pattern" — A repeatable "how to do X in this codebase" recipe: numbered steps,
+                        file paths, and code conventions specific to this project. Use when a
+                        pattern was established or demonstrated (e.g. "how to add a new API
+                        endpoint", "how to add a migration", "how to wire a new plugin hook").
+                        Renders alongside architecture descriptions — do NOT use for general
+                        system descriptions; use "architecture" for those.
 
 - Return ONLY a valid JSON array of objects — no markdown, no explanation, no prose:
   [{"memory": "...", "type": "..."}]

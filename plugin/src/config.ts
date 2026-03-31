@@ -117,7 +117,7 @@ export const STRUCTURAL_DEDUP_DISTANCE = 0.25;
 
 /** Memory types that use the wider dedup threshold and never accumulate copies. */
 export const STRUCTURAL_TYPES = new Set([
-	"project-brief", "architecture", "tech-context", "product-context", "project-config",
+	"project-brief", "architecture", "architecture-pattern", "tech-context", "product-context", "project-config",
 ]);
 
 // ── Relational versioning ───────────────────────────────────────────────────────
