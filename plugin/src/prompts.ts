@@ -58,6 +58,12 @@ Rules:
                         (or deliberately abandoned). Do NOT use for general project status updates.
     "preference"      — Cross-project patterns, personal preferences, workflow habits
     "learned-pattern" — Technical patterns, reusable solutions, established conventions
+    "active-context"  — Current work focus snapshot: what is being built right now, which files
+                        are changing, system state (what's running/broken), immediate next steps,
+                        known blockers. Write as a rich 3–6 sentence snapshot. Only extract when
+                        the conversation shows active implementation work (file edits, bash
+                        commands, architectural decisions) — skip for questions, discussions, or
+                        purely conversational turns.
 
 - Return ONLY a valid JSON array of objects — no markdown, no explanation, no prose:
   [{"memory": "...", "type": "..."}]

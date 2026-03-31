@@ -132,7 +132,7 @@ export const STRUCTURAL_CONTRADICTION_DISTANCE = 0.75;
 export const CONTRADICTION_CANDIDATE_LIMIT = 25;
 
 /** Types that skip contradiction detection (have dedicated lifecycle rules). */
-export const VERSIONING_SKIP_TYPES = new Set(["session-summary", "progress"]);
+export const VERSIONING_SKIP_TYPES = new Set(["session-summary", "progress", "active-context"]);
 
 // ── Memory aging ────────────────────────────────────────────────────────────────
 

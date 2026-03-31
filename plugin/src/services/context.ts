@@ -34,12 +34,15 @@ export interface MemoriesResponseMinimal {
 }
 
 // Ordered sections for the structured [MEMORY] block.
-const STRUCTURED_SECTIONS: Array<{ label: string; types: string[] }> = [
+const STRUCTURED_SECTIONS: Array<{ label: string; types: string[]; renderCap?: number }> = [
 	{ label: "Project Brief",    types: ["project-brief", "project-config"] },
-	{ label: "Architecture",     types: ["architecture"] },
+	{ label: "Architecture",     types: ["architecture", "architecture-pattern"] },
 	{ label: "Tech Context",     types: ["tech-context"] },
 	{ label: "Product Context",  types: ["product-context"] },
 	{ label: "Progress & Status", types: ["progress"] },
+	// Active Context: latest singleton memory — capped at 2,000 chars to prevent
+	// oversized memories from bloating the block (edge case: user manually adds one)
+	{ label: "Active Context",   types: ["active-context"], renderCap: 2000 },
 ];
 
 const SESSION_SUMMARY_TYPES = ["session-summary", "conversation"];
@@ -63,8 +66,19 @@ export function formatContextForPrompt(
 
 			parts.push(`\n## ${section.label}`);
 			items.forEach((mem) => {
-				const content = mem.memory || mem.chunk || "";
-				if (content) parts.push(`- ${content}`);
+				const rawContent = mem.memory || mem.chunk || "";
+				if (!rawContent) return;
+				// Apply per-section render cap (used by Active Context to prevent oversized blobs)
+				const content = section.renderCap && rawContent.length > section.renderCap
+					? rawContent.slice(0, section.renderCap) + "…"
+					: rawContent;
+				// architecture-pattern memories render with a '> pattern:' prefix for visual distinction
+				const memType = (mem.metadata?.type as string | undefined) ?? "";
+				if (memType === "architecture-pattern") {
+					parts.push(`> **pattern:** ${content}`);
+				} else {
+					parts.push(`- ${content}`);
+				}
 			});
 		}
 
