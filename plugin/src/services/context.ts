@@ -139,9 +139,15 @@ export function formatContextForPrompt(
 		...semanticItems.map((r) => ({ ...r, _source: "project" as const })),
 	].sort((a, b) => b.similarity - a.similarity);
 
-	if (allSemantic.length > 0) {
+	// Apply displaySimilarityThreshold — filter out low-confidence results from display.
+	// Note: retrieval still runs at similarityThreshold (0.45) for full recall;
+	// this is a separate, higher display floor to reduce noise in the block.
+	const displayThreshold = PLUGIN_CONFIG.displaySimilarityThreshold;
+	const filteredSemantic = allSemantic.filter((m) => m.similarity >= displayThreshold);
+
+	if (filteredSemantic.length > 0) {
 		parts.push("\n## Relevant to Current Task");
-		allSemantic.forEach((mem) => {
+		filteredSemantic.forEach((mem) => {
 			const pct = Math.round(mem.similarity * 100);
 			const content = mem.memory || mem.chunk || "";
 			if (!content) return;
