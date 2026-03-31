@@ -727,20 +727,38 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 						}
 					}
 
-					// ── Partition project memories by type ──────────────────────
-					const byType: Record<string, StructuredMemory[]> = {};
-					for (const m of allProjectMemories) {
-						const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-						const key = memType || "other";
-						if (!byType[key]) byType[key] = [];
-						byType[key].push({
-							id: m.id,
-							memory: m.summary,
-							similarity: 1,
-							metadata: m.metadata as Record<string, unknown> | undefined,
-							createdAt: m.createdAt,
-						});
+				// ── Partition project memories by type ──────────────────────
+				const byType: Record<string, StructuredMemory[]> = {};
+				for (const m of allProjectMemories) {
+					const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
+					const key = memType || "other";
+					if (!byType[key]) byType[key] = [];
+					byType[key].push({
+						id: m.id,
+						memory: m.summary,
+						similarity: 1,
+						metadata: m.metadata as Record<string, unknown> | undefined,
+						createdAt: m.createdAt,
+					});
+				}
+
+				// ── Per-type soft caps — prevent any single type from crowding out others.
+				// Singletons (progress, active-context) are handled by aging rules and need
+				// no cap. Session-summary is capped separately. Caps are soft: excess entries
+				// are simply sliced off after grouping (already sorted newest-first by list()).
+				const PER_TYPE_CAPS: Record<string, number> = {
+					"project-brief":        8,
+					"project-config":       8,
+					"architecture":         12,
+					"architecture-pattern": 12,
+					"tech-context":         8,
+					"product-context":      8,
+				};
+				for (const [type, cap] of Object.entries(PER_TYPE_CAPS)) {
+					if (byType[type] && byType[type].length > cap) {
+						byType[type] = byType[type].slice(0, cap);
 					}
+				}
 
 					// ── Project-brief fallback seeding ──────────────────────────
 					if (allProjectMemories.length > 0 && !byType["project-brief"]) {

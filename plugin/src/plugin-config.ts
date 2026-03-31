@@ -86,8 +86,11 @@ const DEFAULTS = {
 	displaySimilarityThreshold: 0.60,
 	maxMemories: 20,
 	maxProjectMemories: 20,
-	maxStructuredMemories: 30,
-	maxProfileItems: 5,
+	// Raised from 30 → 50: active-context and architecture-pattern need budget room.
+	// Zero LanceDB scan performance impact (scan already reads up to 10K rows).
+	maxStructuredMemories: 50,
+	// Raised from 5 → 8: User Preferences section was too sparse.
+	maxProfileItems: 8,
 	injectProfile: true,
 	containerTagPrefix: "opencode",
 	compactionThreshold: 0.80,
