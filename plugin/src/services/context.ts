@@ -82,7 +82,9 @@ export function formatContextForPrompt(
 			});
 		}
 
-		// Last session — most recent session-summary only
+		// Recent sessions — up to 3 most recent session-summaries, newest first.
+		// Latest entry is full text; 2nd truncated at 600 chars; 3rd at 300 chars.
+		// Condensation is pure string truncation — no LLM call, zero latency cost.
 		const sessionItems: StructuredMemory[] = [];
 		for (const t of SESSION_SUMMARY_TYPES) {
 			if (byType[t]) sessionItems.push(...byType[t]);
@@ -93,11 +95,26 @@ export function formatContextForPrompt(
 				const tb = b.createdAt ?? "";
 				return tb.localeCompare(ta);
 			});
-			const latest = sorted[0];
-			const content = latest?.memory || latest?.chunk || "";
-			if (content) {
-				parts.push("\n## Last Session");
-				parts.push(`- ${content}`);
+			const recentSessions = sorted.slice(0, 3);
+			const sessionParts: string[] = [];
+
+			recentSessions.forEach((mem, idx) => {
+				const raw = mem.memory || mem.chunk || "";
+				if (!raw) return;
+				let content: string;
+				if (idx === 0) {
+					content = raw;                          // latest: full text
+				} else if (idx === 1) {
+					content = raw.length > 600 ? raw.slice(0, 600) + "…" : raw;
+				} else {
+					content = raw.length > 300 ? raw.slice(0, 300) + "…" : raw;
+				}
+				sessionParts.push(`- ${content}`);
+			});
+
+			if (sessionParts.length > 0) {
+				parts.push("\n## Recent Sessions");
+				parts.push(...sessionParts);
 			}
 		}
 	}
