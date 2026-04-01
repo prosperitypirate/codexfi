@@ -3,7 +3,7 @@
  */
 
 import { describe, test, expect } from "bun:test";
-import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
+import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VERSIONING_SKIP_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
 import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
@@ -81,10 +81,27 @@ describe("constants", () => {
 		expect(STRUCTURAL_TYPES.has("project-config")).toBe(true);
 	});
 
+	test("STRUCTURAL_TYPES includes architecture-pattern (010 Phase 2)", () => {
+		expect(STRUCTURAL_TYPES.has("architecture-pattern")).toBe(true);
+	});
+
 	test("STRUCTURAL_TYPES does not include transient types", () => {
 		expect(STRUCTURAL_TYPES.has("session-summary")).toBe(false);
 		expect(STRUCTURAL_TYPES.has("progress")).toBe(false);
 		expect(STRUCTURAL_TYPES.has("conversation")).toBe(false);
+	});
+});
+
+// ── VERSIONING_SKIP_TYPES ────────────────────────────────────────────────────────
+
+describe("VERSIONING_SKIP_TYPES", () => {
+	test("contains session-summary and progress (pre-existing)", () => {
+		expect(VERSIONING_SKIP_TYPES.has("session-summary")).toBe(true);
+		expect(VERSIONING_SKIP_TYPES.has("progress")).toBe(true);
+	});
+
+	test("contains active-context (010 Phase 1 — singleton aging)", () => {
+		expect(VERSIONING_SKIP_TYPES.has("active-context")).toBe(true);
 	});
 });
 
@@ -115,6 +132,17 @@ describe("extraction prompts", () => {
 		for (const type of expectedTypes) {
 			expect(EXTRACTION_SYSTEM).toContain(type);
 		}
+	});
+
+	test("EXTRACTION_SYSTEM includes new types from 010 (active-context, architecture-pattern)", () => {
+		expect(EXTRACTION_SYSTEM).toContain('"active-context"');
+		expect(EXTRACTION_SYSTEM).toContain('"architecture-pattern"');
+	});
+
+	test("INIT_EXTRACTION_SYSTEM does NOT include active-context or architecture-pattern", () => {
+		// These types only make sense in conversation context, not static file analysis
+		expect(INIT_EXTRACTION_SYSTEM).not.toContain('"active-context"');
+		expect(INIT_EXTRACTION_SYSTEM).not.toContain('"architecture-pattern"');
 	});
 });
 
