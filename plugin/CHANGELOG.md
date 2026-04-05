@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/prosperitypirate/codexfi/compare/v0.5.3...v0.5.4) (2026-04-05)
+
+
+### Bug Fixes
+
+* revert db.ts to simple createRequire — 0.5.3 broke lancedb loading ([#148](https://github.com/prosperitypirate/codexfi/issues/148)) ([9e76ab7](https://github.com/prosperitypirate/codexfi/commit/9e76ab7854c4f79851c8d09cde072ecd903cb617)), closes [#147](https://github.com/prosperitypirate/codexfi/issues/147)
+
 ## [0.5.3](https://github.com/prosperitypirate/codexfi/compare/v0.5.2...v0.5.3) (2026-04-05)
 
 
