@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.2](https://github.com/prosperitypirate/codexfi/compare/v0.5.1...v0.5.2) (2026-04-05)
+
+
+### Bug Fixes
+
+* **plugin:** use createRequire to resolve @lancedb/lancedb from dist path (fixes [#141](https://github.com/prosperitypirate/codexfi/issues/141)) ([#142](https://github.com/prosperitypirate/codexfi/issues/142)) ([64699cd](https://github.com/prosperitypirate/codexfi/commit/64699cde81635209ac831379872630d8d8deb3dd))
+
 ## [0.5.1](https://github.com/prosperitypirate/codexfi/compare/v0.5.0...v0.5.1) (2026-03-08)
 
 
