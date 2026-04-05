@@ -1,12 +1,15 @@
-// Use dynamic import() instead of static ESM import or createRequire so that
-// @lancedb/lancedb loads correctly in all OpenCode runtimes (terminal Bun SEA,
-// desktop Bun SEA, and plain Node.js).  Static imports resolve from the host
-// binary's context (empty namespace in Bun SEA), and createRequire is rejected
-// by the desktop app's Bun SEA for async ESM modules.
+// Use createRequire to load @lancedb/lancedb so that the Bun SEA runtime
+// (used by OpenCode) resolves the module from THIS file's node_modules
+// instead of the host binary's bundled module context.  A plain static
+// `import * as lancedb` resolves to an empty namespace `{}` in Bun SEA.
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type * as LanceDB from "@lancedb/lancedb";
 import { EMBEDDING_DIMS } from "./config.js";
+
+const _require = createRequire(import.meta.url);
+const lancedb = _require("@lancedb/lancedb") as typeof LanceDB;
 
 const DB_PATH = join(homedir(), ".codexfi", "lancedb");
 const TABLE_NAME = "memories";
@@ -15,7 +18,6 @@ let db: LanceDB.Connection;
 let table: LanceDB.Table;
 
 export async function init(dbPath?: string): Promise<void> {
-	const lancedb: typeof LanceDB = await import("@lancedb/lancedb");
 	db = await lancedb.connect(dbPath ?? DB_PATH);
 	try {
 		table = await db.openTable(TABLE_NAME);
