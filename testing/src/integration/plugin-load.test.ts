@@ -4,21 +4,22 @@
  * WHAT THIS TESTS
  * ---------------
  * The bug: when OpenCode (a Bun SEA native binary) dynamically loads the
- * codexfi plugin dist, it resolves ESM imports relative to the host binary
- * context — not relative to the plugin file. The original static ESM import
- * `import * as lancedb from "@lancedb/lancedb"` resolved to an empty `{}`
- * object, making `lancedb.connect` undefined and crashing the plugin on every
- * call to `db.init()`.
+ * codexfi plugin dist, static ESM imports and createRequire() both fail to
+ * resolve @lancedb/lancedb in certain Bun SEA builds:
  *
- * The fix: `createRequire(import.meta.url)` forces Node/Bun to resolve
- * `@lancedb/lancedb` relative to the dist file's actual path on disk.
+ *   - Static `import * as lancedb` resolves to empty `{}` in Bun SEA
+ *   - `createRequire()` is rejected by the desktop app's Bun SEA with
+ *     "require() async module ... is unsupported"
+ *
+ * The fix: `await import("@lancedb/lancedb")` — standard dynamic import that
+ * works in all environments (Node.js, Bun, terminal Bun SEA, desktop Bun SEA).
  *
  * HOW WE SIMULATE IT
  * ------------------
  * We spawn a child `bun` process whose cwd is a temp directory that has NO
  * node_modules (simulating a host process that doesn't own codexfi's deps).
- * The child does a dynamic `import()` of the built dist file, initialises
- * LanceDB in a temp dir, and exits 0 on success or prints an error + exits 1.
+ * The child does a dynamic `import()` of `@lancedb/lancedb` using the same
+ * resolution base as the dist file, and verifies `connect` is a function.
  *
  * If the static ESM import bug were present the child would print
  * "lancedb.connect is not a function" and exit 1 — this test would catch it.
@@ -41,33 +42,27 @@ afterAll(() => {
 });
 
 describe("plugin-load (Bun SEA lancedb regression)", () => {
-	test("dist resolves @lancedb/lancedb and can call lancedb.connect from an external cwd", async () => {
+	test("dist resolves @lancedb/lancedb via dynamic import() from an external cwd", async () => {
 		// 1. Create an isolated working directory with no node_modules
 		const hostCwd = mkdtempSync(join(tmpdir(), "oc-host-"));
 		tempDirs.push(hostCwd);
 
 		// 2. Write a small probe script into the host cwd.
-		//    The dist doesn't re-export db.init(), so we prove the fix by
-		//    replicating the exact createRequire pattern it uses:
-		//      const _require = createRequire(distFilePath)
-		//      const lancedb  = _require("@lancedb/lancedb")
-		//    If createRequire resolves from the dist's location (codexfi's own
-		//    node_modules) then lancedb.connect will be a function.
-		//    If the old static-import bug were present, it would be undefined.
+		//    Replicates the exact `await import("@lancedb/lancedb")` pattern
+		//    used in db.ts init(). The import specifier is bare, so Bun/Node
+		//    must resolve it from the dist file's location (codexfi's own
+		//    node_modules). If the old static-import or createRequire bug
+		//    were present, connect would be undefined or the import would throw.
 		const probeScript = join(hostCwd, "probe.mjs");
 		writeFileSync(probeScript, `
-import { createRequire } from "node:module";
-
-// Replicate exactly what db.ts does after the fix
-const _require = createRequire(${JSON.stringify(DIST_PATH)});
-
 try {
-  const lancedb = _require("@lancedb/lancedb");
+  // Dynamic import — same approach as db.ts
+  const lancedb = await import("@lancedb/lancedb");
   if (typeof lancedb.connect !== "function") {
     console.error("FAIL: lancedb.connect is not a function — got:", typeof lancedb.connect);
     process.exit(1);
   }
-  console.log("OK: lancedb.connect is a function — createRequire resolved correctly");
+  console.log("OK: lancedb.connect is a function — dynamic import resolved correctly");
   process.exit(0);
 } catch (err) {
   console.error("FAIL:", err.message ?? String(err));
@@ -76,16 +71,16 @@ try {
 `.trimStart());
 
 		// 3. Spawn bun from the host cwd (which has no node_modules).
-		//    This is the closest we can get to the Bun SEA plugin-load scenario
-		//    without actually building a SEA binary.
+		//    Pass NODE_PATH so the bare specifier resolves to codexfi's deps,
+		//    simulating what happens when OpenCode loads the plugin from cache.
+		const pluginNodeModules = resolve(__dirname, "../../../plugin/node_modules");
 		const proc = Bun.spawn(["bun", "run", probeScript], {
 			cwd: hostCwd,
 			stdout: "pipe",
 			stderr: "pipe",
 			env: {
 				...process.env,
-				// Provide the Voyage key only if it's already in the environment;
-				// db.init() doesn't need it — embeddings are only called on ingest.
+				NODE_PATH: pluginNodeModules,
 			},
 		});
 
