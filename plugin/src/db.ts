@@ -1,13 +1,20 @@
-import * as lancedb from "@lancedb/lancedb";
+// Use createRequire instead of a static ESM import so that Bun SEA (OpenCode's
+// runtime) resolves @lancedb/lancedb from THIS file's location rather than the
+// host binary's module resolver, which doesn't see codexfi's node_modules.
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type * as LanceDB from "@lancedb/lancedb";
 import { EMBEDDING_DIMS } from "./config.js";
+
+const _require = createRequire(import.meta.url);
+const lancedb = _require("@lancedb/lancedb") as typeof LanceDB;
 
 const DB_PATH = join(homedir(), ".codexfi", "lancedb");
 const TABLE_NAME = "memories";
 
-let db: lancedb.Connection;
-let table: lancedb.Table;
+let db: LanceDB.Connection;
+let table: LanceDB.Table;
 
 export async function init(dbPath?: string): Promise<void> {
 	db = await lancedb.connect(dbPath ?? DB_PATH);
@@ -33,7 +40,7 @@ export async function init(dbPath?: string): Promise<void> {
 	}
 }
 
-export function getTable(): lancedb.Table {
+export function getTable(): LanceDB.Table {
 	if (!table) throw new Error("LanceDB not initialized — call init() first");
 	return table;
 }
@@ -47,7 +54,7 @@ export async function refresh(): Promise<void> {
 	table = await db.openTable(TABLE_NAME);
 }
 
-export function getDb(): lancedb.Connection {
+export function getDb(): LanceDB.Connection {
 	if (!db) throw new Error("LanceDB not initialized — call init() first");
 	return db;
 }
