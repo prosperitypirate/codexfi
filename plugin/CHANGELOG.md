@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.3](https://github.com/prosperitypirate/codexfi/compare/v0.5.2...v0.5.3) (2026-04-05)
+
+
+### Bug Fixes
+
+* use dynamic import() for @lancedb/lancedb instead of createRequire ([#145](https://github.com/prosperitypirate/codexfi/issues/145)) ([0d2e52e](https://github.com/prosperitypirate/codexfi/commit/0d2e52e7f13d8d2fa31fc3d2e67dc2ae1c48609a)), closes [#144](https://github.com/prosperitypirate/codexfi/issues/144)
+
 ## [0.5.2](https://github.com/prosperitypirate/codexfi/compare/v0.5.1...v0.5.2) (2026-04-05)
 
 
