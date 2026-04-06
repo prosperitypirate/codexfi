@@ -83,6 +83,11 @@ jobs:
         working-directory: testing
         run: bun install --frozen-lockfile
 
+      - name: Build plugin (required by plugin-load integration test)
+        if: steps.changes.outputs.plugin == 'true'
+        working-directory: plugin
+        run: bun run build:plugin
+
       - name: Run unit tests
         if: steps.changes.outputs.plugin == 'true'
         working-directory: testing
