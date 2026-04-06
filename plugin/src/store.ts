@@ -26,6 +26,21 @@ import { condenseToLearnedPattern, detectContradictions, extractMemories } from 
 import { withRetry, DB_RETRY, DB_SEARCH_RETRY } from "./retry.js";
 import type { ExtractionMode, IngestResult, Message, SearchResult } from "./types.js";
 
+// ── Type bridge ─────────────────────────────────────────────────────────────────
+
+/**
+ * Cast a SearchResult (or MemoryRecord) to an opaque Record for internal helpers
+ * that consume fields like `id`, `memory`, `user_id` generically without needing
+ * the full vector-store type hierarchy.
+ *
+ * Why `as unknown as`: SearchResult uses Float32Array for the vector field which
+ * TypeScript doesn't consider directly assignable to Record<string, unknown>.
+ * This helper centralises the cast so it's explicit, documented, and easy to grep.
+ */
+function asOpaqueRecord(r: object): Record<string, unknown> {
+	return r as unknown as Record<string, unknown>;
+}
+
 // ── Safe JSON parsing ───────────────────────────────────────────────────────────
 
 /**
@@ -61,10 +76,7 @@ async function findDuplicate(
 		});
 
 		if (results.length > 0 && results[0]!._distance <= distanceThreshold) {
-			// Cast: SearchResult is a typed superset of Record<string, unknown>.
-			// The rest of store.ts consumes these as opaque records (id, memory, etc.)
-			// to avoid coupling internal helpers to the vector-store type hierarchy.
-			return results[0] as unknown as Record<string, unknown>;
+			return asOpaqueRecord(results[0]!);
 		}
 	} catch (e) {
 		console.debug("Dedup search error:", e);
@@ -98,8 +110,7 @@ async function findContradictionCandidates(
 
 		return results
 			.filter(r => r._distance <= maxDistance)
-			// Cast: same rationale as findDuplicate — opaque record bridge.
-			.map(r => r as unknown as Record<string, unknown>);
+			.map(r => asOpaqueRecord(r));
 	} catch (e) {
 		console.debug("findContradictionCandidates error:", e);
 		return [];
@@ -177,7 +188,7 @@ async function getMemoriesByTypes(
 			typed = typed.slice(0, limit);
 		}
 
-		return typed as unknown as Array<Record<string, unknown>>;
+		return typed.map(r => asOpaqueRecord(r));
 	} catch (e) {
 		console.debug("getMemoriesByTypes error:", e);
 		return [];

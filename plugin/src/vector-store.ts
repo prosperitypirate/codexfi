@@ -13,6 +13,12 @@
  *   - At 3k records × 1024 dims ≈ 12MB RAM  (acceptable for a desktop plugin)
  *   - At 50k records × 1024 dims ≈ 200MB RAM (future concern, swap to HNSW then)
  *
+ * Write strategy: full atomic rewrite on every mutating operation (add/update/delete).
+ * At current scale (~3–10k records) this takes < 200ms and is the simplest correct
+ * approach. Future optimisation path: append-only JSONL with periodic compaction
+ * (similar to SQLite WAL), triggered when file exceeds a size threshold — avoids
+ * blocking writes but requires a tombstone/merge pass on reads.
+ *
  * Atomic writes: write to a temp file then rename — crash-safe on all platforms.
  * Concurrency: OpenCode is single-session; last-write-wins is acceptable.
  */

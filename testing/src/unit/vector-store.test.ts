@@ -17,7 +17,16 @@ import { deterministicVector } from "../helpers/mock-embedder.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-/** Make a minimal AddRecord with the given id and vector text. */
+/**
+ * Build a minimal AddRecord suitable for inserting into the vector store.
+ *
+ * Defaults:
+ *   - `userId`       → "u1"
+ *   - `superseded_by` → "" (active, not superseded)
+ *   - `vector`       → deterministicVector(text) — repeatable 1024-dim float array
+ *   - `type`         → "tech-context"
+ *   - `hash`         → id  (good enough for uniqueness in tests)
+ */
 function makeRecord(id: string, text: string, userId = "u1", superseded_by = ""): vs.AddRecord {
 	const now = new Date().toISOString();
 	return {

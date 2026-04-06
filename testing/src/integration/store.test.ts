@@ -9,8 +9,8 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
+import { tmpdir, homedir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
 import * as vs from "../../../plugin/src/vector-store.js";
 import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
@@ -24,6 +24,12 @@ beforeAll(async () => {
 	// Redirect store path BEFORE init so persist() never touches real store
 	vs._setStorePathForTests(tempDir);
 	await db.init(tempDir);
+
+	// Verify isolation: store path must be under tmpdir, not ~/.codexfi
+	const realStoreDir = resolve(homedir(), ".codexfi");
+	if (tempDir.startsWith(realStoreDir)) {
+		throw new Error(`Test isolation failure: tempDir ${tempDir} is inside real store ${realStoreDir}`);
+	}
 
 	// Seed test data — 5 memories for "test-project", 2 for "other-project"
 	const now = new Date().toISOString();
