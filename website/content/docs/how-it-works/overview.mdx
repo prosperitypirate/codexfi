@@ -87,7 +87,7 @@ This means memory is never lost to compaction.
 
 | Component | Technology |
 |-----------|-----------|
-| Storage | [LanceDB](https://lancedb.com/) — embedded vector database, NAPI bindings |
+| Storage | Pure TypeScript vector store — JSONL on disk, brute-force cosine similarity, zero native dependencies |
 | Embeddings | [Voyage AI](https://www.voyageai.com/) `voyage-code-3` — 1024 dimensions |
 | Extraction | Multi-provider LLM (Anthropic/xAI/Google) with automatic fallback |
 | Runtime | [Bun](https://bun.sh/) |
@@ -101,7 +101,7 @@ plugin/src/
 ├── config.ts         — centralized constants, pricing, thresholds
 ├── types.ts          — Zod schemas for memory records
 ├── prompts.ts        — all LLM prompt templates
-├── db.ts             — LanceDB init/connect/refresh
+├── db.ts             — vector store init/adapter
 ├── store.ts          — CRUD, dedup, aging, contradiction, search with recency blending
 ├── extractor.ts      — multi-provider extraction with fallback and retry
 ├── embedder.ts       — Voyage AI embedding via fetch

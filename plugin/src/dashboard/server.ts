@@ -16,13 +16,13 @@
  *   GET /api/search?q=...               — Semantic search (requires VOYAGE_API_KEY)
  */
 
-import { EMBEDDING_DIMS, VOYAGE_API_KEY } from "../config.js";
-import { getTable, refresh as refreshDb } from "../db.js";
+import { VOYAGE_API_KEY } from "../config.js";
+import { store, refresh as refreshDb } from "../db.js";
 import { ledger, activityLog } from "../telemetry.js";
 import { nameRegistry } from "../names.js";
 
 /**
- * Refresh all cross-process state: LanceDB table handle, cost ledger, name registry.
+ * Refresh all cross-process state: store (re-reads JSONL from disk), cost ledger, name registry.
  *
  * The dashboard runs as a separate Bun process from the plugin. All three data
  * sources are written to disk by the plugin and cached in memory here. Without
@@ -36,6 +36,7 @@ async function refreshAll(): Promise<void> {
 		activityLog.load(),
 	]);
 }
+
 import { searchByVector, deleteMemory } from "../store.js";
 import { embed } from "../embedder.js";
 import { validateId } from "../config.js";
@@ -65,24 +66,15 @@ function html(body: string): Response {
 // ── API handlers ────────────────────────────────────────────────────────────────
 
 async function handleStats(): Promise<Response> {
-	const table = getTable();
-	const totalCount = await table.countRows();
-
-	const allRows = totalCount > 0
-		? await table
-			.search(new Array(EMBEDDING_DIMS).fill(0))
-			.limit(100_000)
-			.toArray()
-		: [];
-
-	const active = allRows.filter((r) => !(r.superseded_by as string));
+	const allRows = store.scan({});
+	const active = allRows.filter(r => !r.superseded_by);
 	const superseded = allRows.length - active.length;
 	const names = nameRegistry.snapshot();
 
 	// Per-project breakdown
 	const byProject = new Map<string, { count: number; name: string; scope: string }>();
 	for (const r of active) {
-		const uid = r.user_id as string;
+		const uid = r.user_id;
 		const existing = byProject.get(uid);
 		if (existing) {
 			existing.count++;
@@ -99,15 +91,14 @@ async function handleStats(): Promise<Response> {
 	// Per-type breakdown
 	const byType: Record<string, number> = {};
 	for (const r of active) {
-		const type = (r.type as string) || "untyped";
+		const type = r.type || "untyped";
 		byType[type] = (byType[type] ?? 0) + 1;
 	}
 
 	// Scope counts
 	const byScope = { project: 0, user: 0 };
 	for (const r of active) {
-		const uid = r.user_id as string;
-		if (uid.includes("_user_")) {
+		if (r.user_id.includes("_user_")) {
 			byScope.user++;
 		} else {
 			byScope.project++;
@@ -146,46 +137,37 @@ async function handleMemories(url: URL): Promise<Response> {
 	const safeLimit = Math.min(Math.max(1, limit), 500);
 	const filterUserId = url.searchParams.get("user_id") ?? "";
 
-	const table = getTable();
-	const count = await table.countRows();
-	if (count === 0) return json({ results: [] });
+	if (store.countRows() === 0) return json({ results: [] });
 
-	const rows = await table
-		.search(new Array(EMBEDDING_DIMS).fill(0))
-		.limit(100_000)
-		.toArray();
+	const filter = filterUserId
+		? { user_id: filterUserId, superseded_by: "" as const }
+		: { superseded_by: "" as const };
 
-	// Active only, optionally filtered by user_id, sorted by updated_at descending
-	let active = rows.filter((r) => !(r.superseded_by as string));
-
-	if (filterUserId) {
-		active = active.filter((r) => (r.user_id as string) === filterUserId);
-	}
+	let active = store.scan(filter);
 
 	active.sort((a, b) =>
-		((b.updated_at as string) || "").localeCompare((a.updated_at as string) || "")
+		(b.updated_at || "").localeCompare(a.updated_at || "")
 	);
 
 	active = active.slice(0, safeLimit);
 
 	const names = nameRegistry.snapshot();
 
-	const results = active.map((r) => {
+	const results = active.map(r => {
 		let metadata: Record<string, unknown> = {};
 		try {
-			metadata = JSON.parse((r.metadata_json as string) || "{}");
+			metadata = JSON.parse(r.metadata_json || "{}");
 		} catch { /* empty */ }
 
-		const uid = r.user_id as string;
 		return {
-			id: r.id as string,
-			memory: r.memory as string,
-			user_id: uid,
-			project_name: names[uid] ?? uid,
+			id: r.id,
+			memory: r.memory,
+			user_id: r.user_id,
+			project_name: names[r.user_id] ?? r.user_id,
 			metadata,
-			type: (r.type as string) || (metadata.type as string) || "unknown",
-			created_at: r.created_at as string,
-			updated_at: r.updated_at as string,
+			type: r.type || (metadata.type as string) || "unknown",
+			created_at: r.created_at,
+			updated_at: r.updated_at,
 		};
 	});
 
@@ -218,22 +200,13 @@ async function handleSearch(url: URL): Promise<Response> {
 	const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
 	const safeLimit = Math.min(Math.max(1, limit), 50);
 
-	// Search across all known user IDs
-	const table = getTable();
-	const count = await table.countRows();
-	if (count === 0) return json({ results: [] });
+	if (store.countRows() === 0) return json({ results: [] });
 
-	// Get unique user IDs
-	const allRows = await table
-		.search(new Array(EMBEDDING_DIMS).fill(0))
-		.limit(100_000)
-		.toArray();
-
-	const userIds = [...new Set(allRows.map((r) => r.user_id as string))];
+	// Get unique user IDs from active records
+	const userIds = [...new Set(store.scan({ superseded_by: "" }).map(r => r.user_id))];
 	const names = nameRegistry.snapshot();
 
 	// Embed query ONCE, then reuse the vector across all per-user searches.
-	// Without this, N user scopes = N identical Voyage API calls.
 	const queryVector = await embed(query.trim(), "query");
 
 	// Search across all users with the pre-computed vector
@@ -270,7 +243,7 @@ export interface DashboardOptions {
  * Start the dashboard HTTP server. Returns the Server instance for shutdown.
  *
  * The caller (CLI command) is responsible for:
- *   1. Initializing LanceDB, ledger, and nameRegistry before calling this
+ *   1. Initializing the store, ledger, and nameRegistry before calling this
  *   2. Calling server.stop() on shutdown
  */
 export function startDashboard(options: DashboardOptions = {}): ReturnType<typeof Bun.serve> {
@@ -290,8 +263,6 @@ export function startDashboard(options: DashboardOptions = {}): ReturnType<typeo
 
 			try {
 				// Refresh all cross-process state before handling API requests.
-				// The plugin writes to LanceDB, costs.json, and names.json from
-				// its own process; we need to re-read from disk on every request.
 				if (url.pathname.startsWith("/api/")) {
 					await refreshAll();
 				}

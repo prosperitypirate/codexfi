@@ -17,7 +17,8 @@ Create or append to `~/.config/opencode/AGENTS.md`:
 # Memory System
 
 You have a **persistent, self-hosted memory system** that works automatically
-in the background. It uses LanceDB + Voyage AI embeddings, running locally.
+in the background. It uses a pure TypeScript vector store + Voyage AI embeddings,
+running locally.
 
 ## How it works (fully automatic — no user action needed)
 
@@ -127,7 +128,7 @@ OpenCode resolves `"codexfi"` as an npm package, auto-installs it at startup, an
 - Wrap sensitive content in `<private>...</private>` tags to exclude from extraction
 - API keys, passwords, and secrets in code blocks are not treated specially — use private tags if you discuss them in conversation
 - All data stays local; the only outbound calls are to Voyage AI (embedding) and your extraction provider (LLM)
-- Memory data is stored at `~/.codexfi/lancedb/` — the database is yours to inspect or delete
+- Memory data is stored at `~/.codexfi/store.jsonl` — the store is yours to inspect or delete
 
 ## Troubleshooting
 

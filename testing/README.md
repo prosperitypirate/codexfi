@@ -2,7 +2,7 @@
 
 Fully autonomous end-to-end tests for the `codexfi` plugin. The agent (not a human) creates isolated project directories, spawns `opencode run` sessions, talks to the agent, inspects the memory backend, and reports pass/fail — zero user interaction required.
 
-> **Note:** As of the plugin embedded rewrite, the test harness uses the embedded LanceDB store
+> **Note:** As of the plugin embedded rewrite, the test harness uses the embedded vector store
 > directly (via `plugin/src/store.ts` and `plugin/src/db.ts`) instead of making HTTP calls
 > to the Docker backend. The Docker backend is no longer required for E2E testing.
 
@@ -64,7 +64,7 @@ bun run test:e2e:scenario 13   # single E2E scenario
 
 ## Latest run results (2026-03-07) — auto-init enrichment
 
-Full run of scenario 13 against `plugin/` (embedded LanceDB). Extraction via Anthropic Haiku (`claude-haiku-4-5`).
+Full run of scenario 13 against `plugin/` (embedded vector store). Extraction via Anthropic Haiku (`claude-haiku-4-5`).
 
 ```
 PASS  01  Cross-Session Memory Continuity
@@ -171,10 +171,10 @@ The monitor script captures process snapshots at deletion time (`lsof`, `ps aux`
 testing/
 ├── src/
 │   ├── runner.ts          — entry point, runs all scenarios sequentially
-│   │                        (refreshes LanceDB table before cleanup to fix delete lock contention)
+│   │                        (refreshes store before cleanup to fix delete lock contention)
 │   ├── opencode.ts        — spawns opencode serve with per-directory server cache
 │   │                        (opencode run exits before async handlers complete; serve stays alive)
-│   ├── memory-api.ts      — uses embedded LanceDB store directly (plugin/src/store.ts + db.ts)
+│   ├── memory-api.ts      — uses embedded vector store directly (plugin/src/store.ts + db.ts)
 │   │                        (replaces HTTP calls to Docker backend; calls db.refresh() before reads)
 │   ├── report.ts          — ANSI result formatting
 │   └── scenarios/
@@ -199,11 +199,11 @@ testing/
 
 ### Key changes for plugin
 
-1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process (LanceDB caches table state).
+1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process.
 
 2. **`opencode.ts` uses server mode** — `opencode run` exits before async plugin event handlers (auto-save, extraction) complete. Switched to `opencode serve` with per-directory server caching so the plugin process stays alive for extraction to finish. `waitForMemories(dir, N, 30_000)` polls until data appears.
 
-3. **`runner.ts` refreshes table** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale table handle.
+3. **`runner.ts` refreshes store** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale reference.
 
 4. **Scenario 12 calls `addMemoryDirect()`** — this imports `store.ingest()` directly in the test runner process (not in a child `opencode serve` process), so extraction provider/model config must be correct in the built `dist/index.js`. Different config lifecycle than scenarios 01-11.
 

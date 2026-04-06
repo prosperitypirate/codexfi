@@ -33,7 +33,7 @@ The 13 E2E scenarios test the behaviors you rely on as a user:
 
 <DocsE2eScenarioMap />
 
-Run against `plugin/` (embedded LanceDB) — 2026-03-07.
+Run against `plugin/` (embedded vector store) — 2026-03-07.
 
 ```
 PASS  01  Cross-Session Memory Continuity
@@ -66,7 +66,7 @@ The sections below cover the test architecture and how to run each tier locally.
 | Tier | What runs | Speed |
 |---|---|---|
 | **Unit** | Isolated logic — dedup, aging, extraction parsing, config loading | Seconds |
-| **Integration** | Real LanceDB + real embedder against a test store | ~30s |
+| **Integration** | Real vector store + real embedder against a test store | ~30s |
 | **E2E** | Real `opencode` processes, real memory store, 13 autonomous scenarios | ~5–10 min |
 
 ### Running unit and integration tests

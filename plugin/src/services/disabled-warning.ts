@@ -3,7 +3,7 @@
  * when the plugin is not configured (VOYAGE_API_KEY absent from codexfi.jsonc).
  *
  * Extracted into its own module so it can be unit-tested without importing
- * index.ts (which pulls in @lancedb/lancedb and other heavy native deps).
+ * index.ts (which pulls in heavy dependencies).
  */
 
 import {

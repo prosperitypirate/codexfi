@@ -24,7 +24,7 @@ export type MemoryType = (typeof MEMORY_TYPES)[number];
 
 export const MemoryTypeSchema = z.enum(MEMORY_TYPES);
 
-// ── Memory record (LanceDB row) ─────────────────────────────────────────────────
+// ── Memory record (vector store entry) ──────────────────────────────────────────
 
 export const MemoryRecordSchema = z.object({
 	id: z.string(),

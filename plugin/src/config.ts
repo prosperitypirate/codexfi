@@ -7,22 +7,21 @@ import { homedir } from "node:os";
 
 // ── Input validation ────────────────────────────────────────────────────────────
 
-/** Allowed characters for identifiers used in LanceDB where-clause interpolation. */
+/** Allowed characters for identifiers used in vector store where-clause interpolation. */
 const SAFE_ID_RE = /^[a-zA-Z0-9_:.\-]+$/;
 
 /**
- * Validate and sanitize `value` for safe use in LanceDB `where()` clauses.
+ * Validate and sanitize `value` for safe use in filter expressions.
  *
- * ARCHITECTURE NOTE: LanceDB's JS SDK does not support parameterized queries.
- * All `where()` clauses use string interpolation (e.g., `where(\`user_id = '${id}'\`)`).
- * This function provides two layers of defense:
+ * ARCHITECTURE NOTE: The vector store uses string interpolation for filter
+ * expressions. This function provides two layers of defense:
  *
  * 1. **Allowlist regex**: Only permits alphanumeric, hyphens, underscores, colons, dots.
  *    This blocks all SQL/filter injection characters (quotes, semicolons, parens, etc.)
  * 2. **Single-quote escaping**: Defense-in-depth — escapes any `'` to `''` (SQL-standard
  *    escape) in case the regex is ever relaxed or bypassed.
  *
- * All LanceDB `where()` calls in store.ts MUST use `validateId()` on every interpolated
+ * All filter calls in store.ts MUST use `validateId()` on every interpolated
  * value. See store.ts lines 51, 91, 110, 166, 229, 273, 327, 414, 536, 581.
  *
  * @throws Error if value is empty or contains disallowed characters.

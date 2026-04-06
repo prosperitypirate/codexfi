@@ -171,10 +171,10 @@ Custom patterns are appended to the built-in list:
 
 ## Data storage
 
-All memory data is stored locally at `~/.codexfi/lancedb/`. This is a LanceDB embedded database — no external process required.
+All memory data is stored locally at `~/.codexfi/store.jsonl`. This is a pure TypeScript vector store — no native dependencies, no external process required.
 
 | Path | Contents |
 |------|----------|
-| `~/.codexfi/lancedb/` | Vector database (memories table) |
+| `~/.codexfi/store.jsonl` | Vector store (all memories with embeddings) |
 | `~/.codexfi.log` | Plugin log file |
 | `~/.config/opencode/codexfi.jsonc` | Configuration file |
