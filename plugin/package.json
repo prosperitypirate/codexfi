@@ -8,7 +8,6 @@
 		"codexfi": "./dist/cli.js"
 	},
 	"scripts": {
-		"spike": "bun run src/spike.ts",
 		"prebuild": "rm -f dist/*.node",
 		"build": "bun build src/index.ts --outdir dist --target node && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
 		"build:plugin": "bun build src/index.ts --outdir dist --target node",
