@@ -55,7 +55,7 @@ If a duplicate is found, the existing memory is **updated** (text refreshed, tim
 
 ### 5. Storage
 
-New memories (non-duplicates) are inserted into LanceDB with:
+New memories (non-duplicates) are inserted into the vector store with:
 
 - A UUID identifier
 - The memory text
@@ -134,7 +134,7 @@ If the primary provider fails after retries, the plugin tries the next provider 
 All LLM calls and database operations use exponential backoff with jitter:
 
 - **LLM extraction**: retries with configurable delay and jitter
-- **Database writes**: retries for transient LanceDB errors
+- **Database writes**: retries for transient write errors
 - **Embedding calls**: retries for Voyage AI API errors
 
 Telemetry failures never block extraction or embedding operations.

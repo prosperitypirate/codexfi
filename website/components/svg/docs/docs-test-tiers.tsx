@@ -87,7 +87,7 @@ export function DocsTestTiers() {
           <rect x="62" y="47" width="36" height="16" rx="8" stroke="#c084fc" strokeWidth="1" fill="none" opacity="0.5" />
           <text x="80" y="58" fontSize="10" fill="#c084fc" textAnchor="middle">~30s</text>
           
-          <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real LanceDB</text>
+          <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real store.db</text>
           <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real embedder</text>
         </g>
 

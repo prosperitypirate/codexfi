@@ -2,7 +2,7 @@
  * Main plugin entry point — hooks into OpenCode's chat lifecycle.
  *
  * Registers the memory tool, system prompt injection, auto-save, and compaction hooks.
- * All store operations are embedded (LanceDB) — no external services needed.
+ * All store operations are embedded (pure TS vector store) — no external services needed.
  */
 
 import type { Plugin, PluginInput } from "@opencode-ai/plugin";
@@ -228,7 +228,7 @@ function detectMemoryKeyword(text: string): boolean {
 
 // ── Disabled warning (injected into system prompt when plugin is not configured) ──
 // Defined in its own module (services/disabled-warning.ts) so it can be unit-tested
-// without importing this file's heavy native dependencies (@lancedb/lancedb etc.)
+// without importing this file's heavy dependencies
 
 import { buildDisabledWarning } from "./services/disabled-warning.js";
 export { buildDisabledWarning };
@@ -256,7 +256,7 @@ async function ensureInitialized(): Promise<void> {
 	await ledger.init();
 	await activityLog.init();
 	dbInitialized = true;
-	log("ensureInitialized: LanceDB + nameRegistry + telemetry ready");
+	log("ensureInitialized: sqlite-store + nameRegistry + telemetry ready");
 }
 
 // ── Search wrapper ──────────────────────────────────────────────────────────────
@@ -955,7 +955,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							case "help": {
 								return JSON.stringify({
 									success: true,
-									message: "Memory Usage Guide (self-hosted, embedded LanceDB)",
+									message: "Memory Usage Guide (self-hosted, embedded vector store)",
 									commands: [
 										{ command: "add", description: "Store a new memory", args: ["content", "type?", "scope?"] },
 										{ command: "search", description: "Search memories", args: ["query", "scope?"] },

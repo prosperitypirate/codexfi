@@ -1,8 +1,8 @@
 /**
- * Temporary LanceDB database helper for isolated test runs.
+ * Temporary SQLite store helper for isolated test runs.
  *
- * Creates a fresh LanceDB instance in a temp directory for each test suite,
- * ensuring tests never touch the real ~/.codexfi/ database.
+ * Creates a fresh store in a temp directory for each test suite,
+ * ensuring tests never touch the real ~/.codexfi/ store.
  * Cleans up on teardown.
  */
 
@@ -10,15 +10,21 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
+import * as vs from "../../../plugin/src/store/index.js";
 
 let tempDir: string;
 
 /**
- * Create a fresh temp directory and initialize LanceDB in it.
+ * Create a fresh temp directory and redirect the SQLite store to it.
  * Call this in beforeAll() or beforeEach().
+ *
+ * IMPORTANT: this redirects the database to the temp dir so tests never
+ * write to the real ~/.codexfi/store.db.
  */
 export async function setupTempDb(): Promise<string> {
 	tempDir = mkdtempSync(join(tmpdir(), "oc-test-db-"));
+	// Redirect store path BEFORE init so any writes go to tempDir
+	vs._setStorePathForTests(tempDir);
 	await db.init(tempDir);
 	return tempDir;
 }
@@ -28,6 +34,7 @@ export async function setupTempDb(): Promise<string> {
  * Silently ignores errors (e.g. dir already removed).
  */
 export function teardownTempDb(): void {
+	vs._resetForTests();
 	if (tempDir) {
 		try {
 			rmSync(tempDir, { recursive: true, force: true });

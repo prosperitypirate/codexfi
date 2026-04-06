@@ -1,0 +1,17 @@
+# .opencodeignore — files the LLM may NOT read or modify in this project
+# Syntax: gitignore-style glob patterns, one per line
+# Lines starting with # are comments
+
+# ── Secrets & credentials ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+
+# ── Sensitive project files ───────────────────────────────────────────────────
+secrets/
+credentials/
+.codexfi_super_secret_secrets.txt

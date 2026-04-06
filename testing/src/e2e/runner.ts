@@ -3,8 +3,10 @@
  * runner.ts — main entry point for the codexfi e2e test suite
  *
  * Usage:
- *   bun run src/runner.ts             — run all scenarios
- *   bun run src/runner.ts --scenario 01,03  — run specific scenarios
+ *   bun run src/e2e/runner.ts                  — run all scenarios
+ *   bun run src/e2e/runner.ts --scenario 01,03 — run specific scenarios
+ *
+ * The live dashboard opens automatically at http://localhost:4243
  *
  * Prerequisites:
  *   - opencode installed: bun install -g opencode-ai
@@ -15,6 +17,10 @@
 
 import { isBackendReady } from "./memory-api.js";
 import { printResult, printSummary, saveResults, printDetailedReport, type ScenarioResult } from "./report.js";
+import { activateLiveMode, emit, type RunCompleteResult } from "./live/emitter.js";
+import { startLiveServer } from "./live/server.js";
+import { setCurrentScenario as setScenarioInOpencode } from "./opencode.js";
+import { setCurrentScenario as setScenarioInMemoryApi } from "./memory-api.js";
 import { run as run01 } from "./scenarios/01-cross-session.js";
 import { run as run02 } from "./scenarios/02-readme-seeding.js";
 import { run as run03 } from "./scenarios/03-transcript-noise.js";
@@ -34,6 +40,23 @@ const CYAN  = "\x1b[36m";
 const DIM   = "\x1b[2m";
 const RED   = "\x1b[31m";
 const RESET = "\x1b[0m";
+
+/** Scenario name lookup — used by runner to emit scenario_start with name */
+const SCENARIO_NAMES: Record<string, string> = {
+  "01": "Cross-Session Memory Continuity",
+  "02": "README-Based Project-Brief Seeding",
+  "03": "Transcript Noise Guard",
+  "04": "Project Brief Always Present",
+  "05": "Memory Aging",
+  "06": "Existing Codebase Auto-Init",
+  "07": "Enumeration Hybrid Retrieval",
+  "08": "Cross-Synthesis",
+  "09": "maxMemories=20 Under Load",
+  "10": "Knowledge Update / Superseded",
+  "11": "System Prompt Injection",
+  "12": "Multi-Turn Refresh",
+  "13": "Auto-Init Turn 1",
+};
 
 const ALL_SCENARIOS: Array<{ id: string; fn: () => Promise<ScenarioResult> }> = [
   { id: "01", fn: run01 },
@@ -57,16 +80,21 @@ async function main() {
   console.log(`${DIM}Running automated memory system tests against a live opencode agent${RESET}`);
   console.log();
 
+  // ── Start live dashboard ────────────────────────────────────────────────────
+  activateLiveMode();
+  startLiveServer();
+  console.log();
+
   // ── Preflight checks ────────────────────────────────────────────────────────
   console.log("Preflight checks…");
 
   const backendReady = await isBackendReady();
   if (!backendReady) {
     console.error(`${RED}✗ Embedded memory store failed to initialize${RESET}`);
-    console.error("  Check that VOYAGE_API_KEY is set and LanceDB is working");
+    console.error("  Check that VOYAGE_API_KEY is set and the store is accessible");
     process.exit(1);
   }
-  console.log("  ✓ Embedded memory store ready (LanceDB)");
+  console.log("  ✓ Embedded memory store ready");
 
   // Verify opencode CLI is available
   const probe = Bun.spawn(["opencode", "--version"], {
@@ -86,24 +114,65 @@ async function main() {
   const args = process.argv.slice(2);
   const filterIdx = args.indexOf("--scenario");
   let scenariosToRun = ALL_SCENARIOS;
+  let filterLabel: string | undefined;
   if (filterIdx !== -1 && args[filterIdx + 1]) {
     const ids = args[filterIdx + 1].split(",").map((s) => s.trim());
     scenariosToRun = ALL_SCENARIOS.filter((s) => ids.includes(s.id));
+    filterLabel = ids.join(",");
     console.log(`${DIM}Running scenarios: ${ids.join(", ")}${RESET}`);
     console.log();
   }
 
-  // ── Run scenarios ───────────────────────────────────────────────────────────
+  // ── Emit run_start ──────────────────────────────────────────────────────────
+  emit({ type: "run_start", total: scenariosToRun.length, filter: filterLabel });
+
   console.log(`${BOLD}Running ${scenariosToRun.length} scenario(s)…${RESET}`);
   console.log();
 
   const results: ScenarioResult[] = [];
+  const runStart = Date.now();
 
-  for (const { id, fn } of scenariosToRun) {
+  for (let i = 0; i < scenariosToRun.length; i++) {
+    const { id, fn } = scenariosToRun[i];
+    const scenarioName = SCENARIO_NAMES[id] ?? `Scenario ${id}`;
+
+    // Set current scenario context for live emitters in shared modules
+    setScenarioInOpencode(id);
+    setScenarioInMemoryApi(id);
+
+    // Emit scenario_start
+    emit({
+      type: "scenario_start",
+      id,
+      name: scenarioName,
+      index: i + 1,
+      total: scenariosToRun.length,
+    });
+
     console.log(`${BOLD}▶ Scenario ${id}${RESET}`);
     const result = await fn();
     results.push(result);
     printResult(result);
+
+    // Emit assertion events by parsing the details lines
+    for (const line of result.details) {
+      if (line.includes("[✓]")) {
+        emit({ type: "scenario_assertion", id, label: line.replace(/\s*\[✓\]\s*/, "").trim(), pass: true });
+      } else if (line.includes("[✗]")) {
+        emit({ type: "scenario_assertion", id, label: line.replace(/\s*\[✗\]\s*/, "").trim(), pass: false });
+      }
+    }
+
+    // Emit scenario_end
+    emit({
+      type: "scenario_end",
+      id,
+      name: result.name,
+      status: result.status,
+      durationMs: result.durationMs,
+      error: result.error,
+      memoriesCount: result.evidence?.memoriesCount as number | undefined,
+    });
 
     // ── Shutdown server + cleanup test memories ─────────────────────────────
     if (result.testDirs && result.testDirs.length > 0) {
@@ -118,6 +187,7 @@ async function main() {
       await Bun.sleep(2_000);
       await refreshTable();
       const deleted = await cleanupTestDirs(result.testDirs);
+      emit({ type: "cleanup", id, deleted });
       console.log(`       ${DIM}  ✓ Cleaned up ${deleted} test memories from embedded store${RESET}`);
     }
     console.log();
@@ -128,7 +198,40 @@ async function main() {
   printDetailedReport(results);
   saveResults(results);
 
-  const failed = results.filter((r) => r.status === "FAIL" || r.status === "ERROR").length;
+  const passed = results.filter((r) => r.status === "PASS").length;
+  const failed = results.filter((r) => r.status !== "PASS").length;
+  const totalMs = Date.now() - runStart;
+
+  // Build per-scenario results for the final event
+  const completeResults: RunCompleteResult[] = results.map((r) => {
+    const assertions = r.details
+      .filter((d) => d.includes("[✓]") || d.includes("[✗]"))
+      .map((d) => ({
+        label: d.replace(/\s*\[✓\]\s*/, "").replace(/\s*\[✗\]\s*/, ""),
+        pass: d.includes("[✓]"),
+      }));
+    return {
+      id: r.id,
+      name: r.name,
+      status: r.status,
+      durationMs: r.durationMs,
+      error: r.error,
+      assertions: assertions.length > 0 ? assertions : undefined,
+    };
+  });
+
+  emit({
+    type: "run_complete",
+    passed,
+    failed,
+    total: results.length,
+    durationMs: totalMs,
+    results: completeResults,
+  });
+
+  // Keep the server alive briefly so the browser receives the final event
+  await Bun.sleep(1500);
+
   process.exit(failed > 0 ? 1 : 0);
 }
 

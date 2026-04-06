@@ -13,7 +13,7 @@ The agent simply *remembers*.
 
 ## How it works
 
-After every assistant turn, codexfi analyzes the conversation and extracts key facts as typed memories. Each memory is embedded with [Voyage AI](https://www.voyageai.com/) (`voyage-code-3`) and stored in an embedded [LanceDB](https://lancedb.com/) database on your machine.
+After every assistant turn, codexfi analyzes the conversation and extracts key facts as typed memories. Each memory is embedded with [Voyage AI](https://www.voyageai.com/) (`voyage-code-3`) and stored locally in a SQLite database on your machine — no external dependencies, multi-agent safe.
 
 Before every LLM call, a `[MEMORY]` block is injected into the system prompt containing:
 

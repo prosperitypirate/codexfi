@@ -11,14 +11,13 @@
  *   --json   Output raw JSON instead of formatted display
  */
 
-import { readdirSync, statSync } from "node:fs";
+import { statSync } from "node:fs";
 import { join } from "node:path";
 
 import type { ParsedArgs } from "../args.js";
 import * as fmt from "../fmt.js";
 import { initDb } from "../shared.js";
-import { getTable } from "../../db.js";
-import { EMBEDDING_DIMS } from "../../config.js";
+import { store } from "../../db.js";
 import { ledger } from "../../telemetry.js";
 import { nameRegistry } from "../../names.js";
 import { DATA_DIR } from "../../config.js";
@@ -32,41 +31,29 @@ export async function run(args: ParsedArgs): Promise<void> {
 	await ledger.init();
 	await nameRegistry.init();
 
-	const table = getTable();
 	const names = nameRegistry.snapshot();
 	const costs = ledger.snapshot();
 
-	// Count total rows
-	const totalCount = await table.countRows();
-
-	// Fetch all rows for breakdown (zero-vector scan — no embedding needed)
-	const allRows = totalCount > 0
-		? await table
-			.search(new Array(EMBEDDING_DIMS).fill(0))
-			.limit(100_000)
-			.toArray()
-		: [];
-
-	// Active (non-superseded) memories
-	const active = allRows.filter((r) => !(r.superseded_by as string));
+	// All rows (including superseded)
+	const allRows = store.scan({});
+	const active = allRows.filter(r => !r.superseded_by);
 	const superseded = allRows.length - active.length;
 
 	// Per-project breakdown
 	const byProject = new Map<string, number>();
 	for (const r of active) {
-		const uid = r.user_id as string;
-		byProject.set(uid, (byProject.get(uid) ?? 0) + 1);
+		byProject.set(r.user_id, (byProject.get(r.user_id) ?? 0) + 1);
 	}
 
 	// Per-type breakdown (active only)
 	const byType = new Map<string, number>();
 	for (const r of active) {
-		const type = (r.type as string) || "untyped";
+		const type = r.type || "untyped";
 		byType.set(type, (byType.get(type) ?? 0) + 1);
 	}
 
-	// Database size on disk
-	const dbSize = getDirSize(join(DATA_DIR, "lancedb"));
+	// Store size on disk
+	const dbSize = getFileSize(join(DATA_DIR, "store", "store.db"));
 
 	// JSON output mode
 	if (jsonOutput) {
@@ -89,7 +76,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 	fmt.kv("Total memories", `${allRows.length}`);
 	fmt.kv("Active", `${fmt.green(String(active.length))}`);
 	fmt.kv("Superseded", `${fmt.dim(String(superseded))}`);
-	fmt.kv("Database size", formatBytes(dbSize));
+	fmt.kv("Store size", formatBytes(dbSize));
 	fmt.kv("Data directory", fmt.blue(DATA_DIR));
 
 	// Per-project table
@@ -201,27 +188,10 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-/**
- * Recursively calculate directory size in bytes.
- * Returns 0 if the directory doesn't exist.
- */
-function getDirSize(dirPath: string): number {
+/** Get file size in bytes. Returns 0 if file doesn't exist. */
+function getFileSize(filePath: string): number {
 	try {
-		let total = 0;
-		const entries = readdirSync(dirPath, { withFileTypes: true });
-		for (const entry of entries) {
-			const fullPath = join(dirPath, entry.name);
-			if (entry.isDirectory()) {
-				total += getDirSize(fullPath);
-			} else {
-				try {
-					total += statSync(fullPath).size;
-				} catch {
-					// Skip unreadable files
-				}
-			}
-		}
-		return total;
+		return statSync(filePath).size;
 	} catch {
 		return 0;
 	}

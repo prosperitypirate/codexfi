@@ -1,8 +1,7 @@
 /**
  * memory-api.ts — typed client for verifying memory state in tests.
  *
- * REWRITTEN for plugin: uses embedded LanceDB store directly instead of
- * HTTP calls to the Docker backend at localhost:8020.
+ * Uses the embedded pure TS vector store directly instead of HTTP calls.
  *
  * The public API surface is identical — test scenarios import the same
  * functions with the same signatures. Only the internals changed from
@@ -14,11 +13,16 @@ import { execSync } from "child_process";
 import * as db from "../../../plugin/src/db.js";
 import { refresh as refreshTable } from "../../../plugin/src/db.js";
 import * as store from "../../../plugin/src/store.js";
+import { emit } from "./live/emitter.js";
 
 const PREFIX = "opencode";
 
-// Track whether we've initialized LanceDB for this test process
+// Track whether we've initialized the store for this test process
 let initialized = false;
+
+// Current scenario ID — set by the runner for live emit context
+let _currentScenarioId = "??";
+export function setCurrentScenario(id: string): void { _currentScenarioId = id; }
 
 async function ensureInit(): Promise<void> {
 	if (initialized) return;
@@ -106,13 +110,37 @@ export async function waitForMemories(
 	minCount: number,
 	timeoutMs = 30_000
 ): Promise<Memory[]> {
+	emit({
+		type: "scenario_waiting",
+		id: _currentScenarioId,
+		label: `Waiting for ${minCount}+ memories (${(timeoutMs / 1000).toFixed(0)}s timeout)`,
+		expected: minCount,
+		found: 0,
+	});
 	const deadline = Date.now() + timeoutMs;
 	while (Date.now() < deadline) {
 		const memories = await getMemoriesForDir(dir);
-		if (memories.length >= minCount) return memories;
+		if (memories.length >= minCount) {
+			emit({
+				type: "scenario_waiting",
+				id: _currentScenarioId,
+				label: `Found ${memories.length} memories`,
+				expected: minCount,
+				found: memories.length,
+			});
+			return memories;
+		}
 		await Bun.sleep(1000);
 	}
-	return getMemoriesForDir(dir);
+	const final = await getMemoriesForDir(dir);
+	emit({
+		type: "scenario_waiting",
+		id: _currentScenarioId,
+		label: `Timeout — only ${final.length} memories found`,
+		expected: minCount,
+		found: final.length,
+	});
+	return final;
 }
 
 /**
@@ -163,8 +191,8 @@ export async function searchMemories(
 }
 
 /**
- * "Health check" — for the embedded store, this always returns true once
- * LanceDB is initialized. Replaces the HTTP /health check.
+ * "Health check" — always returns true once the embedded store is initialized.
+ * Replaces the HTTP /health check from the old Docker backend.
  */
 export async function isBackendReady(): Promise<boolean> {
 	try {

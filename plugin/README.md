@@ -12,7 +12,6 @@ The agent learns from every session automatically — no commands, no manual sav
 [![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](../LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
-[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded-CF3CFF?style=flat)](https://lancedb.com/)
 [![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
 [![Anthropic](https://img.shields.io/badge/Anthropic-Haiku_4.5-D97706?style=flat)](https://anthropic.com)
 [![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
@@ -27,7 +26,7 @@ The agent learns from every session automatically — no commands, no manual sav
 
 ## What is this?
 
-A single Bun package that gives OpenCode agents persistent memory across sessions. Everything runs embedded — LanceDB for storage, Voyage AI for embeddings, multi-provider LLM extraction — with zero external processes.
+A single Bun package that gives OpenCode agents persistent memory across sessions. Everything runs embedded — pure TypeScript vector store, Voyage AI for embeddings, multi-provider LLM extraction — with zero external processes and zero native dependencies.
 
 After every assistant turn, the conversation is automatically analysed. Key facts are extracted, embedded, and stored locally. At the start of every new session, relevant memories are silently injected into the agent's context. The agent simply *remembers*.
 
@@ -82,7 +81,7 @@ Open any project in OpenCode. Memory is silently injected into system context ev
 - **Turn 1 visibility** — auto-init reads 28 project files + recent git log and makes memories available immediately on the first turn
 - **Background enrichment** — after the first response, enriches with directory tree, entry points, and CI configs
 - **Fresh project detection** — empty directories get a `[MEMORY - NEW PROJECT]` hint to guide the agent
-- **Embedded storage** — LanceDB runs in-process at `~/.codexfi/lancedb/`
+- **Embedded storage** — pure TypeScript SQLite WAL vector store at `~/.codexfi/store/store.db`
 - **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok (fastest), Google Gemini (native JSON) with automatic fallback
 - **Code-optimised embeddings** — Voyage `voyage-code-3` (1024 dims), purpose-built for code and technical content
 - **Always-fresh context** — `[MEMORY]` block rebuilt in system prompt every LLM call via `system.transform`
@@ -107,7 +106,7 @@ src/
 ├── config.ts             — centralized constants + validateId()
 ├── types.ts              — Zod schemas for memory records
 ├── prompts.ts            — all LLM prompt templates
-├── db.ts                 — LanceDB init/connect/refresh
+├── db.ts                 — vector store init/adapter
 ├── store.ts              — full CRUD + dedup + aging + contradiction + search with recency blending
 ├── extractor.ts          — multi-provider LLM extraction (Anthropic/xAI/Google) + fallback + retry
 ├── embedder.ts           — Voyage AI voyage-code-3 embedding via fetch
@@ -156,7 +155,7 @@ Assistant completes turn → event hook
 - codexfi is a self-hosted persistent memory system for AI coding agents.
 
 ## Architecture
-- Plugin embeds LanceDB, extraction, and embeddings directly — no external services.
+- Plugin embeds a pure TypeScript vector store, extraction, and embeddings directly — no external services.
 
 ## Tech Context
 - Uses voyage-code-3 embeddings; extraction via claude-haiku-4-5 (default)
@@ -308,7 +307,7 @@ bun install
 bun run build          # build to dist/
 bun run typecheck      # type-check only
 bun run smoke:e2e      # full pipeline smoke test (requires API keys)
-bun run spike          # LanceDB NAPI bindings validation
+bun run spike          # vector store validation
 ```
 
 ### Log file
@@ -323,7 +322,6 @@ tail -f ~/.codexfi.log
 
 | Package | Purpose |
 |---|---|
-| `@lancedb/lancedb` | Embedded vector database (NAPI bindings, Bun 1.2.19+) |
 | `zod` | Runtime validation for memory record schemas |
 | `@opencode-ai/plugin` | OpenCode plugin SDK types |
 | `@opencode-ai/sdk` | OpenCode SDK for client interactions |
@@ -340,7 +338,7 @@ The plugin works without this, but adding instructions to `~/.config/opencode/AG
 ````markdown
 # Memory System
 
-You have a **persistent, self-hosted memory system** that works automatically in the background. It uses LanceDB + Voyage AI embeddings, running locally.
+You have a **persistent, self-hosted memory system** that works automatically in the background. It uses a pure TypeScript vector store + Voyage AI embeddings, running locally.
 
 ## How it works (fully automatic — no user action needed)
 
@@ -407,6 +405,6 @@ Wrap sensitive content in `<private>...</private>` to exclude it from extraction
 
 <div align="center">
 
-Built with [OpenCode](https://opencode.ai) · [LanceDB](https://lancedb.com) · [Voyage AI](https://www.voyageai.com) · [Anthropic](https://anthropic.com) · [xAI](https://x.ai) · [Google AI](https://ai.google.dev) · [Bun](https://bun.sh)
+Built with [OpenCode](https://opencode.ai) · [Voyage AI](https://www.voyageai.com) · [Anthropic](https://anthropic.com) · [xAI](https://x.ai) · [Google AI](https://ai.google.dev) · [Bun](https://bun.sh)
 
 </div>

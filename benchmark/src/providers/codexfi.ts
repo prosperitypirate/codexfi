@@ -2,15 +2,15 @@
  * Provider adapter for the codexfi embedded store (plugin).
  *
  * Replaces the HTTP-based adapter that called the Docker backend at localhost:8020.
- * Now uses the embedded LanceDB store directly via plugin/src/store.ts.
+ * Now uses the embedded pure TypeScript vector store directly via plugin/src/store.ts.
  *
  * API surface used (all direct function calls, no HTTP):
  *   store.ingest()       – extract + embed + store memories from messages
  *   store.search()       – semantic vector search with recency blending
  *   store.list()         – list all memories for cleanup
  *   store.deleteMemory() – delete single memory
- *   db.init()            – initialize LanceDB connection
- *   db.refresh()         – refresh table handle between operations
+ *   db.init()            – initialize vector store
+ *   db.refresh()         – reload store state between operations
  */
 
 import type {
@@ -25,6 +25,7 @@ import { emit } from "../live/emitter.js";
 
 import * as db from "../../../plugin/src/db.js";
 import * as store from "../../../plugin/src/store.js";
+import { ledger, activityLog } from "../../../plugin/src/telemetry.js";
 
 // Memory types included in hybrid enumeration retrieval ("list all X", "every Y").
 // Narrow set for pure enumeration queries — excludes architecture (too broad, adds noise)
@@ -51,7 +52,9 @@ export class OpencodeMemoryProvider implements Provider {
 	async initialize(): Promise<void> {
 		try {
 			await db.init();
-			log.success("Embedded LanceDB store initialized");
+			await ledger.init();
+			await activityLog.init();
+			log.success("Embedded vector store initialized");
 		} catch (err) {
 			throw new Error(
 				`Embedded store failed to initialize: ${err instanceof Error ? err.message : String(err)}`

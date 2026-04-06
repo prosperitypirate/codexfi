@@ -1,7 +1,7 @@
 /**
  * Retry utilities with exponential backoff and jitter.
  *
- * Used by store.ts (LanceDB write conflicts) and extractor.ts (provider fallback).
+ * Used by store.ts (write conflicts) and extractor.ts (provider fallback).
  */
 
 export interface RetryConfig {
@@ -18,9 +18,9 @@ export interface RetryConfig {
 }
 
 /**
- * Default retry config for LanceDB write operations.
+ * Default retry config for vector store write operations.
  *
- * No timeoutMs — LanceDB NAPI operations are non-cancellable. A Promise.race
+ * No timeoutMs — write operations are non-cancellable. A Promise.race
  * timeout would reject the promise but the underlying write still completes,
  * causing duplicate inserts or inconsistent state on retry.
  */
@@ -32,7 +32,7 @@ export const DB_RETRY: RetryConfig = {
 };
 
 /**
- * Default retry config for LanceDB search operations.
+ * Default retry config for vector store search operations.
  *
  * No timeoutMs — same non-cancellable rationale as DB_RETRY. Search is
  * read-only so duplicates aren't a risk, but a timed-out search that

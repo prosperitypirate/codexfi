@@ -1,13 +1,12 @@
 /**
  * Memory store — CRUD, deduplication, aging, contradiction detection, search with recency blending.
  *
- * All operations use the embedded LanceDB table directly.
+ * All operations use the SQLite vector store (store/) via the db.ts adapter.
  */
 
 import { createHash, randomUUID } from "node:crypto";
 
 import {
-	EMBEDDING_DIMS,
 	CHUNK_TRUNCATION,
 	CONTRADICTION_CANDIDATE_DISTANCE,
 	CONTRADICTION_CANDIDATE_LIMIT,
@@ -21,12 +20,26 @@ import {
 	VERSIONING_SKIP_TYPES,
 	validateId,
 } from "./config.js";
-import type { VectorQuery } from "@lancedb/lancedb";
-import { getTable } from "./db.js";
+import { store } from "./db.js";
 import { embed } from "./embedder.js";
 import { condenseToLearnedPattern, detectContradictions, extractMemories } from "./extractor.js";
 import { withRetry, DB_RETRY, DB_SEARCH_RETRY } from "./retry.js";
 import type { ExtractionMode, IngestResult, Message, SearchResult } from "./types.js";
+
+// ── Type bridge ─────────────────────────────────────────────────────────────────
+
+/**
+ * Cast a SearchResult (or MemoryRecord) to an opaque Record for internal helpers
+ * that consume fields like `id`, `memory`, `user_id` generically without needing
+ * the full store type hierarchy.
+ *
+ * Why `as unknown as`: SearchResult uses Float32Array for the vector field which
+ * TypeScript doesn't consider directly assignable to Record<string, unknown>.
+ * This helper centralises the cast so it's explicit, documented, and easy to grep.
+ */
+function asOpaqueRecord(r: object): Record<string, unknown> {
+	return r as unknown as Record<string, unknown>;
+}
 
 // ── Safe JSON parsing ───────────────────────────────────────────────────────────
 
@@ -47,7 +60,7 @@ function safeParseJson(raw: unknown, fallback: Record<string, unknown> = {}): Re
 
 /**
  * Find the closest existing memory if within distance threshold.
- * Returns null when table is empty, search fails, or no match close enough.
+ * Returns null when store is empty, search fails, or no match close enough.
  */
 async function findDuplicate(
 	userId: string,
@@ -55,21 +68,15 @@ async function findDuplicate(
 	distanceThreshold: number = DEDUP_DISTANCE,
 ): Promise<Record<string, unknown> | null> {
 	try {
-		const table = getTable();
-		const count = await table.countRows();
-		if (count === 0) return null;
+		if (store.countRows() === 0) return null;
 
-		const safeUserId = validateId(userId, "user_id");
-		// Only match active (non-superseded) memories — prevents reviving stale facts
-		// that were already superseded by contradiction detection.
-		const results = await (table.search(vector) as VectorQuery)
-			.distanceType("cosine")
-			.where(`user_id = '${safeUserId}' AND superseded_by = ''`)
-			.limit(1)
-			.toArray();
+		const results = store.search(vector, {
+			filter: { user_id: userId, superseded_by: "" },
+			limit: 1,
+		});
 
-		if (results.length > 0 && (results[0]._distance as number) <= distanceThreshold) {
-			return results[0];
+		if (results.length > 0 && results[0]!._distance <= distanceThreshold) {
+			return asOpaqueRecord(results[0]!);
 		}
 	} catch (e) {
 		console.debug("Dedup search error:", e);
@@ -94,19 +101,16 @@ async function findContradictionCandidates(
 		: CONTRADICTION_CANDIDATE_DISTANCE;
 
 	try {
-		const table = getTable();
-		const count = await table.countRows();
-		if (count === 0) return [];
+		if (store.countRows() === 0) return [];
 
-		const safeUserId = validateId(userId, "user_id");
-		const safeNewId = validateId(newId, "new_id");
-		const results = await (table.search(vector) as VectorQuery)
-			.distanceType("cosine")
-			.where(`user_id = '${safeUserId}' AND id != '${safeNewId}' AND superseded_by = ''`)
-			.limit(limit)
-			.toArray();
+		const results = store.search(vector, {
+			filter: { user_id: userId, superseded_by: "", excludeId: newId },
+			limit,
+		});
 
-		return results.filter(r => (r._distance as number) <= maxDistance);
+		return results
+			.filter(r => r._distance <= maxDistance)
+			.map(r => asOpaqueRecord(r));
 	} catch (e) {
 		console.debug("findContradictionCandidates error:", e);
 		return [];
@@ -118,12 +122,8 @@ async function findContradictionCandidates(
  */
 async function markSuperseded(oldId: string, newId: string): Promise<void> {
 	try {
-		const safeOldId = validateId(oldId, "old_id");
 		const now = new Date().toISOString();
-		await getTable().update({
-			where: `id = '${safeOldId}'`,
-			values: { superseded_by: newId, updated_at: now },
-		});
+		store.update({ id: oldId }, { superseded_by: newId, updated_at: now });
 	} catch (e) {
 		console.warn(`markSuperseded error for ${oldId} → ${newId}:`, e);
 	}
@@ -169,23 +169,13 @@ async function getMemoriesByTypes(
 	limit?: number,
 ): Promise<Array<Record<string, unknown>>> {
 	try {
-		const table = getTable();
-		const count = await table.countRows();
-		if (count === 0) return [];
+		if (store.countRows() === 0) return [];
 
-		const safeUserId = validateId(userId, "user_id");
-		// WORKAROUND: LanceDB JS SDK requires a vector for every query — there is no
-		// pure-filter query mode. We pass a zero-vector to get filtering without
-		// meaningful similarity ranking. Results are then filtered/sorted in JS.
-		// Uses EMBEDDING_DIMS to stay in sync if the embedding model changes.
-		const results = await table
-			.search(new Array(EMBEDDING_DIMS).fill(0))
-			.where(`user_id = '${safeUserId}' AND superseded_by = ''`)
-			.limit(10_000) // generous cap — single-user system
-			.toArray();
+		// Pure filter scan — no zero-vector hack needed
+		const rows = store.scan({ user_id: userId, superseded_by: "" });
 
 		const typeSet = new Set(memoryTypes);
-		let typed = results.filter(r => {
+		let typed = rows.filter(r => {
 			const meta = safeParseJson(r.metadata_json);
 			return typeSet.has(meta.type as string);
 		});
@@ -198,7 +188,7 @@ async function getMemoriesByTypes(
 			typed = typed.slice(0, limit);
 		}
 
-		return typed;
+		return typed.map(r => asOpaqueRecord(r));
 	} catch (e) {
 		console.debug("getMemoriesByTypes error:", e);
 		return [];
@@ -238,8 +228,7 @@ async function ageProgress(userId: string, newId: string): Promise<void> {
 		const rows = await getMemoriesByType(userId, "progress");
 		for (const row of rows) {
 			if ((row.id as string) !== newId) {
-				const safeId = validateId(row.id as string, "id");
-				await getTable().delete(`id = '${safeId}'`);
+				store.deleteById(row.id as string);
 			}
 		}
 	} catch (e) {
@@ -252,7 +241,7 @@ async function ageSessionSummaries(userId: string): Promise<void> {
 		const existing = await getMemoriesByType(userId, "session-summary");
 		if (existing.length <= MAX_SESSION_SUMMARIES) return;
 
-		const oldest = existing[0];
+		const oldest = existing[0]!;
 		const oldestId = oldest.id as string;
 		const oldestMemory = oldest.memory as string;
 
@@ -261,29 +250,31 @@ async function ageSessionSummaries(userId: string): Promise<void> {
 			const now = new Date().toISOString();
 			const vector = await embed(condensed.memory, "document");
 			await withRetry(
-				() => getTable().add([{
-					id: randomUUID(),
-					memory: condensed.memory,
-					user_id: userId,
-					vector,
-					metadata_json: JSON.stringify({
+				() => {
+					store.add([{
+						id: randomUUID(),
+						memory: condensed.memory,
+						user_id: userId,
+						vector,
+						metadata_json: JSON.stringify({
+							type: "learned-pattern",
+							condensed_from: oldestId,
+						}),
+						created_at: now,
+						updated_at: now,
+						hash: createHash("md5").update(condensed.memory).digest("hex"),
+						chunk: "",
+						superseded_by: "",
 						type: "learned-pattern",
-						condensed_from: oldestId,
-					}),
-					created_at: now,
-					updated_at: now,
-					hash: createHash("md5").update(condensed.memory).digest("hex"),
-					chunk: "",
-					superseded_by: "",
-					type: "learned-pattern",
-				}]),
-				"LanceDB write (condensed learned-pattern)",
+					}]);
+					return Promise.resolve();
+				},
+				"store write (condensed learned-pattern)",
 				DB_RETRY,
 			);
 		}
 
-		const safeOldestId = validateId(oldestId, "id");
-		await getTable().delete(`id = '${safeOldestId}'`);
+		store.deleteById(oldestId);
 	} catch (e) {
 		console.warn("Aging session-summary error:", e);
 	}
@@ -315,8 +306,6 @@ export async function ingest(
 	for (const fact of facts) {
 		const factText = fact.memory;
 		const factType = fact.type || (baseMetadata.type as string) || "";
-		// Chunk = full truncated conversation attached to each memory for detail queries.
-		// Display truncation (400 chars for [MEMORY] block snippets) is separate (context.ts:126).
 		const factChunk = (fact.chunk || "").slice(0, CHUNK_TRUNCATION);
 
 		const metadata = { ...baseMetadata, ...(factType ? { type: factType } : {}) };
@@ -329,19 +318,18 @@ export async function ingest(
 
 		if (dup) {
 			// Dedup match — update existing memory (lightweight refresh)
-			const safeId = validateId(dup.id as string, "id");
 			await withRetry(
-				() => getTable().update({
-					where: `id = '${safeId}'`,
-					values: {
+				() => {
+					store.update({ id: dup.id as string }, {
 						memory: factText,
 						updated_at: now,
 						hash: factHash,
 						metadata_json: metadataStr,
 						chunk: factChunk,
-					},
-				}),
-				"LanceDB update (dedup)",
+					});
+					return Promise.resolve();
+				},
+				"store update (dedup)",
 				DB_RETRY,
 			);
 			results.push({ id: dup.id as string, memory: factText, event: "UPDATE" });
@@ -349,20 +337,23 @@ export async function ingest(
 			// New insert — full pipeline: add, aging, contradiction detection
 			const memId = randomUUID();
 			await withRetry(
-				() => getTable().add([{
-					id: memId,
-					memory: factText,
-					user_id: safeUserId,
-					vector,
-					metadata_json: metadataStr,
-					created_at: now,
-					updated_at: now,
-					hash: factHash,
-					chunk: factChunk,
-					superseded_by: "",
-					type: factType,
-				}]),
-				"LanceDB write (new memory)",
+				() => {
+					store.add([{
+						id: memId,
+						memory: factText,
+						user_id: safeUserId,
+						vector,
+						metadata_json: metadataStr,
+						created_at: now,
+						updated_at: now,
+						hash: factHash,
+						chunk: factChunk,
+						superseded_by: "",
+						type: factType,
+					}]);
+					return Promise.resolve();
+				},
+				"store write (new memory)",
 				DB_RETRY,
 			);
 			results.push({ id: memId, memory: factText, event: "ADD" });
@@ -402,10 +393,6 @@ export async function search(
 
 /**
  * Vector-based search — accepts a pre-computed embedding vector.
- *
- * This is the core search implementation. Use this when you already have
- * a query vector (e.g. dashboard cross-project search where the same query
- * is searched across multiple user scopes — embed once, search N times).
  */
 export async function searchByVector(
 	queryVector: number[],
@@ -413,38 +400,35 @@ export async function searchByVector(
 	options: SearchOptions = {},
 ): Promise<SearchResult[]> {
 	const safeUserId = validateId(userId, "user_id");
-	const table = getTable();
-	const count = await table.countRows();
-	if (count === 0) return [];
+	if (store.countRows() === 0) return [];
 
 	const limit = options.limit ?? 20;
 	const threshold = options.threshold ?? 0.3;
 	const w = options.recencyWeight ?? 0.0;
 
-	// LanceDB JS SDK prefilters by default (.where() filters BEFORE ANN search).
-	// Use .postfilter() to opt out.
 	const rows = await withRetry(
-		() => (table.search(queryVector) as VectorQuery)
-			.distanceType("cosine")
-			.where(`user_id = '${safeUserId}' AND superseded_by = ''`)
-			.limit(limit)
-			.toArray(),
-		"LanceDB search",
+		() => Promise.resolve(
+			store.search(queryVector, {
+				filter: { user_id: safeUserId, superseded_by: "" },
+				limit,
+			})
+		),
+		"store search",
 		DB_SEARCH_RETRY,
 	);
 
 	// Build candidates with semantic scores + parsed dates
 	const candidates = rows.map(r => {
-		const semantic = Math.max(0, 1.0 - (r._distance as number ?? 1.0));
+		const semantic = Math.max(0, 1.0 - (r._distance ?? 1.0));
 		const meta = safeParseJson(r.metadata_json);
-		const d = extractDate(r);
+		const d = extractDate(r as unknown as Record<string, unknown>);
 		return {
-			id: r.id as string,
-			memory: r.memory as string,
-			chunk: (r.chunk as string) || "",
+			id: r.id,
+			memory: r.memory,
+			chunk: r.chunk || "",
 			semantic,
 			metadata: meta,
-			created_at: (r.created_at as string) || null,
+			created_at: r.created_at || null,
 			date: d ? d.toISOString().slice(0, 10) : null,
 			_dateObj: d,
 			score: 0,
@@ -509,7 +493,6 @@ export async function searchByVector(
 			if (extras.length >= totalExtrasLimit) break;
 		}
 
-		// Sort extras by recency
 		extras.sort((a, b) =>
 			(b.created_at || "").localeCompare(a.created_at || "")
 		);
@@ -542,36 +525,25 @@ export async function list(
 	updated_at: string | null;
 }>> {
 	const safeUserId = validateId(userId, "user_id");
-	const table = getTable();
-	const count = await table.countRows();
-	if (count === 0) return [];
+	if (store.countRows() === 0) return [];
 
 	const limit = options.limit ?? 20;
 
-	// WORKAROUND: zero-vector for non-semantic query (see getMemoriesByTypes comment).
-	// Uses EMBEDDING_DIMS constant to stay in sync with embedding model.
-	const whereClause = options.includeSuperseded
-		? `user_id = '${safeUserId}'`
-		: `user_id = '${safeUserId}' AND superseded_by = ''`;
+	const rows = options.includeSuperseded
+		? store.scan({ user_id: safeUserId })
+		: store.scan({ user_id: safeUserId, superseded_by: "" });
 
-	const rows = await table
-		.search(new Array(EMBEDDING_DIMS).fill(0))
-		.where(whereClause)
-		.limit(10_000)
-		.toArray();
-
-	// Sort by updated_at descending
 	rows.sort((a, b) =>
-		((b.updated_at as string) || "").localeCompare((a.updated_at as string) || "")
+		(b.updated_at || "").localeCompare(a.updated_at || "")
 	);
 
 	return rows.slice(0, limit).map(r => ({
-		id: r.id as string,
-		memory: r.memory as string,
-		user_id: r.user_id as string,
+		id: r.id,
+		memory: r.memory,
+		user_id: r.user_id,
 		metadata: safeParseJson(r.metadata_json),
-		created_at: (r.created_at as string) || null,
-		updated_at: (r.updated_at as string) || null,
+		created_at: r.created_at || null,
+		updated_at: r.updated_at || null,
 	}));
 }
 
@@ -592,10 +564,12 @@ export async function listByType(
  * Delete a single memory by ID.
  */
 export async function deleteMemory(memoryId: string): Promise<void> {
-	const safeId = validateId(memoryId, "memory_id");
 	await withRetry(
-		() => getTable().delete(`id = '${safeId}'`),
-		"LanceDB delete",
+		() => {
+			store.deleteById(memoryId);
+			return Promise.resolve();
+		},
+		"store delete",
 		DB_RETRY,
 	);
 }

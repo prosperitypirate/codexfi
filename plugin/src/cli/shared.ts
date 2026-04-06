@@ -1,32 +1,31 @@
 /**
  * Shared utilities for CLI commands — DB initialization and tag resolution.
  *
- * Extracted here so every command that needs LanceDB access doesn't
+ * Extracted here so every command that needs vector store access doesn't
  * duplicate the init/error-handling logic.
  */
 
-import { init as initLanceDb } from "../db.js";
+import { init as initVectorStore } from "../db.js";
 import { getTags } from "../services/tags.js";
 import * as fmt from "./fmt.js";
 
 /**
- * Initialize the LanceDB connection.
+ * Initialize the vector store.
  *
- * Exits with a helpful error if initialization fails (e.g., corrupt DB,
+ * Exits with a helpful error if initialization fails (e.g., corrupt store,
  * missing data directory permissions).
  */
 export async function initDb(): Promise<void> {
 	try {
-		await initLanceDb();
+		await initVectorStore();
 	} catch (err) {
-		fmt.error("Failed to initialize LanceDB.");
+		fmt.error("Failed to initialize vector store.");
 		fmt.blank();
 		fmt.info(`Error: ${err}`);
 		fmt.blank();
 		fmt.info("This usually means:");
 		fmt.info(`  ${fmt.dim("1.")} The data directory (~/.codexfi/) is not writable`);
-		fmt.info(`  ${fmt.dim("2.")} The database files are corrupted`);
-		fmt.info(`  ${fmt.dim("3.")} LanceDB NAPI bindings are missing (try: bun install)`);
+		fmt.info(`  ${fmt.dim("2.")} The store file is corrupted`);
 		fmt.blank();
 		process.exit(1);
 	}

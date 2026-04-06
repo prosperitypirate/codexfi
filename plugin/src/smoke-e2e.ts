@@ -3,10 +3,10 @@
  * E2E smoke test for the embedded memory pipeline.
  *
  * Validates the full lifecycle that index.ts depends on:
- * 1. db.init() — LanceDB connection + table creation
+ * 1. db.init() — vector store initialization
  * 2. nameRegistry.init() — JSON file load
  * 3. ledger.init() — telemetry setup
- * 4. store.ingest() — extraction + embedding + LanceDB write
+ * 4. store.ingest() — extraction + embedding + vector store write
  * 5. store.search() — semantic search with recency blending
  * 6. store.list() — list memories by user_id
  * 7. store.getProfile() — profile retrieval
@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 	console.log("\n1. Initialization");
 	const tempDir = mkdtempSync(join(tmpdir(), "smoke-e2e-"));
 	try {
-		const dbPath = join(tempDir, "lancedb");
+		const dbPath = join(tempDir, "store");
 		await db.init(dbPath);
 		assert(true, "db.init() succeeded");
 
@@ -97,7 +97,7 @@ async function main(): Promise<void> {
 		const firstId = results[0]?.id;
 		console.log(`   First memory: "${results[0]?.memory?.slice(0, 80)}..."`);
 
-		// ── 4. Search (embedding + LanceDB vector search) ───────────────────
+		// ── 4. Search (embedding + vector search) ───────────────────────────
 		console.log("\n4. Search (live API call — embedding + vector search)");
 		const searchStart = Date.now();
 		const searchResults = await store.search("database technology", SMOKE_USER_ID, {

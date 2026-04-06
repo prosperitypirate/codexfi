@@ -1,7 +1,7 @@
 /**
  * `codexfi search <query>` — semantic search over stored memories.
  *
- * Uses the same vector search pipeline as the plugin: Voyage AI embedding → LanceDB
+ * Uses the same vector search pipeline as the plugin: Voyage AI embedding →
  * cosine similarity → recency blending → threshold filtering.
  *
  * Flags:

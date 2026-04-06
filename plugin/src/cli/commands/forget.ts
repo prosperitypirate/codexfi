@@ -1,7 +1,7 @@
 /**
  * `codexfi forget <id>` — delete a memory by ID.
  *
- * Permanently removes a memory from the LanceDB store.
+ * Permanently removes a memory from the store.
  * Use `codexfi list` to find memory IDs.
  *
  * The full UUID or the short prefix (from list output) is accepted.
@@ -12,9 +12,8 @@
 import type { ParsedArgs } from "../args.js";
 import * as fmt from "../fmt.js";
 import { initDb } from "../shared.js";
-import { getTable } from "../../db.js";
-import { EMBEDDING_DIMS } from "../../config.js";
-import * as store from "../../store.js";
+import { store } from "../../db.js";
+import * as storeApi from "../../store.js";
 
 export async function run(args: ParsedArgs): Promise<void> {
 	const idInput = args.positional[0]?.trim();
@@ -31,7 +30,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 	// If the input looks like a short prefix (< 36 chars), resolve it
 	if (idInput.length < 36) {
-		const match = await resolvePrefix(idInput);
+		const match = resolvePrefix(idInput);
 
 		if (match === null) {
 			fmt.error(`No memory found matching prefix "${idInput}".`);
@@ -42,21 +41,18 @@ export async function run(args: ParsedArgs): Promise<void> {
 			fmt.error(`Prefix "${idInput}" matches ${match.length} memories. Be more specific:`);
 			fmt.blank();
 			for (const m of match) {
-				fmt.info(`${fmt.dim(m.id as string)} ${(m.memory as string).slice(0, 60)}`);
+				fmt.info(`${fmt.dim(m.id)} ${m.memory.slice(0, 60)}`);
 			}
 			process.exit(1);
 		}
 
 		// Single match — confirm and delete
-		const fullId = match.id as string;
-		const memory = (match.memory as string).slice(0, 80);
-
 		fmt.blank();
-		fmt.info(`Deleting: ${fmt.dim(fullId)}`);
-		fmt.info(`Content: ${memory}`);
+		fmt.info(`Deleting: ${fmt.dim(match.id)}`);
+		fmt.info(`Content: ${match.memory.slice(0, 80)}`);
 		fmt.blank();
 
-		await store.deleteMemory(fullId);
+		await storeApi.deleteMemory(match.id);
 		fmt.success("Memory deleted.");
 		fmt.blank();
 		return;
@@ -64,7 +60,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 	// Full UUID provided — delete directly
 	try {
-		await store.deleteMemory(idInput);
+		await storeApi.deleteMemory(idInput);
 		fmt.success(`Deleted memory ${fmt.dim(idInput)}`);
 	} catch (err) {
 		fmt.error(`Failed to delete: ${err}`);
@@ -76,31 +72,25 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 // ── Prefix resolution ───────────────────────────────────────────────────────────
 
+import type { MemoryRecord } from "../../store/types.js";
+
 /**
  * Resolve a short ID prefix to a full memory record.
  *
  * Returns:
  *   - null if no match
- *   - Record if exactly one match
- *   - Record[] if multiple matches (caller should ask for longer prefix)
+ *   - MemoryRecord if exactly one match
+ *   - MemoryRecord[] if multiple matches (caller should ask for longer prefix)
  */
-async function resolvePrefix(
+function resolvePrefix(
 	prefix: string,
-): Promise<Record<string, unknown> | Record<string, unknown>[] | null> {
-	const table = getTable();
-	const count = await table.countRows();
-	if (count === 0) return null;
+): MemoryRecord | MemoryRecord[] | null {
+	if (store.countRows() === 0) return null;
 
-	// Scan all IDs — LanceDB doesn't support LIKE queries, so we do a full scan.
-	// This is fine for CLI use (<100K rows) but wouldn't scale for a hot path.
-	const rows = await table
-		.search(new Array(EMBEDDING_DIMS).fill(0))
-		.limit(100_000)
-		.toArray();
-
-	const matches = rows.filter((r) => (r.id as string).startsWith(prefix));
+	const all = store.scan({});
+	const matches = all.filter(r => r.id.startsWith(prefix));
 
 	if (matches.length === 0) return null;
-	if (matches.length === 1) return matches[0];
+	if (matches.length === 1) return matches[0]!;
 	return matches;
 }

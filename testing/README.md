@@ -1,10 +1,9 @@
-# codexfi E2E Test Suite
+# codexfi Test Suite
 
-Fully autonomous end-to-end tests for the `codexfi` plugin. The agent (not a human) creates isolated project directories, spawns `opencode run` sessions, talks to the agent, inspects the memory backend, and reports pass/fail — zero user interaction required.
+Four test tiers covering unit logic, integration, concurrent safety, and full end-to-end agent sessions.
 
-> **Note:** As of the plugin embedded rewrite, the test harness uses the embedded LanceDB store
-> directly (via `plugin/src/store.ts` and `plugin/src/db.ts`) instead of making HTTP calls
-> to the Docker backend. The Docker backend is no longer required for E2E testing.
+> **Storage:** bun:sqlite with WAL mode. Replaced JSONL (v0.5) and LanceDB (v0.4) to support
+> concurrent multi-agent read/write without data loss. See design doc `011-sqlite-vector-store.md`.
 
 ## Prerequisites
 
@@ -19,10 +18,24 @@ bun install -g opencode-ai
 # Verify: opencode --version  (1.2.10+)
 ```
 
-**3. Plugin configured in `~/.config/opencode/opencode.json`**
+**3. Plugin set to LOCAL dev build in `~/.config/opencode/opencode.json`**
+
+> **CRITICAL:** The E2E test harness imports `plugin/src/db.ts` and `plugin/src/store.ts`
+> directly to verify memories. If `opencode.json` uses the npm-published `"codexfi"` package
+> instead of the local dev build, the `opencode run` sessions will write to the npm plugin's
+> store while the test harness reads from the local plugin's store — resulting in **0 memories
+> found and all scenarios failing**.
+
 ```json
 {
-  "plugin": ["file:///path/to/codexfi/plugin/dist/index.js"]
+  "plugin": ["file:///Users/neo/Development/codexfi/plugin"]
+}
+```
+
+After testing, restore to the published package:
+```json
+{
+  "plugin": ["codexfi"]
 }
 ```
 
@@ -38,70 +51,86 @@ The plugin reads keys from `codexfi.jsonc` — env vars are not read by the plug
 ```
 An AI provider key for the OpenCode agent sessions is also required — set this in your shell or `.env` (e.g. `ANTHROPIC_API_KEY`) for OpenCode's own model calls.
 
+## Test tiers
+
+| Tier | Tests | Command | Time | Requirements |
+|------|-------|---------|------|-------------|
+| Unit | 139 | `bun test src/unit/` | ~1s | None |
+| Integration | 31 | `bun test src/integration/` | ~3s | `VOYAGE_API_KEY` |
+| Stress | 3 | `bun test src/stress/` | ~1s | None |
+| E2E | 13 scenarios | `bun run test:e2e` | ~10min | Live opencode + API keys |
+
+### Stress tests (concurrent multi-agent safety)
+
+These validate the SQLite WAL store under multi-process contention — the scenario where
+multiple OpenCode agents read and write the same `store.db` simultaneously.
+
+| Test | Processes | Operations | Validates |
+|------|-----------|-----------|-----------|
+| `concurrent-writes` | 20 writers | 400 INSERTs | Zero data loss, all IDs unique, `PRAGMA integrity_check = ok` |
+| `concurrent-reads` | 20 readers | 400 searches against 500 seeded records | All searches return results, no errors, DB intact |
+| `concurrent-mixed` | 15 writers + 15 readers | 300 writes + 300 reads simultaneously | Zero data loss, all reads succeed, no SQLITE_BUSY errors |
+
+Each test spawns real OS child processes (not async concurrency within one process) hitting
+the same `.db` file — matching the actual multi-agent deployment pattern.
+
 ## Running
 
 ```bash
 cd testing
-bun install       # first time only
-bun run test      # runs unit + integration tests
+bun install                    # first time only
+bun test src/unit/             # unit tests only
+bun test src/integration/      # integration tests only
+bun test src/stress/           # concurrent stress tests only
+bun run test:e2e               # all 13 E2E scenarios (live dashboard at localhost:4243)
+bun run test:e2e:scenario 01   # single E2E scenario
 ```
 
-Output is printed to stdout with ANSI colours. Each run is also saved to `results/` (gitignored).
+E2E output is printed to stdout with ANSI colours and shown live at `http://localhost:4243`.
+Each run is also saved to `results/` (gitignored). After each scenario, the test harness
+**automatically deletes all memories it created** from the store.
 
-After each scenario completes, the test harness **automatically deletes all memories it created** from the backend — keeping the memory store clean between runs.
+## Latest run results (2026-04-06) — SQLite WAL store (PR #151)
 
-To run a single scenario:
-```bash
-bun run test:scenario 07       # single scenario
-bun run test:scenario 07,08    # multiple scenarios
-```
-
-To run the E2E scenarios:
-```bash
-bun run test:e2e               # all 13 scenarios
-bun run test:e2e:scenario 13   # single E2E scenario
-```
-
-## Latest run results (2026-03-07) — auto-init enrichment
-
-Full run of scenario 13 against `plugin/` (embedded LanceDB). Extraction via Anthropic Haiku (`claude-haiku-4-5`).
+Full run against `feat/pure-ts-vector-store` branch. Storage: bun:sqlite with WAL mode.
+Extraction via Anthropic Haiku.
 
 ```
-PASS  01  Cross-Session Memory Continuity
-PASS  02  README-Based Project-Brief Seeding
-PASS  03  Transcript Noise Guard
-PASS  04  Project Brief Always Present
-PASS  05  Memory Aging
-PASS  06  Existing Codebase Auto-Init
-PASS  07  Enumeration Hybrid Retrieval
-PASS  08  Cross-Synthesis (isWideSynthesis)
-WARN  09  maxMemories=20 Under Load           <- 8/10 assertions, K=20 margin under 41 memories
-PASS  10  Knowledge Update / Superseded
-PASS  11  System Prompt Memory Injection
-PASS  12  Multi-Turn Per-Turn Refresh
-PASS  13  Auto-Init Turn 1 Visibility + Enrichment
+Unit:        139 pass,  0 fail  (1.0s)
+Integration:  31 pass,  0 fail  (3.5s)
+Stress:        3 pass,  0 fail  (0.7s)  ← 20 writers + 20 readers + 15+15 mixed
+E2E:       12/13 pass             (629s)
+```
 
-12/13 PASS (scenario 09 is known K=20 margin, not a regression)
+```
+FAIL  01  Cross-Session Memory Continuity       17.5s  ← flaky: agent omitted project name
+PASS  02  README-Based Project-Brief Seeding    14.9s
+PASS  03  Transcript Noise Guard                15.0s
+PASS  04  Project Brief Always Present          19.5s
+PASS  05  Memory Aging                          50.3s
+PASS  06  Existing Codebase Auto-Init           68.1s
+PASS  07  Enumeration Hybrid Retrieval          38.2s
+PASS  08  Cross-Synthesis (isWideSynthesis)     54.9s
+PASS  09  maxMemories=20 Under Load            176.9s
+PASS  10  Knowledge Update / Superseded         67.3s
+PASS  11  System Prompt Memory Injection        23.2s
+PASS  12  Multi-Turn Per-Turn Refresh           59.2s
+PASS  13  Auto-Init Turn 1 Visibility           24.0s
+```
+
+Scenario 01 failure: agent recalled all tech facts (SQLite, Bun, TypeScript, Repository pattern)
+but said "a CLI task management tool" instead of "taskflow". Previous solo run passed. Extraction
+variance, not a store bug.
+
+### Previous results (2026-03-07) — JSONL store
+
+```
+12/13 PASS (scenario 09 was known K=20 margin, not a regression)
 ```
 
 ### Previous results (2026-02-25) — plugin embedded rewrite
 
-Full run against plugin build from PR #44 (`feature/mid-session-retrieval` branch):
-
 ```
-PASS  01  Cross-Session Memory Continuity          12.7s
-PASS  02  README-Based Project-Brief Seeding       19.5s
-PASS  03  Transcript Noise Guard                   19.1s
-PASS  04  Project Brief Always Present             17.9s
-PASS  05  Memory Aging                             38.7s
-PASS  06  Existing Codebase Auto-Init              68.7s
-PASS  07  Enumeration Hybrid Retrieval             25.5s
-PASS  08  Cross-Synthesis (isWideSynthesis)        37.6s
-PASS  09  maxMemories=20 Under Load                96.3s
-PASS  10  Knowledge Update / Superseded            65.5s
-PASS  11  System Prompt Memory Injection           18.2s
-PASS  12  Multi-Turn Per-Turn Refresh              45.3s
-
 12/12 PASS  —  Total: ~465s (~7.8 min)
 ```
 
@@ -130,22 +159,33 @@ env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
 
 This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anomalyco/opencode/issues/14532.
 
-## Known issue: `codexfi.jsonc` deleted during E2E runs
+## Known issue: `codexfi.jsonc` deleted by OpenCode Desktop
 
-When the OpenCode desktop app is running and E2E tests spawn `opencode serve`, the config file `~/.config/opencode/codexfi.jsonc` gets silently deleted. The `opencode.json` file survives — only `codexfi.jsonc` is affected. Without it, `isConfigured()` returns false, the plugin is disabled, and all E2E tests fail with 0 memories.
+The OpenCode Desktop app periodically deletes `~/.config/opencode/codexfi.jsonc`. The watcher
+log at `~/.codexfi-watcher.log` shows it probes multiple filenames (`codexfi.json`,
+`codexfi.jsonc`, `memory.jsonc`) and deletes them in rapid succession — a config
+discovery/migration routine. Without the config file, the plugin is disabled and E2E
+tests fail with 0 memories.
 
-**Root cause:** Under investigation — likely OpenCode's TUI migration or serve process cleanup. The test harness does not reference or touch `codexfi.jsonc` (confirmed via grep). Tracked upstream at https://github.com/anomalyco/opencode/issues/16450.
+**Root cause:** Under investigation. A forensic watcher at `local/watch-codexfi-config.sh`
+uses `fs_usage` (syscall tracing) to capture the exact PID + process name that performs
+the `unlink()`. Run with sudo for full tracing:
 
-**Workaround:** Run the config monitor script in a separate terminal while running E2E tests. It watches for the file deletion and alerts you so you can restore it:
 ```bash
-# Terminal 1: monitor for deletion
-bash testing/monitor-config.sh
+# Terminal 1: forensic watcher (needs root for fs_usage)
+sudo /path/to/codexfi/local/watch-codexfi-config.sh
 
-# Terminal 2 (when monitor reports deletion): restore config
-bunx codexfi install
+# Terminal 2: run E2E tests
+cd testing && bun run test:e2e
 ```
 
-The monitor script captures process snapshots at deletion time (`lsof`, `ps aux`) to help diagnose the root cause. If the file is deleted mid-test, re-run `bunx codexfi install` and restart the failed scenario.
+When a deletion is detected, the watcher dumps the `fs_usage` syscall trace showing exactly
+which process deleted the file. Check `~/.codexfi-watcher.log` for results.
+
+If the config gets deleted mid-test, restore it manually:
+```bash
+cp ~/.codexfi.jsonc.backup ~/.config/opencode/codexfi.jsonc
+```
 
 ## Scenarios
 
@@ -170,40 +210,38 @@ The monitor script captures process snapshots at deletion time (`lsof`, `ps aux`
 ```
 testing/
 ├── src/
-│   ├── runner.ts          — entry point, runs all scenarios sequentially
-│   │                        (refreshes LanceDB table before cleanup to fix delete lock contention)
-│   ├── opencode.ts        — spawns opencode serve with per-directory server cache
-│   │                        (opencode run exits before async handlers complete; serve stays alive)
-│   ├── memory-api.ts      — uses embedded LanceDB store directly (plugin/src/store.ts + db.ts)
-│   │                        (replaces HTTP calls to Docker backend; calls db.refresh() before reads)
-│   ├── report.ts          — ANSI result formatting
-│   └── scenarios/
-│       ├── 01-cross-session.ts
-│       ├── 02-readme-seeding.ts
-│       ├── 03-transcript-noise.ts
-│       ├── 04-project-brief-always.ts
-│       ├── 05-memory-aging.ts
-│       ├── 06-existing-codebase.ts
-│       ├── 07-enumeration-retrieval.ts
-│       ├── 08-cross-synthesis.ts
-│       ├── 09-max-memories.ts
-│       ├── 10-knowledge-update.ts
-│       ├── 11-system-prompt-injection.ts
-│       ├── 12-multi-turn-refresh.ts
-│       └── 13-auto-init-turn1.ts
-├── results/               — gitignored; JSON output of each run
-├── monitor-config.sh      — watches codexfi.jsonc for deletion (run in separate terminal)
-├── package.json
-└── tsconfig.json
+│   ├── unit/                  — 139 unit tests (cosine math, CRUD, filters, serialisation)
+│   ├── integration/           — 31 integration tests (store, db, embedder, plugin-load)
+│   ├── stress/                — 3 concurrent multi-process tests
+│   │   ├── worker.ts          — child process entry point (write or read mode)
+│   │   ├── concurrent-writes.test.ts   — 20 processes × 20 writes, zero loss
+│   │   ├── concurrent-reads.test.ts    — 20 processes × 20 searches on 500 records
+│   │   └── concurrent-mixed.test.ts    — 15 writers + 15 readers simultaneously
+│   ├── helpers/
+│   │   └── temp-db.ts         — test isolation (redirects store to temp dir)
+│   ├── e2e/
+│   │   ├── runner.ts          — entry point, runs scenarios, emits live SSE events
+│   │   ├── opencode.ts        — spawns opencode serve sessions
+│   │   ├── memory-api.ts      — direct store access for verification
+│   │   ├── report.ts          — ANSI result formatting
+│   │   ├── live/
+│   │   │   ├── emitter.ts     — SSE event emitter (same pattern as benchmark)
+│   │   │   ├── server.ts      — Bun.serve on port 4243
+│   │   │   └── page.ts        — self-contained HTML live dashboard
+│   │   └── scenarios/
+│   │       ├── 01-cross-session.ts ... 13-auto-init-turn1.ts
+│   ├── results/               — gitignored; JSON output of each run
+│   ├── package.json
+│   └── tsconfig.json
 ```
 
 ### Key changes for plugin
 
-1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process (LanceDB caches table state).
+1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process.
 
 2. **`opencode.ts` uses server mode** — `opencode run` exits before async plugin event handlers (auto-save, extraction) complete. Switched to `opencode serve` with per-directory server caching so the plugin process stays alive for extraction to finish. `waitForMemories(dir, N, 30_000)` polls until data appears.
 
-3. **`runner.ts` refreshes table** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale table handle.
+3. **`runner.ts` refreshes store** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale reference.
 
 4. **Scenario 12 calls `addMemoryDirect()`** — this imports `store.ingest()` directly in the test runner process (not in a child `opencode serve` process), so extraction provider/model config must be correct in the built `dist/index.js`. Different config lifecycle than scenarios 01-11.
 

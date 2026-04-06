@@ -1,24 +1,22 @@
 {
 	"name": "codexfi",
 	"version": "0.5.4",
-	"description": "Persistent, semantic memory for AI coding agents — embedded LanceDB, zero Docker, one-command install",
+	"description": "Persistent, semantic memory for AI coding agents — zero native dependencies, fully self-hosted, one-command install",
 	"type": "module",
 	"main": "dist/index.js",
 	"bin": {
 		"codexfi": "./dist/cli.js"
 	},
 	"scripts": {
-		"spike": "bun run src/spike.ts",
 		"prebuild": "rm -f dist/*.node",
-		"build": "bun build src/index.ts --outdir dist --target node --external @lancedb/lancedb && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node --external @lancedb/lancedb",
-		"build:plugin": "bun build src/index.ts --outdir dist --target node --external @lancedb/lancedb",
-		"build:cli": "bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node --external @lancedb/lancedb",
+		"build": "bun build src/index.ts --outdir dist --target node && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
+		"build:plugin": "bun build src/index.ts --outdir dist --target node",
+		"build:cli": "bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
 		"typecheck": "tsc --noEmit",
 		"cli": "bun run src/cli/index.ts",
 		"smoke:e2e": "bun run src/smoke-e2e.ts"
 	},
 	"dependencies": {
-		"@lancedb/lancedb": "^0.15.0",
 		"@opencode-ai/plugin": "^1.2.11",
 		"@opencode-ai/sdk": "^1.2.11",
 		"zod": "^4.3.6"
@@ -32,7 +30,6 @@
 		"memory",
 		"ai",
 		"coding-agent",
-		"lancedb",
 		"persistent-memory",
 		"plugin"
 	],

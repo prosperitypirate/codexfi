@@ -12,7 +12,7 @@ Browse, search, export, and inspect — everything the plugin does, accessible f
 [![Zero Dependencies](https://img.shields.io/badge/Zero-Dependencies-CF3CFF?style=flat)](https://github.com/prosperitypirate/codexfi)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
-[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded-CF3CFF?style=flat)](https://lancedb.com/)
+[![Pure TypeScript](https://img.shields.io/badge/Pure-TypeScript-CF3CFF?style=flat)](https://github.com/prosperitypirate/codexfi)
 [![Voyage AI](https://img.shields.io/badge/Voyage_AI-Semantic_Search-5B6BF5?style=flat)](https://www.voyageai.com/)
 [![ANSI Colors](https://img.shields.io/badge/ANSI-Color_Output-FF6B35?style=flat)](https://no-color.org/)
 [![NO_COLOR](https://img.shields.io/badge/NO__COLOR-Respected-888888?style=flat)](https://no-color.org/)
@@ -85,7 +85,7 @@ $ bunx codexfi status
 Status
 ──────────
   ✓ Data directory ~/.codexfi
-  ✓ LanceDB database ~/.codexfi/lancedb
+  ✓ Vector store ~/.codexfi/store/store.db
   ✓ Config file ~/.config/opencode/codexfi.jsonc
   ✓ Voyage API key set (pa-PNK...)
   ✓ Extraction API key anthropic (sk-ant...)
@@ -317,7 +317,7 @@ src/dashboard/
 - **Lazy command loading** — each command is a dynamic `import()`, so `help` and `--version` are instant
 - **Dual output** — every command renders both human-friendly (ANSI tables, spinners) and machine-friendly (`--json`)
 - **`NO_COLOR` respected** — follows the [no-color.org](https://no-color.org/) convention; falls back to ASCII on dumb terminals
-- **Same store** — reads/writes the exact same LanceDB database as the plugin, using the same tag computation
+- **Same store** — reads/writes the exact same pure TS vector store as the plugin, using the same tag computation
 
 ---
 

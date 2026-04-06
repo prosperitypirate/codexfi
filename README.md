@@ -12,7 +12,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
-[![LanceDB](https://img.shields.io/badge/LanceDB-Embedded-CF3CFF?style=flat)](https://lancedb.com/)
 [![Voyage AI](https://img.shields.io/badge/Voyage_AI-Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
 [![Anthropic](https://img.shields.io/badge/Anthropic-Haiku-D97706?style=flat)](https://anthropic.com)
 [![xAI](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
@@ -70,7 +69,7 @@ Once a session runs, proof it's working: start a second session and ask the agen
 
 
 1. **You code normally.** No commands, no `/save`, nothing to learn.
-2. **After every turn**, the plugin extracts typed facts from the conversation and stores them locally in LanceDB.
+2. **After every turn**, the plugin extracts typed facts from the conversation and stores them locally in a pure TypeScript vector store.
 3. **On every LLM call**, a `[MEMORY]` block is rebuilt into the system prompt with project context, preferences, and semantically relevant memories.
 4. **When you switch topics** mid-session, semantic search refreshes to surface different memories.
 5. **Across sessions**, the agent picks up where it left off — project decisions, error fixes, your preferences, everything.
@@ -88,7 +87,7 @@ All data stays on your machine at `~/.codexfi/`. Nothing is sent anywhere except
 
 
 - **Fully automatic** — saves after every turn, injects on every call
-- **100% local storage** — LanceDB embedded in-process
+- **100% local storage** — pure TypeScript vector store, embedded in-process
 - **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok, or Google Gemini
 - **Code-optimised embeddings** — Voyage `voyage-code-3`
 - **Typed memory system** — `architecture`, `error-solution`, `preference`, `progress`, and more
@@ -153,6 +152,6 @@ All data stays on your machine. Outbound API calls go only to Voyage AI (embeddi
 
 <div align="center">
 
-Built with [OpenCode](https://opencode.ai) · [LanceDB](https://lancedb.com) · [Voyage AI](https://www.voyageai.com) · [Bun](https://bun.sh)
+Built with [OpenCode](https://opencode.ai) · [Voyage AI](https://www.voyageai.com) · [Bun](https://bun.sh)
 
 </div>

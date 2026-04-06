@@ -2,7 +2,7 @@
  * `codexfi status` — health check for the memory system.
  *
  * Verifies:
- *   - LanceDB database exists and is readable
+ *   - Vector store exists and is readable
  *   - Config file (~/.config/opencode/codexfi.jsonc) exists
  *   - Required API keys are set
  *   - Plugin is registered in OpenCode config
@@ -39,7 +39,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 	// 1. Data directory
 	checks.push(checkDataDir());
 
-	// 2. LanceDB database
+	// 2. Vector store
 	checks.push(checkDatabase());
 
 	// 3. Config file
@@ -111,20 +111,15 @@ function checkDataDir(): CheckResult {
 }
 
 function checkDatabase(): CheckResult {
-	const name = "LanceDB database";
-	const dbPath = join(DATA_DIR, "lancedb");
+	const name = "Vector store";
+	const storePath = join(DATA_DIR, "store", "store.db");
 	try {
-		if (!existsSync(dbPath)) {
+		if (!existsSync(storePath)) {
 			return { name, status: "warn", detail: "not initialized yet (will be created on first session)" };
 		}
-		// Check for the memories.lance directory (table data)
-		const tablePath = join(dbPath, "memories.lance");
-		if (existsSync(tablePath)) {
-			return { name, status: "ok", detail: dbPath };
-		}
-		return { name, status: "warn", detail: "database exists but no memories table found" };
+		return { name, status: "ok", detail: storePath };
 	} catch {
-		return { name, status: "fail", detail: "unable to check database" };
+		return { name, status: "fail", detail: "unable to check store" };
 	}
 }
 
