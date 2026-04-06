@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/prosperitypirate/codexfi/compare/v0.5.4...v0.6.0) (2026-04-06)
+
+
+### Features
+
+* **plugin:** replace LanceDB with pure TypeScript vector store ([#151](https://github.com/prosperitypirate/codexfi/issues/151)) ([e714259](https://github.com/prosperitypirate/codexfi/commit/e71425985a4ab4cea6c7352beac320d9d4809b82))
+
 ## [0.5.4](https://github.com/prosperitypirate/codexfi/compare/v0.5.3...v0.5.4) (2026-04-05)
 
 
