@@ -85,7 +85,7 @@ $ bunx codexfi status
 Status
 ──────────
   ✓ Data directory ~/.codexfi
-  ✓ Vector store ~/.codexfi/store.jsonl
+  ✓ Vector store ~/.codexfi/store/store.db
   ✓ Config file ~/.config/opencode/codexfi.jsonc
   ✓ Voyage API key set (pa-PNK...)
   ✓ Extraction API key anthropic (sk-ant...)

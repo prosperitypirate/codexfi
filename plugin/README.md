@@ -81,7 +81,7 @@ Open any project in OpenCode. Memory is silently injected into system context ev
 - **Turn 1 visibility** — auto-init reads 28 project files + recent git log and makes memories available immediately on the first turn
 - **Background enrichment** — after the first response, enriches with directory tree, entry points, and CI configs
 - **Fresh project detection** — empty directories get a `[MEMORY - NEW PROJECT]` hint to guide the agent
-- **Embedded storage** — pure TypeScript vector store at `~/.codexfi/store.jsonl`
+- **Embedded storage** — pure TypeScript SQLite WAL vector store at `~/.codexfi/store/store.db`
 - **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok (fastest), Google Gemini (native JSON) with automatic fallback
 - **Code-optimised embeddings** — Voyage `voyage-code-3` (1024 dims), purpose-built for code and technical content
 - **Always-fresh context** — `[MEMORY]` block rebuilt in system prompt every LLM call via `system.transform`
