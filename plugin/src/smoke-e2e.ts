@@ -61,7 +61,7 @@ async function main(): Promise<void> {
 	console.log("\n1. Initialization");
 	const tempDir = mkdtempSync(join(tmpdir(), "smoke-e2e-"));
 	try {
-		const dbPath = join(tempDir, "store.jsonl");
+		const dbPath = join(tempDir, "store");
 		await db.init(dbPath);
 		assert(true, "db.init() succeeded");
 

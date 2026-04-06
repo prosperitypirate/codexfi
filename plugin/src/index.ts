@@ -256,7 +256,7 @@ async function ensureInitialized(): Promise<void> {
 	await ledger.init();
 	await activityLog.init();
 	dbInitialized = true;
-	log("ensureInitialized: vector-store + nameRegistry + telemetry ready");
+	log("ensureInitialized: sqlite-store + nameRegistry + telemetry ready");
 }
 
 // ── Search wrapper ──────────────────────────────────────────────────────────────

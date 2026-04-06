@@ -112,7 +112,7 @@ function checkDataDir(): CheckResult {
 
 function checkDatabase(): CheckResult {
 	const name = "Vector store";
-	const storePath = join(DATA_DIR, "store.jsonl");
+	const storePath = join(DATA_DIR, "store", "store.db");
 	try {
 		if (!existsSync(storePath)) {
 			return { name, status: "warn", detail: "not initialized yet (will be created on first session)" };

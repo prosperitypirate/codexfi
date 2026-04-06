@@ -1,7 +1,7 @@
 /**
  * Memory store — CRUD, deduplication, aging, contradiction detection, search with recency blending.
  *
- * All operations use vector-store.ts (pure TS) via the db.ts adapter.
+ * All operations use the SQLite vector store (store/) via the db.ts adapter.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -31,7 +31,7 @@ import type { ExtractionMode, IngestResult, Message, SearchResult } from "./type
 /**
  * Cast a SearchResult (or MemoryRecord) to an opaque Record for internal helpers
  * that consume fields like `id`, `memory`, `user_id` generically without needing
- * the full vector-store type hierarchy.
+ * the full store type hierarchy.
  *
  * Why `as unknown as`: SearchResult uses Float32Array for the vector field which
  * TypeScript doesn't consider directly assignable to Record<string, unknown>.

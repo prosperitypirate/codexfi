@@ -100,7 +100,7 @@ export function DocsSessionFlow() {
       <text x="340" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">auto-save</text>
 
       <rect x="420" y="224" width="100" height="32" rx="8" className="fill-card stroke-[#a855f7]" strokeWidth="2" />
-      <text x="470" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">store.jsonl</text>
+      <text x="470" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">store.db</text>
     </svg>
   );
 }

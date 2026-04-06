@@ -22,7 +22,7 @@ import { ledger, activityLog } from "../telemetry.js";
 import { nameRegistry } from "../names.js";
 
 /**
- * Refresh all cross-process state: store (re-reads JSONL from disk), cost ledger, name registry.
+ * Refresh all cross-process state: store (SQLite WAL checkpoint), cost ledger, name registry.
  *
  * The dashboard runs as a separate Bun process from the plugin. All three data
  * sources are written to disk by the plugin and cached in memory here. Without

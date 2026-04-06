@@ -1,17 +1,17 @@
 /**
- * Unit tests for vector-store.ts — cosine similarity, CRUD, filters,
- * serialisation round-trip, and lifecycle (init/reload).
+ * Unit tests for the SQLite vector store — cosine similarity, CRUD, filters,
+ * round-trip vector encoding, and lifecycle (init/reload).
  *
- * Isolation: each test uses _resetForTests() to clear the in-memory map
- * without touching disk, so tests never interfere with each other or with
- * the real ~/.codexfi/store.jsonl.
+ * Isolation: each test uses _setStorePathForTests() to redirect to a fresh
+ * temp directory, so tests never interfere with each other or with the real
+ * ~/.codexfi/store.db.
  */
 
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import * as vs from "../../../plugin/src/vector-store.js";
+import * as vs from "../../../plugin/src/store/index.js";
 import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 import { deterministicVector } from "../helpers/mock-embedder.js";
 
@@ -46,8 +46,8 @@ function makeRecord(id: string, text: string, userId = "u1", superseded_by = "")
 
 // ── Per-test isolation ────────────────────────────────────────────────────────
 
-// Redirect to a fresh temp dir before every test so persist() never
-// touches the real ~/.codexfi/store.jsonl.
+// Redirect to a fresh temp dir before every test so writes never
+// touch the real ~/.codexfi/store.db.
 let tempDir: string;
 
 beforeEach(() => {
@@ -56,6 +56,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vs._resetForTests();
 	try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
 });
 
@@ -123,7 +124,7 @@ describe("cosine similarity", () => {
 // ── add / countRows / deleteById ──────────────────────────────────────────────
 
 describe("add / countRows / deleteById", () => {
-	test("store starts empty after _resetForTests()", () => {
+	test("store starts empty after _setStorePathForTests()", () => {
 		expect(vs.countRows()).toBe(0);
 	});
 
@@ -287,21 +288,31 @@ describe("scan filters", () => {
 	});
 });
 
-// ── Serialisation round-trip ──────────────────────────────────────────────────
+// ── Persistence & round-trip ─────────────────────────────────────────────────
 
-describe("serialisation (init / reload)", () => {
-	test("bulkAdd + _resetForTests() clears state", () => {
+describe("persistence (SQLite round-trip)", () => {
+	test("data persists after _resetForTests + re-open", () => {
 		vs.add([
 			makeRecord("persist-1", "persisted memory one"),
 			makeRecord("persist-2", "persisted memory two"),
 		]);
 		expect(vs.countRows()).toBe(2);
+
+		// Reset and re-open the SAME database
 		vs._resetForTests();
-		vs._setStorePathForTests(tempDir); // keep path pointed at temp after reset
-		expect(vs.countRows()).toBe(0);
+		vs._setStorePathForTests(tempDir);
+		expect(vs.countRows()).toBe(2);
 	});
 
-	test("vectors survive float32 conversion", () => {
+	test("_resetForTests() clears access to data", () => {
+		vs.add([makeRecord("reset-me", "should be inaccessible")]);
+		expect(vs.countRows()).toBe(1);
+		vs._resetForTests();
+		// After reset, DB is closed — operations should throw
+		expect(() => vs.countRows()).toThrow();
+	});
+
+	test("vectors survive Float32Array → BLOB → Float32Array conversion", () => {
 		const originalVector = deterministicVector("vector round trip test");
 		const rec = makeRecord("vec-test", "vector round trip test");
 		vs.add([rec]);
@@ -315,7 +326,7 @@ describe("serialisation (init / reload)", () => {
 		}
 	});
 
-	test("superseded_by field is preserved in-memory", () => {
+	test("superseded_by field is preserved", () => {
 		vs.add([
 			makeRecord("mem-a", "memory a", "u1", ""),
 			makeRecord("mem-b", "memory b", "u1", "mem-a"),
@@ -330,12 +341,5 @@ describe("serialisation (init / reload)", () => {
 		const countBefore = vs.countRows();
 		vs.init(); // second call should be a no-op (initialised flag is set)
 		expect(vs.countRows()).toBe(countBefore);
-	});
-
-	test("_resetForTests() clears map and resets init flag", () => {
-		vs.add([makeRecord("reset-me", "should be cleared")]);
-		expect(vs.countRows()).toBe(1);
-		vs._resetForTests();
-		expect(vs.countRows()).toBe(0);
 	});
 });

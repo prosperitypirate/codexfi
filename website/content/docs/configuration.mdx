@@ -171,10 +171,14 @@ Custom patterns are appended to the built-in list:
 
 ## Data storage
 
-All memory data is stored locally at `~/.codexfi/store.jsonl`. This is a pure TypeScript vector store — no native dependencies, no external process required.
+All memory data is stored locally at `~/.codexfi/store/store.db` — a SQLite database with WAL mode. No external dependencies, no server process, no cloud sync.
 
 | Path | Contents |
 |------|----------|
-| `~/.codexfi/store.jsonl` | Vector store (all memories with embeddings) |
+| `~/.codexfi/store/store.db` | SQLite database (all memories with vector embeddings) |
+| `~/.codexfi/store/store.db-wal` | Write-ahead log (auto-managed by SQLite) |
+| `~/.codexfi/store/store.db-shm` | Shared memory index (auto-managed by SQLite) |
 | `~/.codexfi.log` | Plugin log file |
 | `~/.config/opencode/codexfi.jsonc` | Configuration file |
+
+The WAL and SHM files are created automatically when the database is opened and cleaned up when the last connection closes. They enable concurrent reads from multiple agents without blocking.

@@ -87,11 +87,27 @@ This means memory is never lost to compaction.
 
 | Component | Technology |
 |-----------|-----------|
-| Storage | Pure TypeScript vector store — JSONL on disk, brute-force cosine similarity, zero native dependencies |
+| Storage | SQLite with WAL mode (`bun:sqlite`) — zero npm dependencies, multi-agent safe, ACID transactions |
+| Search | Exact nearest neighbor cosine similarity over Float32Array BLOBs |
 | Embeddings | [Voyage AI](https://www.voyageai.com/) `voyage-code-3` — 1024 dimensions |
 | Extraction | Multi-provider LLM (Anthropic/xAI/Google) with automatic fallback |
 | Runtime | [Bun](https://bun.sh/) |
 | Validation | [Zod](https://zod.dev/) schemas for memory records |
+
+### Why SQLite?
+
+codexfi originally used LanceDB for vector storage. LanceDB is excellent software, but its native NAPI bindings broke on OpenCode Desktop auto-updates — users got cryptic module loading errors with no workaround. We replaced it with `bun:sqlite`, which is built into the Bun runtime (like `node:fs` is built into Node) — zero npm packages, zero native binaries, zero breakage on updates.
+
+SQLite with WAL (Write-Ahead Logging) also solves multi-agent concurrency. Many developers run multiple OpenCode agents simultaneously. WAL mode allows 100+ concurrent readers without blocking, with writers safely queued via `busy_timeout`. This was validated with stress tests spawning 20+ real OS processes hitting the same database file — zero data loss, zero corruption.
+
+| | LanceDB | SQLite WAL | JSONL (interim) |
+|---|---|---|---|
+| Concurrent reads | Yes | 100+ readers, zero blocking | Stale data |
+| Concurrent writes | Untested with multi-process | Single writer, others queue safely | Data loss |
+| Native dependencies | NAPI binary (broke on updates) | None (built into Bun) | None |
+| Storage size (3.5k records) | ~35MB | ~35MB | ~93MB |
+| Search at 50k records | ~2ms (indexed) | ~20ms (exact NN) | ~20ms (exact NN) |
+| Crash recovery | Lance format | Full ACID | Atomic rename only |
 
 ## File structure
 
@@ -101,8 +117,16 @@ plugin/src/
 ├── config.ts         — centralized constants, pricing, thresholds
 ├── types.ts          — Zod schemas for memory records
 ├── prompts.ts        — all LLM prompt templates
-├── db.ts             — vector store init/adapter
-├── store.ts          — CRUD, dedup, aging, contradiction, search with recency blending
+├── db.ts             — thin adapter (imports from store/)
+├── store.ts          — business logic: dedup, aging, contradiction, search with recency blending
+├── store/            — SQLite persistence layer
+│   ├── index.ts      — public API (add, search, scan, update, delete, init, reload)
+│   ├── sqlite.ts     — connection management, WAL config, pragmas
+│   ├── schema.ts     — CREATE TABLE, indexes
+│   ├── crud.ts       — add, update, deleteById, getById, scan, countRows
+│   ├── search.ts     — vector search with cosine scoring + filters
+│   ├── cosine.ts     — Float32Array cosine distance (pure math)
+│   └── types.ts      — MemoryRecord, SearchResult, FilterOptions
 ├── extractor.ts      — multi-provider extraction with fallback and retry
 ├── embedder.ts       — Voyage AI embedding via fetch
 ├── retry.ts          — exponential backoff with jitter

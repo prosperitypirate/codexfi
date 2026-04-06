@@ -33,27 +33,32 @@ The 13 E2E scenarios test the behaviors you rely on as a user:
 
 <DocsE2eScenarioMap />
 
-Run against `plugin/` (embedded vector store) — 2026-03-07.
+Run against `feat/pure-ts-vector-store` branch (SQLite WAL store) — 2026-04-06.
 
 ```
-PASS  01  Cross-Session Memory Continuity
-PASS  02  README-Based Project-Brief Seeding
-PASS  03  Transcript Noise Guard
-PASS  04  Project Brief Always Present
-PASS  05  Memory Aging
-PASS  06  Existing Codebase Auto-Init
-PASS  07  Enumeration Hybrid Retrieval
-PASS  08  Cross-Synthesis (isWideSynthesis)
-WARN  09  maxMemories=20 Under Load
-PASS  10  Knowledge Update / Superseded
-PASS  11  System Prompt Memory Injection
-PASS  12  Multi-Turn Per-Turn Refresh
-PASS  13  Auto-Init Turn 1 Visibility + Enrichment
-
-12/13 PASS
+Unit:        139 pass, 0 fail   (~1s)
+Integration:  31 pass, 0 fail   (~3s)
+Stress:        3 pass, 0 fail   (~1s)
+E2E:       12/13 pass           (~10min)
 ```
 
-Scenario 09 (`maxMemories=20 Under Load`) shows a `WARN` rather than a `PASS`. This is a non-deterministic margin issue — not a regression. The extraction LLM consolidates conversation facts differently on each run, so the number of memories produced by a fixed set of sessions varies. The K=20 retrieval depth is correct; the test assertion can be missed when extraction yields fewer memories than expected. The underlying feature (early-session recall under load) works correctly.
+```
+FAIL  01  Cross-Session Memory Continuity       17.5s
+PASS  02  README-Based Project-Brief Seeding    14.9s
+PASS  03  Transcript Noise Guard                15.0s
+PASS  04  Project Brief Always Present          19.5s
+PASS  05  Memory Aging                          50.3s
+PASS  06  Existing Codebase Auto-Init           68.1s
+PASS  07  Enumeration Hybrid Retrieval          38.2s
+PASS  08  Cross-Synthesis (isWideSynthesis)     54.9s
+PASS  09  maxMemories=20 Under Load            176.9s
+PASS  10  Knowledge Update / Superseded         67.3s
+PASS  11  System Prompt Memory Injection        23.2s
+PASS  12  Multi-Turn Per-Turn Refresh           59.2s
+PASS  13  Auto-Init Turn 1 Visibility           24.0s
+```
+
+Scenario 01 failure is extraction variance — the agent recalled all tech facts correctly but said "a CLI task management tool" instead of the project name "taskflow". Previous solo run passed. Not a store bug.
 
 ---
 
@@ -63,11 +68,14 @@ The sections below cover the test architecture and how to run each tier locally.
 
 ### Test tiers
 
-| Tier | What runs | Speed |
-|---|---|---|
-| **Unit** | Isolated logic — dedup, aging, extraction parsing, config loading | Seconds |
-| **Integration** | Real vector store + real embedder against a test store | ~30s |
-| **E2E** | Real `opencode` processes, real memory store, 13 autonomous scenarios | ~5–10 min |
+| Tier | Tests | What runs | Speed |
+|---|---|---|---|
+| **Unit** | 139 | Cosine math, CRUD, filters, serialisation, dedup, aging, extraction parsing | ~1s |
+| **Integration** | 31 | Real SQLite store + real Voyage AI embedder against a test database | ~3s |
+| **Stress** | 3 | 20 real OS processes hitting the same SQLite file — concurrent writes, reads, and mixed | ~1s |
+| **E2E** | 13 | Real `opencode` agent sessions, real memory store, 13 autonomous scenarios | ~10 min |
+
+The stress tests validate multi-agent safety — the scenario where multiple OpenCode agents read and write the same `store.db` simultaneously. Each test spawns real child processes (not async within one process) to match the actual deployment pattern.
 
 ### Running unit and integration tests
 

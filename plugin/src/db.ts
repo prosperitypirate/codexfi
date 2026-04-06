@@ -1,10 +1,10 @@
 /**
- * db.ts — thin adapter over vector-store.ts.
+ * db.ts — thin adapter over the SQLite vector store.
  *
- * All plugin code goes through this module to reach the pure TS vector store.
+ * All plugin code goes through this module to reach the store.
  */
 
-import * as vs from "./vector-store.js";
+import * as vs from "./store/index.js";
 
 export async function init(storePath?: string): Promise<void> {
 	if (storePath) {
@@ -14,7 +14,7 @@ export async function init(storePath?: string): Promise<void> {
 	vs.init();
 }
 
-/** Reload store from disk — picks up writes from other processes (e.g. plugin → dashboard). */
+/** Reload store — runs a WAL checkpoint to pick up writes from other processes. */
 export async function refresh(): Promise<void> {
 	vs.reload();
 }

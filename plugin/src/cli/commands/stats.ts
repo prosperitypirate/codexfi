@@ -53,7 +53,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 	}
 
 	// Store size on disk
-	const dbSize = getFileSize(join(DATA_DIR, "store.jsonl"));
+	const dbSize = getFileSize(join(DATA_DIR, "store", "store.db"));
 
 	// JSON output mode
 	if (jsonOutput) {

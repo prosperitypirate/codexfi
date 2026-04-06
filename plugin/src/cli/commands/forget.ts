@@ -72,7 +72,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 // ── Prefix resolution ───────────────────────────────────────────────────────────
 
-import type { MemoryRecord } from "../../vector-store.js";
+import type { MemoryRecord } from "../../store/types.js";
 
 /**
  * Resolve a short ID prefix to a full memory record.

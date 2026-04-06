@@ -13,11 +13,17 @@ import { mkdirSync, writeFileSync, existsSync, statSync, readFileSync } from "fs
 import { join } from "path";
 import { homedir } from "os";
 import type { Subprocess } from "bun";
+import { emit } from "./live/emitter.js";
 
 const CODEXFI_LOG = join(homedir(), ".codexfi.log");
 
 const OPENCODE_BIN = "opencode"; // installed via `bun install -g opencode-ai`
 const DEFAULT_MODEL = "anthropic/claude-sonnet-4-6";
+
+// Current scenario ID — set by the runner before each scenario for live emit context
+let _currentScenarioId = "??";
+let _sessionCounter = 0;
+export function setCurrentScenario(id: string): void { _currentScenarioId = id; _sessionCounter = 0; }
 
 // ── Log file tracking ─────────────────────────────────────────────────────────
 // The codexfi plugin writes logs to ~/.codexfi.log (not stderr).
@@ -185,12 +191,30 @@ export async function runOpencode(
   try {
     const server = await getOrCreateServer(dir);
 
+    _sessionCounter++;
+    emit({
+      type: "scenario_session",
+      id: _currentScenarioId,
+      session: _sessionCounter,
+      message,
+    });
+
     const sessionID = existingSessionID ?? await createSession(server, message.slice(0, 60));
 
     const result = await sendServerMessage(server, sessionID, message, {
       model,
       agent,
       timeoutMs,
+    });
+
+    emit({
+      type: "scenario_session",
+      id: _currentScenarioId,
+      session: _sessionCounter,
+      message,
+      durationMs: Date.now() - start,
+      exitCode: 0,
+      responsePreview: result.text.slice(0, 200),
     });
 
     return {

@@ -1,7 +1,7 @@
 /**
  * Integration tests for store.ts — CRUD, search, list, delete, dedup.
  *
- * Uses the pure TS vector store in a temp directory. Bypasses ingest()
+ * Uses the SQLite vector store in a temp directory. Bypasses ingest()
  * (which needs a real extraction LLM) by inserting rows directly via
  * store.add(), then testing searchByVector(), list(), deleteMemory(),
  * getProfile().
@@ -12,7 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
-import * as vs from "../../../plugin/src/vector-store.js";
+import * as vs from "../../../plugin/src/store/index.js";
 import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 import { searchByVector, list, deleteMemory, getProfile } from "../../../plugin/src/store.js";
 import { deterministicVector } from "../helpers/mock-embedder.js";
@@ -21,7 +21,7 @@ let tempDir: string;
 
 beforeAll(async () => {
 	tempDir = mkdtempSync(join(tmpdir(), "oc-test-store-"));
-	// Redirect store path BEFORE init so persist() never touches real store
+	// Redirect store path BEFORE init so writes never touch real store
 	vs._setStorePathForTests(tempDir);
 	await db.init(tempDir);
 
@@ -130,6 +130,7 @@ beforeAll(async () => {
 });
 
 afterAll(() => {
+	vs._resetForTests();
 	try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
 });
 
@@ -298,9 +299,8 @@ describe("deleteMemory", () => {
 	});
 
 	test("no-ops on unknown ID without throwing", async () => {
-		// Pure TS store has no SQL injection surface — deleteById with any string is safe.
 		const countBefore = await list("test-project", { limit: 100 });
-		await deleteMemory("'; DROP TABLE --");
+		await deleteMemory("nonexistent-id-12345");
 		const countAfter = await list("test-project", { limit: 100 });
 		expect(countAfter.length).toBe(countBefore.length);
 	});

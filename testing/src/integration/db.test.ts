@@ -1,10 +1,9 @@
 /**
- * Integration tests for db.ts — pure TS vector store initialization and refresh.
+ * Integration tests for db.ts — SQLite vector store initialization and refresh.
  *
- * getTable() / getDb() no longer exist. db.ts is now a thin
- * wrapper over vector-store.ts. These tests verify init(), refresh(), and that
- * the underlying store functions (add, countRows, deleteById) work correctly
- * through the adapter.
+ * db.ts is a thin wrapper over store/index.ts. These tests verify init(),
+ * refresh(), and that the underlying store functions (add, countRows,
+ * deleteById) work correctly through the adapter.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -68,7 +67,7 @@ describe("store via db adapter", () => {
 	});
 
 	test("vector dimension mismatch does not crash — stored as-is", () => {
-		// Pure TS store does not validate dimensions — it stores whatever is given.
+		// SQLite store does not validate dimensions — it stores whatever is given.
 		// Dimension validation happens at embed time, not store time.
 		const now = new Date().toISOString();
 		expect(() => {

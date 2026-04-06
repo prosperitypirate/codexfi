@@ -8,7 +8,7 @@ export function DocsExtractionPipeline() {
     { y: 96, n: 2, name: "LLM Extraction", sub: "returns JSON facts", color: "#a855f7" },
     { y: 152, n: 3, name: "Embedding", sub: "voyage-code-3, 1024d", color: "#a855f7" },
     { y: 208, n: 4, name: "Deduplication", sub: "cosine similarity check", color: "#c084fc" },
-    { y: 264, n: 5, name: "Storage", sub: "insert into store.jsonl", color: "#a855f7" },
+    { y: 264, n: 5, name: "Storage", sub: "insert into store.db", color: "#a855f7" },
     { y: 320, n: 6, name: "Aging Rules", sub: "progress / summaries", color: "#c084fc" },
     { y: 376, n: 7, name: "Contradiction Detection", sub: "supersede stale facts", color: "#e879f9" },
   ];
