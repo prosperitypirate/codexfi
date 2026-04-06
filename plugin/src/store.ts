@@ -2,7 +2,6 @@
  * Memory store — CRUD, deduplication, aging, contradiction detection, search with recency blending.
  *
  * All operations use vector-store.ts (pure TS) via the db.ts adapter.
- * No LanceDB dependency.
  */
 
 import { createHash, randomUUID } from "node:crypto";
@@ -62,6 +61,9 @@ async function findDuplicate(
 		});
 
 		if (results.length > 0 && results[0]!._distance <= distanceThreshold) {
+			// Cast: SearchResult is a typed superset of Record<string, unknown>.
+			// The rest of store.ts consumes these as opaque records (id, memory, etc.)
+			// to avoid coupling internal helpers to the vector-store type hierarchy.
 			return results[0] as unknown as Record<string, unknown>;
 		}
 	} catch (e) {
@@ -96,6 +98,7 @@ async function findContradictionCandidates(
 
 		return results
 			.filter(r => r._distance <= maxDistance)
+			// Cast: same rationale as findDuplicate — opaque record bridge.
 			.map(r => r as unknown as Record<string, unknown>);
 	} catch (e) {
 		console.debug("findContradictionCandidates error:", e);

@@ -1,14 +1,14 @@
 /**
  * vector-store.ts
  *
- * Pure TypeScript replacement for LanceDB. Zero native dependencies.
+ * Pure TypeScript vector store. Zero native dependencies.
  *
  * Storage: ~/.codexfi/store.jsonl  (one MemoryRecord per line)
  * In-memory: Map<id, MemoryRecord> loaded on init, kept in sync on every write.
  * Search: brute-force cosine similarity over Float32Array vectors.
  *
  * Why Float32Array:
- *   - Same precision as LanceDB (32-bit floats)
+ *   - 32-bit float precision (matches what Voyage AI embeddings need)
  *   - V8 optimises typed array arithmetic — cosine over 1024 dims ≈ 0.01ms
  *   - At 3k records × 1024 dims ≈ 12MB RAM  (acceptable for a desktop plugin)
  *   - At 50k records × 1024 dims ≈ 200MB RAM (future concern, swap to HNSW then)
@@ -69,8 +69,8 @@ export interface FilterOptions {
 
 // ── Store path ───────────────────────────────────────────────────────────────────
 
-const STORE_PATH = join(DATA_DIR, "store.jsonl");
-const STORE_TMP = join(DATA_DIR, "store.jsonl.tmp");
+let STORE_PATH = join(DATA_DIR, "store.jsonl");
+let STORE_TMP  = join(DATA_DIR, "store.jsonl.tmp");
 
 // ── In-memory map ────────────────────────────────────────────────────────────────
 
@@ -81,7 +81,6 @@ let initialised = false;
 
 /**
  * Cosine distance (0 = identical, 2 = opposite) between two Float32Arrays.
- * Matches LanceDB's distanceType("cosine") convention.
  */
 function cosineDistance(a: Float32Array, b: Float32Array): number {
 	let dot = 0;
@@ -92,7 +91,9 @@ function cosineDistance(a: Float32Array, b: Float32Array): number {
 		normA += a[i]! * a[i]!;
 		normB += b[i]! * b[i]!;
 	}
-	if (normA === 0 || normB === 0) return 1; // treat zero-vectors as fully dissimilar
+	// Zero-vector guard: return max distance (1) instead of NaN.
+	// Treats zero-vectors as fully dissimilar — safe default.
+	if (normA === 0 || normB === 0) return 1;
 	return 1 - dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
@@ -198,7 +199,7 @@ export function deleteById(id: string): void {
 
 /**
  * Vector search — returns up to `limit` records sorted by cosine distance ascending,
- * optionally filtered. Matches LanceDB's .search(vector).distanceType("cosine").
+ * optionally filtered.
  */
 export function search(
 	queryVector: number[] | Float32Array,
@@ -216,8 +217,8 @@ export function search(
 	for (const rec of records.values()) {
 		if (filter) {
 			if (filter.user_id !== undefined && rec.user_id !== filter.user_id) continue;
-			if (filter.superseded_by !== undefined && rec.superseded_by !== "") continue;
-			if (filter.excludeId !== undefined && rec.id === filter.excludeId) continue;
+		if (filter.superseded_by !== undefined && rec.superseded_by !== filter.superseded_by) continue;
+		if (filter.excludeId !== undefined && rec.id === filter.excludeId) continue;
 		}
 		const dist = cosineDistance(qv, rec.vector);
 		candidates.push({ rec, dist });
@@ -233,7 +234,7 @@ export function search(
 
 /**
  * Pure filter scan — no vector, no similarity ranking.
- * Replaces the zero-vector hack used in LanceDB for list/getMemoriesByTypes.
+ * Used for list/getMemoriesByTypes queries that don't need ranking.
  */
 export function scan(
 	filter: FilterOptions,
@@ -244,7 +245,7 @@ export function scan(
 
 	for (const rec of records.values()) {
 		if (filter.user_id !== undefined && rec.user_id !== filter.user_id) continue;
-		if (filter.superseded_by !== undefined && rec.superseded_by !== "") continue;
+		if (filter.superseded_by !== undefined && rec.superseded_by !== filter.superseded_by) continue;
 		if (filter.excludeId !== undefined && rec.id === filter.excludeId) continue;
 		results.push(rec);
 		if (results.length >= limit) break;
@@ -261,4 +262,26 @@ export function getById(id: string): MemoryRecord | undefined {
 /** Expose the raw map for migration/export tooling only. */
 export function _allRecords(): ReadonlyMap<string, MemoryRecord> {
 	return records;
+}
+
+/**
+ * Reset in-memory state without touching disk.
+ * FOR TESTS ONLY — clears the map and resets the initialised flag so
+ * init() will re-read from disk on the next call.
+ */
+export function _resetForTests(): void {
+	records.clear();
+	initialised = false;
+}
+
+/**
+ * Redirect store persistence to a custom path.
+ * FOR TESTS ONLY — call before any add/update/delete to avoid writing
+ * to the real ~/.codexfi/store.jsonl.
+ */
+export function _setStorePathForTests(dir: string): void {
+	STORE_PATH = join(dir, "store.jsonl");
+	STORE_TMP  = join(dir, "store.jsonl.tmp");
+	records.clear();
+	initialised = false;
 }

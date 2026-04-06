@@ -1,8 +1,7 @@
 /**
- * db.ts — pure TS vector store (replaces LanceDB).
+ * db.ts — thin adapter over vector-store.ts.
  *
- * This module is the only place that touches vector-store.ts.
- * store.ts calls init() once and then uses the exported functions directly.
+ * All plugin code goes through this module to reach the pure TS vector store.
  */
 
 import * as vs from "./vector-store.js";

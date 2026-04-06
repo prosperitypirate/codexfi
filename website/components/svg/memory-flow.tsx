@@ -251,13 +251,13 @@ export function MemoryFlowSVG() {
         <text x="85" y="326" className="fill-muted-foreground" fontSize="10" fontFamily="var(--font-mono, monospace)">Type a message...</text>
       </g>
 
-      {/* RIGHT: VECTOR DATABASE (LanceDB) */}
+      {/* RIGHT: VECTOR DATABASE (pure TS) */}
       <g>
         <rect x="700" y="40" width="250" height="310" rx="12" className="fill-card stroke-border" strokeWidth="1.5" />
         
         {/* DB Top Bar */}
         <path d="M 700 52 Q 700 40 712 40 L 938 40 Q 950 40 950 52 L 950 64 L 700 64 Z" className="fill-muted" />
-        <text x="825" y="55" textAnchor="middle" className="fill-foreground" fontSize="12" fontWeight="600">LanceDB Vector Store</text>
+        <text x="825" y="55" textAnchor="middle" className="fill-foreground" fontSize="12" fontWeight="600">Vector Store (JSONL)</text>
 
         {/* Hexagon Grid Cluster (Embeddings) */}
         <g transform="translate(787, 117.5)">
@@ -299,7 +299,7 @@ export function MemoryFlowSVG() {
         <circle cx="760" cy="285" r="4" fill="#4ade80" filter="url(#glow-green)" />
         <text x="775" y="289" className="fill-foreground" fontSize="11" fontWeight="600">Storage Active</text>
         <text x="750" y="308" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">DIMENSIONS: 1024</text>
-        <text x="750" y="320" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">INDEX: HNSW</text>
+        <text x="750" y="320" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">INDEX: COSINE</text>
       </g>
     </svg>
   );

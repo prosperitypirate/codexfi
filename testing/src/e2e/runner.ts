@@ -63,10 +63,10 @@ async function main() {
   const backendReady = await isBackendReady();
   if (!backendReady) {
     console.error(`${RED}✗ Embedded memory store failed to initialize${RESET}`);
-    console.error("  Check that VOYAGE_API_KEY is set and LanceDB is working");
+    console.error("  Check that VOYAGE_API_KEY is set and the store is accessible");
     process.exit(1);
   }
-  console.log("  ✓ Embedded memory store ready (LanceDB)");
+  console.log("  ✓ Embedded memory store ready");
 
   // Verify opencode CLI is available
   const probe = Bun.spawn(["opencode", "--version"], {

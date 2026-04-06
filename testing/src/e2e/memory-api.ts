@@ -1,8 +1,7 @@
 /**
  * memory-api.ts — typed client for verifying memory state in tests.
  *
- * REWRITTEN for plugin: uses embedded LanceDB store directly instead of
- * HTTP calls to the Docker backend at localhost:8020.
+ * Uses the embedded pure TS vector store directly instead of HTTP calls.
  *
  * The public API surface is identical — test scenarios import the same
  * functions with the same signatures. Only the internals changed from
@@ -17,7 +16,7 @@ import * as store from "../../../plugin/src/store.js";
 
 const PREFIX = "opencode";
 
-// Track whether we've initialized LanceDB for this test process
+// Track whether we've initialized the store for this test process
 let initialized = false;
 
 async function ensureInit(): Promise<void> {
@@ -163,8 +162,8 @@ export async function searchMemories(
 }
 
 /**
- * "Health check" — for the embedded store, this always returns true once
- * LanceDB is initialized. Replaces the HTTP /health check.
+ * "Health check" — always returns true once the embedded store is initialized.
+ * Replaces the HTTP /health check from the old Docker backend.
  */
 export async function isBackendReady(): Promise<boolean> {
 	try {

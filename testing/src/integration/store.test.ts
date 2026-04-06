@@ -1,9 +1,10 @@
 /**
  * Integration tests for store.ts — CRUD, search, list, delete, dedup.
  *
- * Uses real LanceDB in a temp directory. Bypasses ingest() (which needs
- * a real extraction LLM) by inserting rows directly into the table,
- * then testing searchByVector(), list(), deleteMemory(), getProfile().
+ * Uses the pure TS vector store in a temp directory. Bypasses ingest()
+ * (which needs a real extraction LLM) by inserting rows directly via
+ * store.add(), then testing searchByVector(), list(), deleteMemory(),
+ * getProfile().
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -11,6 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
+import * as vs from "../../../plugin/src/vector-store.js";
 import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
 import { searchByVector, list, deleteMemory, getProfile } from "../../../plugin/src/store.js";
 import { deterministicVector } from "../helpers/mock-embedder.js";
@@ -19,13 +21,14 @@ let tempDir: string;
 
 beforeAll(async () => {
 	tempDir = mkdtempSync(join(tmpdir(), "oc-test-store-"));
+	// Redirect store path BEFORE init so persist() never touches real store
+	vs._setStorePathForTests(tempDir);
 	await db.init(tempDir);
 
 	// Seed test data — 5 memories for "test-project", 2 for "other-project"
-	const table = db.getTable();
 	const now = new Date().toISOString();
 
-	await table.add([
+	db.store.add([
 		{
 			id: "mem-1",
 			memory: "Authentication uses JWT tokens stored in httpOnly cookies",
@@ -264,16 +267,16 @@ describe("list", () => {
 
 describe("deleteMemory", () => {
 	test("deletes a memory by ID", async () => {
-		// Add a throwaway memory, then delete it
-		const table = db.getTable();
-		await table.add([{
+		// Add a throwaway memory directly via db.store.add(), then delete it
+		const now = new Date().toISOString();
+		db.store.add([{
 			id: "mem-delete-test",
 			memory: "To be deleted",
 			user_id: "test-project",
 			vector: new Array(EMBEDDING_DIMS).fill(0),
 			metadata_json: "{}",
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
+			created_at: now,
+			updated_at: now,
 			hash: "deleteme",
 			chunk: "",
 			superseded_by: "",
@@ -288,8 +291,12 @@ describe("deleteMemory", () => {
 		expect(ids).not.toContain("mem-delete-test");
 	});
 
-	test("rejects invalid ID", async () => {
-		await expect(deleteMemory("'; DROP TABLE --")).rejects.toThrow("Invalid memory_id");
+	test("no-ops on unknown ID without throwing", async () => {
+		// Pure TS store has no SQL injection surface — deleteById with any string is safe.
+		const countBefore = await list("test-project", { limit: 100 });
+		await deleteMemory("'; DROP TABLE --");
+		const countAfter = await list("test-project", { limit: 100 });
+		expect(countAfter.length).toBe(countBefore.length);
 	});
 });
 

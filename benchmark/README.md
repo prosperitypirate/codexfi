@@ -205,7 +205,7 @@ Ingest total: 353.8s (25 sessions) · ~13.6s/session mean · Total run time: 30m
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **Pure TS vector store** (zero native deps)
 >
-> Validation run for the LanceDB → pure TypeScript vector store migration. Retrieval-sensitive categories
+> Validation run confirming the pure TypeScript vector store migration. Retrieval-sensitive categories
 > (pref/tech/abstain/arch) match or exceed embedded-v4, confirming cosine similarity parity. Regression
 > in knowledge-update (60%) and synthesis (64%) is extraction variance — identical pattern to haiku-run3.
 
@@ -593,9 +593,9 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 
 ## Version History
 
-### embedded-v5 (run `embedded-v5`) — **85.5%** · Pure TS vector store (LanceDB removed) · extractor: Anthropic Haiku 4.5 · 25m 22s
+### embedded-v5 (run `embedded-v5`) — **85.5%** · Pure TS vector store · extractor: Anthropic Haiku 4.5 · 25m 22s
 
-200 questions, 25 sessions. Validation run for the LanceDB → pure TypeScript vector store migration. Retrieval-sensitive categories confirm parity: pref 100%, tech 96%, abstain 96%, arch 92%. Regression in knowledge-update (60%) and synthesis (64%) is extraction variance — same nondeterministic pattern as haiku-run3 (93.5%) and haiku-run1 (92.0%). The store and cosine similarity pipeline are confirmed correct. Key fixes in this release: `db.refresh()` now reloads from disk (fixes cross-process reads for dashboard), `activityLog.init()` + `ledger.init()` added to benchmark provider (fixes API activity visibility).
+200 questions, 25 sessions. Validation run confirming the pure TypeScript vector store migration. Retrieval-sensitive categories confirm parity: pref 100%, tech 96%, abstain 96%, arch 92%. Regression in knowledge-update (60%) and synthesis (64%) is extraction variance — same nondeterministic pattern as haiku-run3 (93.5%) and haiku-run1 (92.0%). The store and cosine similarity pipeline are confirmed correct. Key fixes in this release: `db.refresh()` now reloads from disk (fixes cross-process reads for dashboard), `activityLog.init()` + `ledger.init()` added to benchmark provider (fixes API activity visibility).
 
 ### embedded-v4 (run `embedded-v4`) — **94.5%** · Embedded pure TS vector store · extractor: Anthropic Haiku 4.5
 
