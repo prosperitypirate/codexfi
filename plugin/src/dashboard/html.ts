@@ -391,6 +391,7 @@ body {
 }
 .badge-project-brief   { color: var(--blue-400);    background: var(--blue-500-15);    border-color: var(--blue-500-30); }
 .badge-architecture    { color: var(--purple-400);  background: var(--purple-500-15);  border-color: var(--purple-500-30); }
+.badge-architecture-pattern { color: var(--purple-400); background: var(--purple-500-15); border-color: var(--purple-500-30); }
 .badge-tech-context    { color: var(--cyan-400);    background: var(--cyan-500-15);    border-color: var(--cyan-500-30); }
 .badge-product-context { color: var(--emerald-400); background: var(--emerald-500-15); border-color: var(--emerald-500-30); }
 .badge-progress        { color: var(--amber-400);   background: var(--amber-500-15);   border-color: var(--amber-500-30); }
@@ -399,6 +400,7 @@ body {
 .badge-preference      { color: var(--pink-400);    background: var(--pink-500-15);    border-color: var(--pink-500-30); }
 .badge-learned-pattern { color: var(--indigo-400);  background: var(--indigo-500-15);  border-color: var(--indigo-500-30); }
 .badge-project-config  { color: var(--text-400);    background: var(--zinc-500-15);    border-color: var(--zinc-500-30); }
+.badge-active-context  { color: var(--amber-400);   background: var(--amber-500-15);   border-color: var(--amber-500-30); }
 .badge-unknown         { color: var(--text-400);    background: var(--zinc-500-15);    border-color: var(--zinc-500-30); }
 
 /* Scope badges */
@@ -813,9 +815,9 @@ let detailSearch = "";
 // ── Constants ───────────────────────────────────────────────────────────────────
 
 const ALL_TYPES = [
-	"project-brief", "architecture", "tech-context", "product-context",
+	"project-brief", "architecture", "architecture-pattern", "tech-context", "product-context",
 	"progress", "session-summary", "error-solution", "preference",
-	"learned-pattern", "project-config",
+	"learned-pattern", "project-config", "active-context",
 ];
 
 const API_LABELS = { xai: "xAI", anthropic: "Anthropic", google: "Google", voyage: "Voyage" };

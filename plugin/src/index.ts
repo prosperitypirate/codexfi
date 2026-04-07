@@ -939,6 +939,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 						.enum([
 							"project-brief",
 							"architecture",
+							"architecture-pattern",
 							"tech-context",
 							"product-context",
 							"session-summary",
@@ -947,6 +948,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							"error-solution",
 							"preference",
 							"learned-pattern",
+							"active-context",
 							"conversation",
 						])
 						.optional(),
@@ -988,6 +990,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 									types: [
 										"project-brief",
 										"architecture",
+										"architecture-pattern",
 										"tech-context",
 										"product-context",
 										"session-summary",
@@ -996,6 +999,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 										"error-solution",
 										"preference",
 										"learned-pattern",
+										"active-context",
 										"conversation",
 									],
 								});
