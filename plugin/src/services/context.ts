@@ -3,6 +3,7 @@
  * Zero network calls, zero side effects — pure formatting.
  */
 
+import { SIMILARITY_THRESHOLD } from "../config.js";
 import { PLUGIN_CONFIG } from "../plugin-config.js";
 
 export interface StructuredMemory {
@@ -154,7 +155,7 @@ export function formatContextForPrompt(
 			const dateTag = mem.date ? `, ${mem.date}` : "";
 			parts.push(`- [${pct}%${dateTag}] ${content}`);
 			const snippet = mem.chunk?.trim();
-			if (snippet && snippet !== content && mem.similarity >= 0.55) {
+			if (snippet && snippet !== content && mem.similarity >= SIMILARITY_THRESHOLD) {
 				const isTranscript =
 					snippet.startsWith("[assistant]") || snippet.startsWith("[user]");
 				if (!isTranscript) {
