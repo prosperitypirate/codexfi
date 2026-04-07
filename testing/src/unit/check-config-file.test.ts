@@ -6,12 +6,11 @@
  * API key checks, which would silently pass with stale cached values.
  *
  * These tests verify:
- * 1. Returns { status: "ok" } when codexfi.jsonc exists in CONFIG_DIR
- * 2. Returns { status: "ok" } when codexfi.json exists in CONFIG_DIR
- * 3. Returns { status: "fail" } when neither file exists
- * 4. The fail result contains an actionable message referencing codexfi install
- * 5. The ok result detail is the resolved file path
- * 6. The check name is "Config file"
+ * 1. Returns { status: "ok" } when codexfi.jsonc exists in CONFIG_DIR (~/.codexfi/)
+ * 2. Returns { status: "fail" } when codexfi.jsonc does not exist
+ * 3. The fail result contains an actionable message referencing codexfi install
+ * 4. The ok result detail is the resolved file path
+ * 5. The check name is "Config file"
  *
  * Strategy: write real temp files into CONFIG_DIR (same pattern as
  * plugin-config.test.ts), restore state in afterAll.
@@ -19,7 +18,6 @@
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { checkConfigFile } from "../../../plugin/src/cli/commands/status.js";
@@ -28,7 +26,6 @@ import { CONFIG_DIR } from "../../../plugin/src/plugin-config.js";
 // ── Paths ────────────────────────────────────────────────────────────────────────
 
 const CODEXFI_JSONC = join(CONFIG_DIR, "codexfi.jsonc");
-const CODEXFI_JSON  = join(CONFIG_DIR, "codexfi.json");
 
 /** Minimal valid content for a config file used in tests. */
 const STUB_CONFIG = JSON.stringify({ voyageApiKey: "pa-unit-test-stub" });
@@ -56,13 +53,11 @@ function removeStub(path: string) {
 
 // ── Baseline state ───────────────────────────────────────────────────────────────
 
-/** True if the real user's config files exist before tests run. */
+/** True if the real user's config file exists before tests run. */
 let hadJsoncBefore = false;
-let hadJsonBefore = false;
 
 beforeAll(() => {
 	hadJsoncBefore = existsSync(CODEXFI_JSONC);
-	hadJsonBefore  = existsSync(CODEXFI_JSON);
 });
 
 afterAll(() => {
@@ -95,58 +90,44 @@ describe("checkConfigFile — ok branch", () => {
 		removeStub(CODEXFI_JSONC);
 	});
 
-	test("returns ok when only codexfi.json exists", () => {
-		// Ensure codexfi.jsonc is absent so codexfi.json is the first hit
-		const jsonc = existsSync(CODEXFI_JSONC);
-		if (jsonc) return; // skip on machines where real .jsonc is present
-
-		writeStub(CODEXFI_JSON);
-
-		const result = checkConfigFile();
-		expect(result.status).toBe("ok");
-		expect(result.detail).toBe(CODEXFI_JSON);
-
-		removeStub(CODEXFI_JSON);
-	});
-
-	test("ok detail is an absolute path ending in .jsonc or .json", () => {
+	test("ok detail is an absolute path ending in .jsonc", () => {
 		writeStub(CODEXFI_JSONC);
 
 		const result = checkConfigFile();
 		if (result.status === "ok") {
-			expect(result.detail).toMatch(/\.(jsonc|json)$/);
+			expect(result.detail).toMatch(/\.jsonc$/);
 			expect(result.detail.startsWith("/")).toBe(true);
 		}
 
 		removeStub(CODEXFI_JSONC);
 	});
 
-	test("codexfi.jsonc takes precedence over codexfi.json when both exist", () => {
+	test("ok detail path is inside ~/.codexfi/", () => {
 		writeStub(CODEXFI_JSONC);
-		writeStub(CODEXFI_JSON);
 
 		const result = checkConfigFile();
-		expect(result.status).toBe("ok");
-		expect(result.detail).toBe(CODEXFI_JSONC);
+		if (result.status === "ok") {
+			expect(result.detail).toContain(".codexfi");
+			expect(result.detail).not.toContain(".config/opencode");
+		}
 
 		removeStub(CODEXFI_JSONC);
-		removeStub(CODEXFI_JSON);
 	});
 });
 
 // ── fail branch ──────────────────────────────────────────────────────────────────
 
 describe("checkConfigFile — fail branch", () => {
-	test("returns fail when neither codexfi.jsonc nor codexfi.json exists", () => {
-		// Only run this test when the user's real config files are absent
-		if (hadJsoncBefore || hadJsonBefore) return;
+	test("returns fail when codexfi.jsonc does not exist", () => {
+		// Only run this test when the user's real config file is absent
+		if (hadJsoncBefore) return;
 
 		const result = checkConfigFile();
 		expect(result.status).toBe("fail");
 	});
 
 	test("fail detail contains actionable install command", () => {
-		if (hadJsoncBefore || hadJsonBefore) return;
+		if (hadJsoncBefore) return;
 
 		const result = checkConfigFile();
 		if (result.status === "fail") {
@@ -155,7 +136,7 @@ describe("checkConfigFile — fail branch", () => {
 	});
 
 	test("fail detail references codexfi.jsonc as the file to create", () => {
-		if (hadJsoncBefore || hadJsonBefore) return;
+		if (hadJsoncBefore) return;
 
 		const result = checkConfigFile();
 		if (result.status === "fail") {
@@ -164,7 +145,7 @@ describe("checkConfigFile — fail branch", () => {
 	});
 
 	test("fail detail says 'not found'", () => {
-		if (hadJsoncBefore || hadJsonBefore) return;
+		if (hadJsoncBefore) return;
 
 		const result = checkConfigFile();
 		if (result.status === "fail") {
