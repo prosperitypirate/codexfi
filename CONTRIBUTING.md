@@ -39,7 +39,7 @@ The core deliverable is the `plugin/` package. The `website/` directory is the d
 - [pnpm](https://pnpm.io/) — used for `website/` (`npm` and `yarn` are not supported)
 - [OpenCode](https://opencode.ai/) — required to run the plugin end-to-end
 - A [Voyage AI](https://www.voyageai.com/) API key and an extraction provider key — not required to build or typecheck, but needed any time the plugin actually runs:
-  - **Local dev sessions and E2E tests** (`testing/`): keys go in `~/.config/opencode/codexfi.jsonc` for the plugin (Voyage embeddings + extraction provider), plus `.env` or your shell for OpenCode's own model calls — see `testing/README.md`
+  - **Local dev sessions and E2E tests** (`testing/`): keys go in `~/.codexfi/codexfi.jsonc` for the plugin (Voyage embeddings + extraction provider), plus `.env` or your shell for OpenCode's own model calls — see `testing/README.md`
   - **Benchmark** (`benchmark/`): keys go in `benchmark/.env.local` (copy from `benchmark/.env.example`)
 
 ### Plugin

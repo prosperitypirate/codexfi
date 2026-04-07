@@ -1,18 +1,15 @@
 /**
- * Unit tests for plugin-config.ts — CONFIG_FILES paths, writeApiKeys(), getConfigPath().
+ * Unit tests for plugin-config.ts — CONFIG_FILE path, writeApiKeys(), getConfigPath().
  *
  * These tests verify:
- * 1. CONFIG_FILES contains only codexfi.jsonc and codexfi.json (no legacy memory.* paths)
- * 2. writeApiKeys() writes to codexfi.jsonc, not memory.jsonc
- * 3. getConfigPath() returns codexfi.jsonc as the default when no config files exist
- * 4. getConfigPath() returns the first existing file when one is present
+ * 1. Config path is codexfi.jsonc in ~/.codexfi/ (no legacy memory.* paths)
+ * 2. writeApiKeys() writes to codexfi.jsonc in ~/.codexfi/
+ * 3. getConfigPath() returns codexfi.jsonc
  *
  * NOTE: CONFIG_DIR is computed from homedir() at module load time. We cannot override
  * it per-test without monkey-patching. Instead, we test the exported functions against
- * the real ~/.config/opencode/ path but use a write-then-cleanup approach for
+ * the real ~/.codexfi/ path but use a write-then-cleanup approach for
  * writeApiKeys() tests to avoid side-effects on the developer's live config.
- *
- * For CONFIG_FILES shape tests we assert on the exported constant directly.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -26,10 +23,9 @@ import { CONFIG_DIR, PLUGIN_CONFIG, writeApiKeys, getConfigPath } from "../../..
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
-const CODEXFI_JSONC = join(CONFIG_DIR, "codexfi.jsonc");
-const CODEXFI_JSON  = join(CONFIG_DIR, "codexfi.json");
-const LEGACY_JSONC  = join(CONFIG_DIR, "memory.jsonc");
-const LEGACY_JSON   = join(CONFIG_DIR, "memory.json");
+const CODEXFI_JSONC  = join(CONFIG_DIR, "codexfi.jsonc");
+const LEGACY_JSONC   = join(CONFIG_DIR, "memory.jsonc");
+const LEGACY_JSON    = join(CONFIG_DIR, "memory.json");
 
 /** Files written by our tests — cleaned up in afterAll. */
 const writtenByTest: string[] = [];
@@ -41,58 +37,31 @@ function cleanupTestFiles() {
 	writtenByTest.length = 0;
 }
 
-// ── CONFIG_FILES shape ───────────────────────────────────────────────────────────
+// ── Config path ─────────────────────────────────────────────────────────────────
 
-describe("CONFIG_FILES", () => {
-	test("codexfi.jsonc is the first (primary) config path", () => {
-		// getConfigPath() returns CONFIG_FILES[0] when nothing exists.
-		// We can infer the first entry by calling getConfigPath() in a clean state.
-		// We rely on no codexfi.* or memory.* files existing for this assertion —
-		// if they do exist, getConfigPath() returns the real file, which is also fine.
+describe("config path", () => {
+	test("codexfi.jsonc is the config path", () => {
 		const path = getConfigPath();
-		// Either the real file exists (path is whatever file the user has),
-		// or the default is codexfi.jsonc. Either way it must NOT be memory.jsonc.
+		expect(path).toEndWith("codexfi.jsonc");
 		expect(path).not.toMatch(/memory\.jsonc$/);
 		expect(path).not.toMatch(/memory\.json$/);
 	});
 
-	test("codexfi.jsonc default path is inside CONFIG_DIR", () => {
-		const defaultPath = join(CONFIG_DIR, "codexfi.jsonc");
-		// When no files exist, getConfigPath() returns CONFIG_FILES[0] = codexfi.jsonc
-		// We verify that the default path is well-formed.
-		expect(defaultPath).toContain(".config/opencode");
-		expect(defaultPath).toEndWith("codexfi.jsonc");
+	test("config path is inside ~/.codexfi/", () => {
+		const path = getConfigPath();
+		expect(path).toContain(".codexfi");
+		expect(path).toEndWith("codexfi.jsonc");
 	});
 
-	test("legacy memory.jsonc path is NOT in the config resolution chain", () => {
-		// Write only a legacy file and verify getConfigPath() does NOT return it.
-		// This confirms legacy paths were removed from CONFIG_FILES.
-		mkdirSync(CONFIG_DIR, { recursive: true });
+	test("config path is NOT inside ~/.config/opencode/", () => {
+		const path = getConfigPath();
+		expect(path).not.toContain(".config/opencode");
+	});
 
-		// Temporarily write memory.jsonc only (ensure codexfi.* don't exist for this check)
-		const hadCodexfiJsonc = existsSync(CODEXFI_JSONC);
-		const hadCodexfiJson  = existsSync(CODEXFI_JSON);
-
-		if (!hadCodexfiJsonc && !hadCodexfiJson) {
-			// Only run this check when no codexfi.* file exists
-			writeFileSync(LEGACY_JSONC, JSON.stringify({ voyageApiKey: "test-legacy" }));
-			writtenByTest.push(LEGACY_JSONC);
-
-			const resolved = getConfigPath();
-
-			// Should NOT resolve to the legacy file
-			expect(resolved).not.toBe(LEGACY_JSONC);
-			expect(resolved).not.toMatch(/memory\.jsonc$/);
-
-			// Clean up immediately
-			rmSync(LEGACY_JSONC);
-			writtenByTest.splice(writtenByTest.indexOf(LEGACY_JSONC), 1);
-		} else {
-			// codexfi.* already exists — just verify it's not a legacy path
-			const resolved = getConfigPath();
-			expect(resolved).not.toMatch(/memory\.jsonc$/);
-			expect(resolved).not.toMatch(/memory\.json$/);
-		}
+	test("legacy memory.jsonc path is NOT returned by getConfigPath()", () => {
+		const path = getConfigPath();
+		expect(path).not.toMatch(/memory\.jsonc$/);
+		expect(path).not.toMatch(/memory\.json$/);
 	});
 });
 
@@ -162,8 +131,6 @@ describe("writeApiKeys", () => {
 
 		// Write an initial config with a custom setting
 		writeApiKeys({ voyageApiKey: "pa-initial" });
-		// Manually inject a custom setting into the file
-		const initial = readFileSync(CODEXFI_JSONC, "utf-8");
 		// The generated file is valid JSONC — we verify it was created, then
 		// update with a different key and check the new key is present.
 		writeApiKeys({ voyageApiKey: "pa-updated", anthropicApiKey: "sk-ant-updated" });
@@ -218,14 +185,14 @@ describe("writeApiKeys", () => {
 // ── getConfigPath() ──────────────────────────────────────────────────────────────
 
 describe("getConfigPath", () => {
-	test("returns a path ending in .jsonc or .json", () => {
+	test("returns a path ending in .jsonc", () => {
 		const p = getConfigPath();
-		expect(p).toMatch(/\.(jsonc|json)$/);
+		expect(p).toMatch(/\.jsonc$/);
 	});
 
-	test("returned path is inside .config/opencode", () => {
+	test("returned path is inside ~/.codexfi", () => {
 		const p = getConfigPath();
-		expect(p).toContain(".config/opencode");
+		expect(p).toContain(".codexfi");
 	});
 
 	test("returned path is never a legacy memory.* path", () => {
@@ -233,15 +200,8 @@ describe("getConfigPath", () => {
 		expect(p).not.toMatch(/memory\.(jsonc|json)$/);
 	});
 
-	test("default (no file exists) is codexfi.jsonc", () => {
-		// Only assert the default when neither codexfi.* file exists
-		if (!existsSync(CODEXFI_JSONC) && !existsSync(CODEXFI_JSON)) {
-			expect(getConfigPath()).toBe(CODEXFI_JSONC);
-		} else {
-			// A real config exists — the result is a valid codexfi path
-			const p = getConfigPath();
-			expect(p === CODEXFI_JSONC || p === CODEXFI_JSON).toBe(true);
-		}
+	test("always returns codexfi.jsonc", () => {
+		expect(getConfigPath()).toBe(CODEXFI_JSONC);
 	});
 });
 

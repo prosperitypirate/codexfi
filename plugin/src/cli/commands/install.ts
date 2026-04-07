@@ -5,7 +5,7 @@
  * Steps:
  *   1. Register the npm package name "codexfi" in the OpenCode config.
  *   2. Migrate any stale file:// entries from previous installs.
- *   3. Prompt for API keys interactively and store in ~/.config/opencode/codexfi.jsonc.
+ *   3. Prompt for API keys interactively and store in ~/.codexfi/codexfi.jsonc.
  *   4. Create the /memory-init slash command in ~/.config/opencode/command/.
  *   5. Print next-steps guidance.
  *
@@ -14,7 +14,7 @@
  * latest version without manual updates.
  *
  * API key storage:
- *   - Keys are stored in a plugin-specific JSONC config file (~/.config/opencode/codexfi.jsonc)
+ *   - Keys are stored in a plugin-specific JSONC config file (~/.codexfi/codexfi.jsonc)
  *   - Environment variables are NOT read by the plugin at runtime
  *   - Install command prompts interactively and writes to the config file
  *

@@ -51,7 +51,7 @@ The installer interactively prompts for:
 1. **Voyage AI key** (required) — used for all embedding operations
 2. **Extraction provider key** (required) — choose from Anthropic, xAI, or Google
 
-Keys are stored in `~/.config/opencode/codexfi.jsonc`.
+Keys are stored in `~/.codexfi/codexfi.jsonc`.
 
 ## Non-interactive install
 
@@ -89,7 +89,7 @@ This runs 7 checks and reports the result of each:
 |---|-------|-------------|
 | 1 | Data directory | `~/.codexfi/` exists and is readable/writable |
 | 2 | Vector store | store is initialized (warn if not yet — created on first session) |
-| 3 | Config file | `~/.config/opencode/codexfi.jsonc` exists |
+| 3 | Config file | `~/.codexfi/codexfi.jsonc` exists |
 | 4 | Voyage API key | `voyageApiKey` is set in `codexfi.jsonc` |
 | 5 | Extraction API key | at least one of `anthropicApiKey`, `xaiApiKey`, `googleApiKey` is set |
 | 6 | OpenCode plugin | `"codexfi"` is registered in `opencode.json` |

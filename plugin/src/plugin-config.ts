@@ -1,22 +1,21 @@
 /**
- * Plugin-specific user configuration — loaded from ~/.config/opencode/codexfi.jsonc.
+ * Plugin-specific user configuration — loaded from ~/.codexfi/codexfi.jsonc.
  *
  * API keys are stored in codexfi.jsonc only — environment variables are NOT read
  * by the plugin at runtime. The `codexfi install` command prompts for keys and
  * writes them here.
+ *
+ * History: config was previously at ~/.config/opencode/codexfi.jsonc, but
+ * OpenCode app deletes unrecognized files from that directory (#155).
+ * Moved to ~/.codexfi/ which is already used for the SQLite store.
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-export const CONFIG_DIR = join(homedir(), ".config", "opencode");
-// CONFIG_FILES[0] is the canonical write target for `codexfi install`.
-// Additional entries are read-only fallbacks for forward-compat (e.g. .json).
-const CONFIG_FILES = [
-	join(CONFIG_DIR, "codexfi.jsonc"),
-	join(CONFIG_DIR, "codexfi.json"),
-];
+export const CONFIG_DIR = join(homedir(), ".codexfi");
+const CONFIG_FILE = join(CONFIG_DIR, "codexfi.jsonc");
 
 interface MemoryConfig {
 	// ── API Keys (stored in config file only) ─────────────────────────────────────
@@ -121,17 +120,14 @@ function stripJsoncComments(text: string): string {
 }
 
 function loadConfig(): MemoryConfig {
-	for (const path of CONFIG_FILES) {
-		try {
-			// Synchronous read at module init — ESM-safe import (no require())
-			const text = readFileSync(path, "utf-8");
-			const stripped = stripJsoncComments(text);
-			return JSON.parse(stripped) as MemoryConfig;
-		} catch {
-			// File doesn't exist or invalid — try next
-		}
+	try {
+		const text = readFileSync(CONFIG_FILE, "utf-8");
+		const stripped = stripJsoncComments(text);
+		return JSON.parse(stripped) as MemoryConfig;
+	} catch {
+		// File doesn't exist or invalid
+		return {};
 	}
-	return {};
 }
 
 const fileConfig = loadConfig();
@@ -167,7 +163,7 @@ export const PLUGIN_CONFIG = {
 /**
  * Returns true if the plugin has the minimum configuration to operate.
  *
- * Checks for voyageApiKey in ~/.config/opencode/codexfi.jsonc only.
+ * Checks for voyageApiKey in ~/.codexfi/codexfi.jsonc only.
  * Environment variables are not read for API keys — use `codexfi install`
  * to store keys in the config file.
  */
@@ -187,7 +183,7 @@ export interface ApiKeyUpdate {
 }
 
 /**
- * Write API keys to ~/.config/opencode/codexfi.jsonc.
+ * Write API keys to ~/.codexfi/codexfi.jsonc.
  *
  * Reads the existing config file (if any) to preserve non-key settings,
  * merges in the new keys, and writes a well-commented JSONC file.
@@ -200,19 +196,15 @@ export function writeApiKeys(keys: ApiKeyUpdate): void {
 	const existing = loadConfig();
 	const merged: MemoryConfig = { ...existing, ...keys };
 
-	const configPath = CONFIG_FILES[0];
-	writeFileSync(configPath, generateConfigJsonc(merged), "utf-8");
+	writeFileSync(CONFIG_FILE, generateConfigJsonc(merged), "utf-8");
 }
 
 /**
- * Return the path to the config file that would be read.
- * Returns the first existing file, or the default .jsonc path if none exist.
+ * Return the path to the config file.
+ * Always returns ~/.codexfi/codexfi.jsonc.
  */
 export function getConfigPath(): string {
-	for (const path of CONFIG_FILES) {
-		if (existsSync(path)) return path;
-	}
-	return CONFIG_FILES[0]; // default: codexfi.jsonc
+	return CONFIG_FILE;
 }
 
 /**
@@ -225,7 +217,7 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	const lines: string[] = [];
 
 	lines.push("// Codexfi - plugin configuration");
-	lines.push("// Location: ~/.config/opencode/codexfi.jsonc");
+	lines.push("// Location: ~/.codexfi/codexfi.jsonc");
 	lines.push("// Docs: https://github.com/prosperitypirate/codexfi");
 	lines.push("{");
 

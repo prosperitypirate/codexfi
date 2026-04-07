@@ -9,11 +9,11 @@ codexfi works out of the box with sensible defaults. All settings are optional a
 
 ## Config file
 
-The config file lives at `~/.config/opencode/codexfi.jsonc`. It is created automatically by the `codexfi install` command, or you can create it manually.
+The config file lives at `~/.codexfi/codexfi.jsonc`. It is created automatically by the `codexfi install` command, or you can create it manually.
 
 ```jsonc
 // Codexfi — plugin configuration
-// Location: ~/.config/opencode/codexfi.jsonc
+// Location: ~/.codexfi/codexfi.jsonc
 {
   // ── API Keys ──────────────────────────────────────────────────────
   "voyageApiKey": "pa-...",
@@ -59,7 +59,7 @@ The codexfi memory plugin is installed but not configured.
 Run `bunx codexfi install` to set up your API keys and enable memory.
 ```
 
-To fix this, run `bunx codexfi install` or manually add your keys to `~/.config/opencode/codexfi.jsonc`. Run `bunx codexfi status` to confirm the plugin is ready.
+To fix this, run `bunx codexfi install` or manually add your keys to `~/.codexfi/codexfi.jsonc`. Run `bunx codexfi status` to confirm the plugin is ready.
 
 ## Extraction provider
 
@@ -179,6 +179,6 @@ All memory data is stored locally at `~/.codexfi/store/store.db` — a SQLite da
 | `~/.codexfi/store/store.db-wal` | Write-ahead log (auto-managed by SQLite) |
 | `~/.codexfi/store/store.db-shm` | Shared memory index (auto-managed by SQLite) |
 | `~/.codexfi.log` | Plugin log file |
-| `~/.config/opencode/codexfi.jsonc` | Configuration file |
+| `~/.codexfi/codexfi.jsonc` | Configuration file |
 
 The WAL and SHM files are created automatically when the database is opened and cleaned up when the last connection closes. They enable concurrent reads from multiple agents without blocking.
