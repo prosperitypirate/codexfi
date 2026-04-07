@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.1](https://github.com/prosperitypirate/codexfi/compare/v0.6.0...v0.6.1) (2026-04-07)
+
+
+### Bug Fixes
+
+* **plugin:** move config from ~/.config/opencode/ to ~/.codexfi/ ([#156](https://github.com/prosperitypirate/codexfi/issues/156)) ([9344c3b](https://github.com/prosperitypirate/codexfi/commit/9344c3bbb6be37d7bc12c932eaf09507555ecc0c))
+
 ## [0.6.0](https://github.com/prosperitypirate/codexfi/compare/v0.5.4...v0.6.0) (2026-04-06)
 
 
