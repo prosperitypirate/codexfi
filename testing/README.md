@@ -39,7 +39,7 @@ After testing, restore to the published package:
 }
 ```
 
-**4. API keys in `~/.config/opencode/codexfi.jsonc`**
+**4. API keys in `~/.codexfi/codexfi.jsonc`**
 
 The plugin reads keys from `codexfi.jsonc` — env vars are not read by the plugin. Run `bunx codexfi install` or create the file manually:
 ```jsonc
@@ -159,33 +159,12 @@ env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
 
 This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anomalyco/opencode/issues/14532.
 
-## Known issue: `codexfi.jsonc` deleted by OpenCode Desktop
+## Resolved: `codexfi.jsonc` previously deleted by OpenCode Desktop
 
-The OpenCode Desktop app periodically deletes `~/.config/opencode/codexfi.jsonc`. The watcher
-log at `~/.codexfi-watcher.log` shows it probes multiple filenames (`codexfi.json`,
-`codexfi.jsonc`, `memory.jsonc`) and deletes them in rapid succession — a config
-discovery/migration routine. Without the config file, the plugin is disabled and E2E
-tests fail with 0 memories.
-
-**Root cause:** Under investigation. A forensic watcher at `local/watch-codexfi-config.sh`
-uses `fs_usage` (syscall tracing) to capture the exact PID + process name that performs
-the `unlink()`. Run with sudo for full tracing:
-
-```bash
-# Terminal 1: forensic watcher (needs root for fs_usage)
-sudo /path/to/codexfi/local/watch-codexfi-config.sh
-
-# Terminal 2: run E2E tests
-cd testing && bun run test:e2e
-```
-
-When a deletion is detected, the watcher dumps the `fs_usage` syscall trace showing exactly
-which process deleted the file. Check `~/.codexfi-watcher.log` for results.
-
-If the config gets deleted mid-test, restore it manually:
-```bash
-cp ~/.codexfi.jsonc.backup ~/.config/opencode/codexfi.jsonc
-```
+The OpenCode Desktop app periodically deletes unrecognized files from `~/.config/opencode/`.
+This was the root cause of config file disappearance — fixed by moving the config to
+`~/.codexfi/codexfi.jsonc` (PR #156). The `~/.codexfi/` directory is not managed by
+OpenCode, so the config is no longer affected. See issue #155 for forensic details.
 
 ## Scenarios
 

@@ -86,7 +86,7 @@ Status
 ──────────
   ✓ Data directory ~/.codexfi
   ✓ Vector store ~/.codexfi/store/store.db
-  ✓ Config file ~/.config/opencode/codexfi.jsonc
+  ✓ Config file ~/.codexfi/codexfi.jsonc
   ✓ Voyage API key set (pa-PNK...)
   ✓ Extraction API key anthropic (sk-ant...)
   ✓ OpenCode plugin registered in opencode.json

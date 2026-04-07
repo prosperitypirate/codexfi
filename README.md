@@ -102,7 +102,7 @@ All data stays on your machine at `~/.codexfi/`. Nothing is sent anywhere except
 
 ## Configuration
 
-Config at `~/.config/opencode/codexfi.jsonc`:
+Config at `~/.codexfi/codexfi.jsonc`:
 
 ```jsonc
 {

@@ -45,7 +45,7 @@ bun run build
 
 ### 2. Set API keys
 
-Run the installer to store your keys in `~/.config/opencode/codexfi.jsonc`:
+Run the installer to store your keys in `~/.codexfi/codexfi.jsonc`:
 
 ```bash
 bunx codexfi install
@@ -113,7 +113,7 @@ src/
 ├── retry.ts              — exponential backoff with jitter
 ├── telemetry.ts          — CostLedger + ActivityLog
 ├── names.ts              — name registry JSON persistence
-├── plugin-config.ts      — user-facing config from ~/.config/opencode/codexfi.jsonc
+├── plugin-config.ts      — user-facing config from ~/.codexfi/codexfi.jsonc
 └── services/
     ├── auto-init-config.ts — init file list (28 files) and total char cap
     ├── auto-save.ts      — background extraction after assistant turns
@@ -261,7 +261,7 @@ E2E: 13 scenarios. See [benchmark/README.md](../benchmark/README.md) for full re
 
 ## Configuration
 
-Config file at `~/.config/opencode/codexfi.jsonc` (created by `codexfi install`):
+Config file at `~/.codexfi/codexfi.jsonc` (created by `codexfi install`):
 
 ```jsonc
 {

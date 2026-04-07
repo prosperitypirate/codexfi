@@ -41,7 +41,7 @@ export function validateId(value: string, fieldName = "id"): string {
 // ── API credentials ─────────────────────────────────────────────────────────────
 // codexfi.jsonc is the ONLY source of truth for API keys. Environment variables
 // are intentionally NOT read. Use `codexfi install` to store keys in the config
-// file at ~/.config/opencode/codexfi.jsonc.
+// file at ~/.codexfi/codexfi.jsonc.
 
 import { PLUGIN_CONFIG, DEFAULT_EXTRACTION_PROVIDER } from "./plugin-config.js";
 

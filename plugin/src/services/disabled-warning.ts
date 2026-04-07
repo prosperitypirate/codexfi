@@ -43,7 +43,7 @@ ${keyStatus("GOOGLE_API_KEY", GOOGLE_API_KEY)}
 ${!VOYAGE_API_KEY ? `Root cause: VOYAGE_API_KEY is not set. This is required for all memory operations.` : ""}
 ${extractionAvailable && !VOYAGE_API_KEY ? `Note: ${availableExtraction} is available - extraction would work once VOYAGE_API_KEY is set.` : ""}
 
-Keys must be stored in ~/.config/opencode/codexfi.jsonc.
+Keys must be stored in ~/.codexfi/codexfi.jsonc.
 Run \`codexfi install\` to set them up.
 
 Run \`codexfi status\` for full diagnostics.`;

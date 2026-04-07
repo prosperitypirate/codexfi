@@ -3,7 +3,7 @@
  *
  * Verifies:
  *   - Vector store exists and is readable
- *   - Config file (~/.config/opencode/codexfi.jsonc) exists
+ *   - Config file (~/.codexfi/codexfi.jsonc) exists
  *   - Required API keys are set
  *   - Plugin is registered in OpenCode config
  *   - Data directory permissions
@@ -125,17 +125,14 @@ function checkDatabase(): CheckResult {
 
 export function checkConfigFile(): CheckResult {
 	const name = "Config file";
-	const candidates = [
-		join(CONFIG_DIR, "codexfi.jsonc"),
-		join(CONFIG_DIR, "codexfi.json"),
-	];
-	for (const p of candidates) {
-		if (existsSync(p)) return { name, status: "ok", detail: p };
+	const configPath = join(CONFIG_DIR, "codexfi.jsonc");
+	if (existsSync(configPath)) {
+		return { name, status: "ok", detail: configPath };
 	}
 	return {
 		name,
 		status: "fail",
-		detail: `not found - run 'codexfi install' to create ${join(CONFIG_DIR, "codexfi.jsonc")}`,
+		detail: `not found - run 'codexfi install' to create ${configPath}`,
 	};
 }
 
