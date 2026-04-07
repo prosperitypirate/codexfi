@@ -12,12 +12,13 @@
  * 4. The ok result detail is the resolved file path
  * 5. The check name is "Config file"
  *
- * Strategy: write real temp files into CONFIG_DIR (same pattern as
- * plugin-config.test.ts), restore state in afterAll.
+ * SAFETY: The real codexfi.jsonc is backed up at the top-level beforeAll and
+ * restored unconditionally in the top-level afterAll. Tests that need the file
+ * absent temporarily remove it and restore it within the same test or describe.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, rmSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
 import { checkConfigFile } from "../../../plugin/src/cli/commands/status.js";
@@ -30,43 +31,60 @@ const CODEXFI_JSONC = join(CONFIG_DIR, "codexfi.jsonc");
 /** Minimal valid content for a config file used in tests. */
 const STUB_CONFIG = JSON.stringify({ voyageApiKey: "pa-unit-test-stub" });
 
-// ── Helpers ──────────────────────────────────────────────────────────────────────
+// ── Top-level backup/restore ─────────────────────────────────────────────────────
 
-/** Files we created in tests — removed in afterAll. */
-const createdByTest: string[] = [];
-
-function ensureConfigDir() {
-	mkdirSync(CONFIG_DIR, { recursive: true });
-}
-
-function writeStub(path: string) {
-	ensureConfigDir();
-	writeFileSync(path, STUB_CONFIG, "utf-8");
-	if (!createdByTest.includes(path)) createdByTest.push(path);
-}
-
-function removeStub(path: string) {
-	try { rmSync(path); } catch { /* already gone */ }
-	const idx = createdByTest.indexOf(path);
-	if (idx !== -1) createdByTest.splice(idx, 1);
-}
-
-// ── Baseline state ───────────────────────────────────────────────────────────────
-
-/** True if the real user's config file exists before tests run. */
-let hadJsoncBefore = false;
+let _savedConfigContent: string | null = null;
+let _configExistedBefore = false;
 
 beforeAll(() => {
-	hadJsoncBefore = existsSync(CODEXFI_JSONC);
+	_configExistedBefore = existsSync(CODEXFI_JSONC);
+	if (_configExistedBefore) {
+		_savedConfigContent = readFileSync(CODEXFI_JSONC, "utf-8");
+	}
 });
 
 afterAll(() => {
-	// Remove anything we created that wasn't there before
-	for (const f of [...createdByTest]) {
-		try { rmSync(f); } catch { /* already gone */ }
+	if (_configExistedBefore && _savedConfigContent !== null) {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writeFileSync(CODEXFI_JSONC, _savedConfigContent, "utf-8");
+	} else if (!_configExistedBefore) {
+		try { rmSync(CODEXFI_JSONC); } catch { /* already gone */ }
 	}
-	createdByTest.length = 0;
 });
+
+// ── Helpers ──────────────────────────────────────────────────────────────────────
+
+/** Temporarily remove the config file for a test, returning a restore function. */
+function withConfigRemoved(): () => void {
+	let backup: string | null = null;
+	if (existsSync(CODEXFI_JSONC)) {
+		backup = readFileSync(CODEXFI_JSONC, "utf-8");
+		rmSync(CODEXFI_JSONC);
+	}
+	return () => {
+		if (backup !== null) {
+			mkdirSync(CONFIG_DIR, { recursive: true });
+			writeFileSync(CODEXFI_JSONC, backup, "utf-8");
+		}
+	};
+}
+
+/** Write a stub config, returning a restore function. */
+function withStubConfig(): () => void {
+	let backup: string | null = null;
+	if (existsSync(CODEXFI_JSONC)) {
+		backup = readFileSync(CODEXFI_JSONC, "utf-8");
+	}
+	mkdirSync(CONFIG_DIR, { recursive: true });
+	writeFileSync(CODEXFI_JSONC, STUB_CONFIG, "utf-8");
+	return () => {
+		if (backup !== null) {
+			writeFileSync(CODEXFI_JSONC, backup, "utf-8");
+		} else {
+			try { rmSync(CODEXFI_JSONC); } catch { /* already gone */ }
+		}
+	};
+}
 
 // ── check name ───────────────────────────────────────────────────────────────────
 
@@ -81,37 +99,40 @@ describe("checkConfigFile name", () => {
 
 describe("checkConfigFile — ok branch", () => {
 	test("returns ok when codexfi.jsonc exists", () => {
-		writeStub(CODEXFI_JSONC);
-
-		const result = checkConfigFile();
-		expect(result.status).toBe("ok");
-		expect(result.detail).toBe(CODEXFI_JSONC);
-
-		removeStub(CODEXFI_JSONC);
+		const restore = withStubConfig();
+		try {
+			const result = checkConfigFile();
+			expect(result.status).toBe("ok");
+			expect(result.detail).toBe(CODEXFI_JSONC);
+		} finally {
+			restore();
+		}
 	});
 
 	test("ok detail is an absolute path ending in .jsonc", () => {
-		writeStub(CODEXFI_JSONC);
-
-		const result = checkConfigFile();
-		if (result.status === "ok") {
-			expect(result.detail).toMatch(/\.jsonc$/);
-			expect(result.detail.startsWith("/")).toBe(true);
+		const restore = withStubConfig();
+		try {
+			const result = checkConfigFile();
+			if (result.status === "ok") {
+				expect(result.detail).toMatch(/\.jsonc$/);
+				expect(result.detail.startsWith("/")).toBe(true);
+			}
+		} finally {
+			restore();
 		}
-
-		removeStub(CODEXFI_JSONC);
 	});
 
 	test("ok detail path is inside ~/.codexfi/", () => {
-		writeStub(CODEXFI_JSONC);
-
-		const result = checkConfigFile();
-		if (result.status === "ok") {
-			expect(result.detail).toContain(".codexfi");
-			expect(result.detail).not.toContain(".config/opencode");
+		const restore = withStubConfig();
+		try {
+			const result = checkConfigFile();
+			if (result.status === "ok") {
+				expect(result.detail).toContain(".codexfi");
+				expect(result.detail).not.toContain(".config/opencode");
+			}
+		} finally {
+			restore();
 		}
-
-		removeStub(CODEXFI_JSONC);
 	});
 });
 
@@ -119,37 +140,48 @@ describe("checkConfigFile — ok branch", () => {
 
 describe("checkConfigFile — fail branch", () => {
 	test("returns fail when codexfi.jsonc does not exist", () => {
-		// Only run this test when the user's real config file is absent
-		if (hadJsoncBefore) return;
-
-		const result = checkConfigFile();
-		expect(result.status).toBe("fail");
+		const restore = withConfigRemoved();
+		try {
+			const result = checkConfigFile();
+			expect(result.status).toBe("fail");
+		} finally {
+			restore();
+		}
 	});
 
 	test("fail detail contains actionable install command", () => {
-		if (hadJsoncBefore) return;
-
-		const result = checkConfigFile();
-		if (result.status === "fail") {
-			expect(result.detail).toContain("codexfi install");
+		const restore = withConfigRemoved();
+		try {
+			const result = checkConfigFile();
+			if (result.status === "fail") {
+				expect(result.detail).toContain("codexfi install");
+			}
+		} finally {
+			restore();
 		}
 	});
 
 	test("fail detail references codexfi.jsonc as the file to create", () => {
-		if (hadJsoncBefore) return;
-
-		const result = checkConfigFile();
-		if (result.status === "fail") {
-			expect(result.detail).toContain("codexfi.jsonc");
+		const restore = withConfigRemoved();
+		try {
+			const result = checkConfigFile();
+			if (result.status === "fail") {
+				expect(result.detail).toContain("codexfi.jsonc");
+			}
+		} finally {
+			restore();
 		}
 	});
 
 	test("fail detail says 'not found'", () => {
-		if (hadJsoncBefore) return;
-
-		const result = checkConfigFile();
-		if (result.status === "fail") {
-			expect(result.detail).toContain("not found");
+		const restore = withConfigRemoved();
+		try {
+			const result = checkConfigFile();
+			if (result.status === "fail") {
+				expect(result.detail).toContain("not found");
+			}
+		} finally {
+			restore();
 		}
 	});
 });

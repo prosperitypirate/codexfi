@@ -8,11 +8,12 @@
  * fetch() to store.*() calls.
  */
 
-import { createHash } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { execSync } from "child_process";
 import * as db from "../../../plugin/src/db.js";
-import { refresh as refreshTable } from "../../../plugin/src/db.js";
+import { refresh as refreshTable, store as rawStore } from "../../../plugin/src/db.js";
 import * as store from "../../../plugin/src/store.js";
+import { embed } from "../../../plugin/src/embedder.js";
 import { emit } from "./live/emitter.js";
 
 const PREFIX = "opencode";
@@ -49,9 +50,11 @@ const USER_TAG = getUserTag();
 export type MemoryType =
 	| "project-brief"
 	| "architecture"
+	| "architecture-pattern"
 	| "tech-context"
 	| "product-context"
 	| "progress"
+	| "active-context"
 	| "project-config"
 	| "error-solution"
 	| "preference"
@@ -169,6 +172,44 @@ export async function addMemoryDirect(
 		memory: r.memory,
 		event: r.event,
 	}));
+}
+
+/**
+ * Seed a memory directly into the store with an exact type, bypassing LLM extraction.
+ *
+ * Unlike addMemoryDirect() (which passes content through the LLM extractor and lets
+ * the model re-classify the type), this function inserts the content verbatim with the
+ * specified type. Use this when you need deterministic type control — e.g. seeding
+ * session-summary memories that the extractor would otherwise classify as tech-context.
+ */
+export async function seedMemoryDirect(
+	dir: string,
+	content: string,
+	type: MemoryType,
+): Promise<{ id: string; memory: string }> {
+	await ensureInit();
+	const projectTag = projectTagForDir(dir);
+	const id = randomUUID();
+	const now = new Date().toISOString();
+	const hash = createHash("md5").update(content).digest("hex");
+	const metadata = JSON.stringify({ type });
+	const vector = await embed(content, "document");
+
+	rawStore.add([{
+		id,
+		memory: content,
+		user_id: projectTag,
+		vector,
+		metadata_json: metadata,
+		created_at: now,
+		updated_at: now,
+		hash,
+		chunk: "",
+		superseded_by: "",
+		type,
+	}]);
+
+	return { id, memory: content };
 }
 
 /** Directly search memories via the embedded store */
