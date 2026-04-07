@@ -201,7 +201,51 @@ Ingest total: 353.8s (25 sessions) · ~13.6s/session mean · Total run time: 30m
 
 ## Results
 
-### embedded-v5 — 200 questions · 25 sessions · run `embedded-v5` ← current (pure TS vector store)
+### pr138-richer-memory-block — 200 questions · 25 sessions · run `pr138-richer-memory-block` ← current
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **PR #138: richer [MEMORY] block** · Total run time: **34m 48s**
+>
+> Benchmark on the `feat/richer-memory-block` branch (PR #138). Changes: `displaySimilarityThreshold` (retrieve broadly,
+> render only high-confidence), `active-context` singleton with aging, `architecture-pattern` sub-type, Recent Sessions
+> (3 truncated summaries instead of 1), `STRUCTURED_SECTIONS` in context.ts. These are display-layer changes — extraction
+> and retrieval pipeline unchanged. Score is within the established Haiku extraction variance band (85.5–95.0%).
+
+```
+preference        ████████████████████ 100%  (25/25)  ✓  perfect
+error-solution    ████████████████████ 100%  (25/25)  ✓  perfect
+abstention        ████████████████████ 100%  (25/25)  ✓  perfect
+tech-stack        ███████████████████░  96%  (24/25)  ✓
+session-cont.     ██████████████████░░  92%  (23/25)  ✓
+architecture      █████████████████░░░  88%  (22/25)  ✓
+knowledge-update  █████████████████░░░  88%  (22/25)  ✓
+cross-synthesis   ██████████████░░░░░░  68%  (17/25)  ⚠  weakest category
+─────────────────────────────────────────────────────────────
+Overall           91.5%  (183/200)                    within Haiku variance band
+```
+
+#### Retrieval Quality (K=20)
+
+```
+Hit@20       █████████████████░░░  86.0%
+Precision@20 ██░░░░░░░░░░░░░░░░░░   9.5%
+MRR                               0.655
+NDCG                              0.687
+```
+
+#### Latency
+
+```
+Phase              min     mean   median    p95      p99
+ingest/session    5858   14784    13869  23353    25933
+search             110     214      140    289      710
+answer             846    4883     4276   9118    12586
+```
+
+Ingest total: 382.1s (25 sessions) · ~14.8s/session mean · Total run time: 34m 48s
+
+---
+
+### embedded-v5 — 200 questions · 25 sessions · run `embedded-v5` (pure TS vector store)
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **Pure TS vector store** (zero native deps)
 >
@@ -521,34 +565,34 @@ bun run bench run -r config-b
 
 ### Run Comparison
 
-| Factor | haiku-run1 | haiku-run2 | haiku-run3 | causal-chain | embedded-v4 | embedded-v5 |
-|---|---|---|---|---|---|---|
-| **Backend** | Docker | Docker | Docker | Docker | Embedded (pure TS) | **Embedded (pure TS)** |
-| Questions | 200 | 200 | 200 | 200 | 200 | 200 |
-| Extractor | Anthropic | Anthropic | Anthropic | xAI | Anthropic | **Anthropic** |
-| Judge/Answer | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 |
-| Retrieval K | 20 | 20 | 20 | 20 | 20 | 20 |
-| tech-stack | 96% | 100% | 100% | 100% | 100% | **96%** |
-| architecture | 96% | 100% | 100% | 100% | 100% | **92%** |
-| preference | 92% | 100% | 100% | 100% | 100% | **100%** |
-| abstention | 96% | 100% | 96% | 92% | 100% | **96%** |
-| session-cont. | 96% | 96% | 96% | 92% | 96% | 88% |
-| error-solution | 100% | 92% | 96% | 100% | 92% | 88% |
-| knowledge-update | 92% | 96% | 92% | 92% | 96% | 60% ⚠ |
-| cross-synthesis | 68% | 76% | 68% | 80% | 72% | 64% ⚠ |
-| **Overall** | **92.0%** | **95.0%** | **93.5%** | **94.5%** | **94.5%** | **85.5%** |
-| Run time | — | 28m 19s | 30m 14s | ~29m | ~29m | 25m 22s |
+| Factor | haiku-run1 | haiku-run2 | haiku-run3 | causal-chain | embedded-v4 | embedded-v5 | pr138-richer-memory-block |
+|---|---|---|---|---|---|---|---|
+| **Backend** | Docker | Docker | Docker | Docker | Embedded (pure TS) | Embedded (pure TS) | **Embedded (pure TS)** |
+| Questions | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+| Extractor | Anthropic | Anthropic | Anthropic | xAI | Anthropic | Anthropic | **Anthropic** |
+| Judge/Answer | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 | sonnet-4-6 |
+| Retrieval K | 20 | 20 | 20 | 20 | 20 | 20 | 20 |
+| tech-stack | 96% | 100% | 100% | 100% | 100% | 96% | **96%** |
+| architecture | 96% | 100% | 100% | 100% | 100% | 92% | **88%** |
+| preference | 92% | 100% | 100% | 100% | 100% | 100% | **100%** |
+| abstention | 96% | 100% | 96% | 92% | 100% | 96% | **100%** |
+| session-cont. | 96% | 96% | 96% | 92% | 96% | 88% | **92%** |
+| error-solution | 100% | 92% | 96% | 100% | 92% | 88% | **100%** |
+| knowledge-update | 92% | 96% | 92% | 92% | 96% | 60% ⚠ | **88%** |
+| cross-synthesis | 68% | 76% | 68% | 80% | 72% | 64% ⚠ | **68%** |
+| **Overall** | **92.0%** | **95.0%** | **93.5%** | **94.5%** | **94.5%** | **85.5%** | **91.5%** |
+| Run time | — | 28m 19s | 30m 14s | ~29m | ~29m | 25m 22s | 34m 48s |
 
 #### Full historical comparison (all runs)
 
-| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch | haiku-run1 | haiku-run2 | haiku-run3 | embedded-v4 | embedded-v5 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| Backend | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Embedded | **Embedded** |
-| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
-| Extractor | xAI | xAI | xAI | xAI | xAI | xAI | xAI | Anthropic | Anthropic | Anthropic | Anthropic | Anthropic |
-| Retrieval K | 8 | 8 | 8 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 |
-| Cross-synthesis | 60% | 44% | 52% | 64% | 76% | 76% | 80% | 68% | 76% | 68% | 72% | 64% |
-| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** | **92.0%** | **95.0%** | **93.5%** | **94.5%** | **85.5%** ⚠ |
+| Factor | v1 (40q) | v2-baseline | v2-natural | k20-synthesis-fix | enum-narrowed-clean | abstention-fix-v2 | causal-chain-synthesis-arch | haiku-run1 | haiku-run2 | haiku-run3 | embedded-v4 | embedded-v5 | pr138-richer-memory-block |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Backend | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Docker | Embedded | Embedded | **Embedded** |
+| Questions | 40 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 | 200 |
+| Extractor | xAI | xAI | xAI | xAI | xAI | xAI | xAI | Anthropic | Anthropic | Anthropic | Anthropic | Anthropic | **Anthropic** |
+| Retrieval K | 8 | 8 | 8 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 | 20 |
+| Cross-synthesis | 60% | 44% | 52% | 64% | 76% | 76% | 80% | 68% | 76% | 68% | 72% | 64% | **68%** |
+| **Overall** | **87.5%** | **74.0%** | **88.0%** | **91.0%** | **92.0%** | **92.0%** | **94.5%** | **92.0%** | **95.0%** | **93.5%** | **94.5%** | **85.5%** ⚠ | **91.5%** |
 
 > **Note:** Abstention dropped 100% → 92% between `abstention-fix-v2` and `causal-chain-synthesis-arch`.
 > This is **ingest nondeterminism**, not a regression from code changes — the xAI extractor (temperature=0)
@@ -592,6 +636,10 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 ---
 
 ## Version History
+
+### pr138-richer-memory-block (run `pr138-richer-memory-block`) — **91.5%** · Embedded pure TS vector store · extractor: Anthropic Haiku 4.5 · 34m 48s
+
+200 questions, 25 sessions. Benchmark of PR #138 display-layer changes: `displaySimilarityThreshold` (retrieve broadly at 0.45, render only ≥0.55), `active-context` singleton memory type with automatic aging, `architecture-pattern` sub-type, Recent Sessions (3 summaries with progressive truncation instead of 1), and `STRUCTURED_SECTIONS` array for extensible memory block rendering. Score 91.5% (183/200) — comfortably within the Haiku extraction variance band (85.5–95.0%). 3 categories at 100% (preference, error-solution, abstention), cross-synthesis at 68% (weakest, unchanged from haiku-run1/run3). These are display-layer changes that don't affect the Tier 1 extraction/retrieval pipeline the benchmark measures; the score confirms no regressions from the new rendering logic. Retrieval quality: Hit@20 86%, MRR 0.655, NDCG 0.687. Ingest: 382s total (14.8s/session mean).
 
 ### embedded-v5 (run `embedded-v5`) — **85.5%** · Pure TS vector store · extractor: Anthropic Haiku 4.5 · 25m 22s
 
