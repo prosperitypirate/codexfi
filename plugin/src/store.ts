@@ -247,8 +247,7 @@ async function ageActiveContext(userId: string, newId: string): Promise<void> {
 		const rows = await getMemoriesByType(userId, "active-context");
 		for (const row of rows) {
 			if ((row.id as string) !== newId) {
-				const safeId = validateId(row.id as string, "id");
-				await getTable().delete(`id = '${safeId}'`);
+				store.deleteById(row.id as string);
 			}
 		}
 	} catch (e) {

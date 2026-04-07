@@ -4,29 +4,26 @@
  * Verifies that only the latest active-context memory survives per project —
  * same lifecycle as `progress` (singleton aging rule).
  *
- * Uses mock.module() to bypass real LLM + embedding calls, then invokes
- * store.ingest() to exercise the full aging pipeline.
+ * Inserts rows directly via db.store.add() (bypassing the embedder) to test
+ * the aging logic in isolation without any LLM or embedding calls.
  */
 
-import { describe, test, expect, beforeAll, afterAll, mock } from "bun:test";
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { deterministicVector } from "../helpers/mock-embedder.js";
 
-// ── Mock embedder BEFORE importing store (config is read at load time) ──────────
-mock.module("../../../plugin/src/embedder.js", () => ({
-	embed: async (text: string) => deterministicVector(text),
-}));
-
-// ── Import store and db AFTER mock is installed ──────────────────────────────────
-const { init, getTable } = await import("../../../plugin/src/db.js");
+// ── Import store and db ──────────────────────────────────────────────────────────
+import * as vs from "../../../plugin/src/store/index.js";
+const { init, store: db } = await import("../../../plugin/src/db.js");
 const { list } = await import("../../../plugin/src/store.js");
 
 let tempDir: string;
 
 beforeAll(async () => {
 	tempDir = mkdtempSync(join(tmpdir(), "oc-test-active-context-aging-"));
+	vs._setStorePathForTests(tempDir);
 	await init(tempDir);
 });
 
@@ -36,13 +33,12 @@ afterAll(() => {
 
 describe("active-context singleton aging", () => {
 	test("only the latest active-context memory survives after 3 inserts", async () => {
-		const table = getTable();
 		const projectTag = "test-active-ctx-aging";
 		const now = new Date().toISOString();
 
 		// Insert 3 active-context rows with ascending timestamps
 		// (simulating 3 successive sessions saving active context)
-		await table.add([
+		db.add([
 			{
 				id: "ac-old-1",
 				memory: "Working on the login form, auth not wired yet",
@@ -71,10 +67,9 @@ describe("active-context singleton aging", () => {
 			},
 		]);
 
-		// Insert the "new" active-context row — this should trigger aging
-		// (deleting the two older ones)
+		// Insert the "new" active-context row — the latest one
 		const newId = "ac-new-3";
-		await table.add([
+		db.add([
 			{
 				id: newId,
 				memory: "OAuth refresh token working; next: add offline scope to Google consent",
@@ -91,21 +86,12 @@ describe("active-context singleton aging", () => {
 		]);
 
 		// Simulate aging: delete all active-context rows except the latest
-		// (mirrors what ageActiveContext() does in store.ts)
-		const allRows = await table
-			.search(new Array(1024).fill(0))
-			.where(`user_id = '${projectTag}' AND superseded_by = ''`)
-			.limit(1000)
-			.toArray();
-
-		const activeContextRows = allRows.filter(
-			(r) => (r.type as string) === "active-context"
-		);
-
-		// Delete all except the new one
+		// (mirrors what ageActiveContext() does in store.ts via store.deleteById())
+		const allRows = vs.scan({ user_id: projectTag, superseded_by: "" });
+		const activeContextRows = allRows.filter((r) => r.type === "active-context");
 		for (const row of activeContextRows) {
-			if ((row.id as string) !== newId) {
-				await table.delete(`id = '${row.id as string}'`);
+			if (row.id !== newId) {
+				db.deleteById(row.id);
 			}
 		}
 
