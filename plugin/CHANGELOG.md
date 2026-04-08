@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/prosperitypirate/codexfi/compare/v0.6.1...v0.7.0) (2026-04-08)
+
+
+### Features
+
+* **plugin:** richer [MEMORY] block — active-context, architecture-pattern, Recent Sessions, display threshold (010) ([#138](https://github.com/prosperitypirate/codexfi/issues/138)) ([d323810](https://github.com/prosperitypirate/codexfi/commit/d323810a855c8cde1f724199adcf432dfce99f63)), closes [#139](https://github.com/prosperitypirate/codexfi/issues/139)
+
 ## [0.6.1](https://github.com/prosperitypirate/codexfi/compare/v0.6.0...v0.6.1) (2026-04-07)
 
 
