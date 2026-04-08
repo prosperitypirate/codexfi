@@ -218,6 +218,8 @@ async function applyAgingRules(userId: string, memoryType: string, newId: string
 
 	if (memoryType === "progress") {
 		await ageProgress(userId, newId);
+	} else if (memoryType === "active-context") {
+		await ageActiveContext(userId, newId);
 	} else if (memoryType === "session-summary") {
 		await ageSessionSummaries(userId);
 	}
@@ -233,6 +235,23 @@ async function ageProgress(userId: string, newId: string): Promise<void> {
 		}
 	} catch (e) {
 		console.warn("Aging progress error:", e);
+	}
+}
+
+/**
+ * Singleton aging for active-context: only the latest entry per project survives.
+ * Direct copy of ageProgress with type changed to "active-context".
+ */
+async function ageActiveContext(userId: string, newId: string): Promise<void> {
+	try {
+		const rows = await getMemoriesByType(userId, "active-context");
+		for (const row of rows) {
+			if ((row.id as string) !== newId) {
+				store.deleteById(row.id as string);
+			}
+		}
+	} catch (e) {
+		console.warn("Aging active-context error:", e);
 	}
 }
 

@@ -52,3 +52,5 @@ scripts/setup-github-repo.sh
 # Local machine-specific files (daemon configs, watcher scripts, etc.)
 local/
 *.tsbuildinfo
+
+.opencodeignore

@@ -9,6 +9,7 @@ import { z } from "zod";
 export const MEMORY_TYPES = [
 	"project-brief",
 	"architecture",
+	"architecture-pattern",
 	"tech-context",
 	"product-context",
 	"session-summary",
@@ -17,6 +18,7 @@ export const MEMORY_TYPES = [
 	"preference",
 	"learned-pattern",
 	"project-config",
+	"active-context",
 	"conversation",
 ] as const;
 

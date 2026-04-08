@@ -49,6 +49,28 @@ const ENUMERATION_REGEX = /\b(list\s+all|list\s+every|all\s+the\s+\w+|every\s+(e
 
 const WIDE_SYNTHESIS_REGEX = /\b(both\s+(projects?|the)|across\s+both|end[\s-]to[\s-]end|how\s+has.{0,30}evolved|sequence\s+of.{0,20}decisions?)\b/i;
 
+// ── Per-type soft caps — prevent any single type from crowding out others.
+// Singletons (progress, active-context) are handled by aging rules and need
+// no cap. Session-summary is capped separately. Caps are soft: excess entries
+// are simply sliced off after grouping (already sorted newest-first by list()).
+const PER_TYPE_CAPS: Record<string, number> = {
+	"project-brief":        8,
+	"project-config":       8,
+	"architecture":         12,
+	"architecture-pattern": 12,
+	"tech-context":         8,
+	"product-context":      8,
+};
+
+/** Apply per-type soft caps in-place, slicing excess entries from each type. */
+function applyPerTypeCaps(byType: Record<string, StructuredMemory[]>): void {
+	for (const [type, cap] of Object.entries(PER_TYPE_CAPS)) {
+		if (byType[type] && byType[type].length > cap) {
+			byType[type] = byType[type].slice(0, cap);
+		}
+	}
+}
+
 function detectQueryTypes(query: string): string[] | undefined {
 	const isEnumeration = ENUMERATION_REGEX.test(query);
 	const isWideSynthesis = WIDE_SYNTHESIS_REGEX.test(query);
@@ -742,6 +764,8 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 						});
 					}
 
+					applyPerTypeCaps(byType);
+
 					// ── Project-brief fallback seeding ──────────────────────────
 					if (allProjectMemories.length > 0 && !byType["project-brief"]) {
 						await seedProjectBrief(directory, tags).catch(
@@ -826,6 +850,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 										createdAt: m.createdAt,
 									});
 								}
+								applyPerTypeCaps(byType);
 								cache.structuredSections = byType;
 
 								log("chat.message: post-compaction structured sections refreshed", {
@@ -921,6 +946,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 						.enum([
 							"project-brief",
 							"architecture",
+							"architecture-pattern",
 							"tech-context",
 							"product-context",
 							"session-summary",
@@ -929,6 +955,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							"error-solution",
 							"preference",
 							"learned-pattern",
+							"active-context",
 							"conversation",
 						])
 						.optional(),
@@ -970,6 +997,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 									types: [
 										"project-brief",
 										"architecture",
+										"architecture-pattern",
 										"tech-context",
 										"product-context",
 										"session-summary",
@@ -978,6 +1006,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 										"error-solution",
 										"preference",
 										"learned-pattern",
+										"active-context",
 										"conversation",
 									],
 								});

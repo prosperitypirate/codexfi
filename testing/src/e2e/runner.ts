@@ -34,6 +34,8 @@ import { run as run10 } from "./scenarios/10-knowledge-update.js";
 import { run as run11 } from "./scenarios/11-system-prompt-injection.js";
 import { run as run12 } from "./scenarios/12-multi-turn-refresh.js";
 import { run as run13 } from "./scenarios/13-auto-init-turn1.js";
+import { run as run14 } from "./scenarios/14-active-context-singleton.js";
+import { run as run15 } from "./scenarios/15-recent-sessions-three.js";
 
 const BOLD  = "\x1b[1m";
 const CYAN  = "\x1b[36m";
@@ -56,6 +58,8 @@ const SCENARIO_NAMES: Record<string, string> = {
   "11": "System Prompt Injection",
   "12": "Multi-Turn Refresh",
   "13": "Auto-Init Turn 1",
+  "14": "Active-Context Singleton Aging",
+  "15": "Recent Sessions Shows Last 3 Summaries",
 };
 
 const ALL_SCENARIOS: Array<{ id: string; fn: () => Promise<ScenarioResult> }> = [
@@ -72,6 +76,8 @@ const ALL_SCENARIOS: Array<{ id: string; fn: () => Promise<ScenarioResult> }> = 
   { id: "11", fn: run11 },
   { id: "12", fn: run12 },
   { id: "13", fn: run13 },
+  { id: "14", fn: run14 },
+  { id: "15", fn: run15 },
 ];
 
 async function main() {

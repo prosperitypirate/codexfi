@@ -21,6 +21,7 @@ import * as store from "../../store.js";
 const TYPE_COLORS: Record<string, (s: string) => string> = {
 	"project-brief": fmt.cyan,
 	"architecture": fmt.blue,
+	"architecture-pattern": fmt.blue,
 	"tech-context": fmt.magenta,
 	"product-context": fmt.green,
 	"progress": fmt.yellow,
@@ -29,6 +30,7 @@ const TYPE_COLORS: Record<string, (s: string) => string> = {
 	"preference": fmt.green,
 	"learned-pattern": fmt.magenta,
 	"project-config": fmt.cyan,
+	"active-context": fmt.yellow,
 	"conversation": fmt.dim,
 };
 

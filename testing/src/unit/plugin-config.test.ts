@@ -8,8 +8,11 @@
  *
  * NOTE: CONFIG_DIR is computed from homedir() at module load time. We cannot override
  * it per-test without monkey-patching. Instead, we test the exported functions against
- * the real ~/.codexfi/ path but use a write-then-cleanup approach for
- * writeApiKeys() tests to avoid side-effects on the developer's live config.
+ * the real ~/.codexfi/ path.
+ *
+ * SAFETY: The real codexfi.jsonc is backed up at the top-level beforeAll and restored
+ * unconditionally in the top-level afterAll. Individual tests never delete CODEXFI_JSONC
+ * if it existed before the suite started.
  */
 
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
@@ -27,15 +30,30 @@ const CODEXFI_JSONC  = join(CONFIG_DIR, "codexfi.jsonc");
 const LEGACY_JSONC   = join(CONFIG_DIR, "memory.jsonc");
 const LEGACY_JSON    = join(CONFIG_DIR, "memory.json");
 
-/** Files written by our tests — cleaned up in afterAll. */
-const writtenByTest: string[] = [];
+// ── Top-level backup/restore ─────────────────────────────────────────────────────
+// Save the real config once at suite start and restore it unconditionally at end.
+// This prevents any test from destroying the developer's live config.
 
-function cleanupTestFiles() {
-	for (const f of writtenByTest) {
-		try { rmSync(f); } catch { /* already gone */ }
+let _savedConfigContent: string | null = null;
+let _configExistedBefore = false;
+
+beforeAll(() => {
+	_configExistedBefore = existsSync(CODEXFI_JSONC);
+	if (_configExistedBefore) {
+		_savedConfigContent = readFileSync(CODEXFI_JSONC, "utf-8");
 	}
-	writtenByTest.length = 0;
-}
+});
+
+afterAll(() => {
+	if (_configExistedBefore && _savedConfigContent !== null) {
+		// Always restore — this is the developer's real config with real API keys
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writeFileSync(CODEXFI_JSONC, _savedConfigContent, "utf-8");
+	} else if (!_configExistedBefore) {
+		// Config didn't exist before tests — clean up anything we created
+		try { rmSync(CODEXFI_JSONC); } catch { /* already gone */ }
+	}
+});
 
 // ── Config path ─────────────────────────────────────────────────────────────────
 
@@ -68,29 +86,10 @@ describe("config path", () => {
 // ── writeApiKeys() ───────────────────────────────────────────────────────────────
 
 describe("writeApiKeys", () => {
-	// Save the original codexfi.jsonc content so we can restore it
-	let originalContent: string | null = null;
-
-	beforeAll(() => {
-		if (existsSync(CODEXFI_JSONC)) {
-			originalContent = readFileSync(CODEXFI_JSONC, "utf-8");
-		}
-	});
-
-	afterAll(() => {
-		if (originalContent !== null) {
-			// Restore original config
-			writeFileSync(CODEXFI_JSONC, originalContent, "utf-8");
-		} else if (writtenByTest.includes(CODEXFI_JSONC)) {
-			// We created it — remove it
-			try { rmSync(CODEXFI_JSONC); } catch {}
-		}
-		cleanupTestFiles();
-	});
+	// No per-describe backup needed — the top-level beforeAll/afterAll handles it.
 
 	test("writes to codexfi.jsonc, not memory.jsonc", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-test-write-target" });
 
@@ -106,7 +105,6 @@ describe("writeApiKeys", () => {
 
 	test("written file contains the provided API key", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-unit-test-key-12345" });
 
@@ -116,7 +114,6 @@ describe("writeApiKeys", () => {
 
 	test("written file header says codexfi.jsonc, not memory.jsonc", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-header-check" });
 
@@ -127,7 +124,6 @@ describe("writeApiKeys", () => {
 
 	test("preserves existing non-key settings when updating keys", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		// Write an initial config with a custom setting
 		writeApiKeys({ voyageApiKey: "pa-initial" });
@@ -142,7 +138,6 @@ describe("writeApiKeys", () => {
 
 	test("written file contains only ASCII characters (no Bun bytecode corruption)", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({
 			voyageApiKey: "pa-ascii-test",
@@ -169,7 +164,6 @@ describe("writeApiKeys", () => {
 
 	test("does not write memory.jsonc as a side-effect", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		const legacyExistedBefore = existsSync(LEGACY_JSONC);
 
@@ -219,24 +213,10 @@ describe("PLUGIN_CONFIG.extractionProvider", () => {
 });
 
 describe("writeApiKeys with extractionProvider", () => {
-	let originalContent: string | null = null;
-
-	beforeAll(() => {
-		if (existsSync(CODEXFI_JSONC)) {
-			originalContent = readFileSync(CODEXFI_JSONC, "utf-8");
-		}
-	});
-
-	afterAll(() => {
-		if (originalContent !== null) {
-			writeFileSync(CODEXFI_JSONC, originalContent, "utf-8");
-		}
-		cleanupTestFiles();
-	});
+	// No per-describe backup needed — top-level beforeAll/afterAll handles it.
 
 	test("written file includes extractionProvider field", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-provider-test", extractionProvider: "xai" });
 
@@ -247,7 +227,6 @@ describe("writeApiKeys with extractionProvider", () => {
 
 	test("extractionProvider defaults to anthropic in generated config", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-default-provider-test" });
 
@@ -258,7 +237,6 @@ describe("writeApiKeys with extractionProvider", () => {
 
 	test("extractionProvider comment references all three options", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		writeApiKeys({ voyageApiKey: "pa-comment-test" });
 
@@ -271,7 +249,6 @@ describe("writeApiKeys with extractionProvider", () => {
 
 	test("preserves extractionProvider when updating only API keys", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
-		writtenByTest.push(CODEXFI_JSONC);
 
 		// Write initial config with xai provider
 		writeApiKeys({ voyageApiKey: "pa-preserve-1", extractionProvider: "xai" });

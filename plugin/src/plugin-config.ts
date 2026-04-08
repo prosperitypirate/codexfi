@@ -33,7 +33,14 @@ interface MemoryConfig {
 	extractionProvider?: "anthropic" | "xai" | "google";
 
 	// ── Plugin Settings ─────────────────────────────────────────────────────────
+	/** Minimum similarity for LanceDB retrieval (controls search depth). Default: 0.45. */
 	similarityThreshold?: number;
+	/**
+	 * Minimum similarity to *display* in the ## Relevant to Current Task section.
+	 * Separate from similarityThreshold (retrieval depth) — this is a display-only filter.
+	 * Raise to reduce noise; lower to show more results. Default: 0.60.
+	 */
+	displaySimilarityThreshold?: number;
 	maxMemories?: number;
 	maxProjectMemories?: number;
 	maxStructuredMemories?: number;
@@ -75,10 +82,14 @@ const DEFAULT_KEYWORD_PATTERNS = [
 
 const DEFAULTS = {
 	similarityThreshold: 0.45,
+	displaySimilarityThreshold: 0.60,
 	maxMemories: 20,
 	maxProjectMemories: 20,
-	maxStructuredMemories: 30,
-	maxProfileItems: 5,
+	// Raised from 30 → 50: active-context and architecture-pattern need budget room.
+	// Zero LanceDB scan performance impact (scan already reads up to 10K rows).
+	maxStructuredMemories: 50,
+	// Raised from 5 → 8: User Preferences section was too sparse.
+	maxProfileItems: 8,
 	injectProfile: true,
 	containerTagPrefix: "opencode",
 	compactionThreshold: 0.80,
@@ -144,6 +155,7 @@ export const PLUGIN_CONFIG = {
 
 	// Plugin settings
 	similarityThreshold: fileConfig.similarityThreshold ?? DEFAULTS.similarityThreshold,
+	displaySimilarityThreshold: fileConfig.displaySimilarityThreshold ?? DEFAULTS.displaySimilarityThreshold,
 	maxMemories: fileConfig.maxMemories ?? DEFAULTS.maxMemories,
 	maxProjectMemories: fileConfig.maxProjectMemories ?? DEFAULTS.maxProjectMemories,
 	maxStructuredMemories: fileConfig.maxStructuredMemories ?? DEFAULTS.maxStructuredMemories,
@@ -274,6 +286,7 @@ function collectNonDefaults(config: MemoryConfig): string[] {
 
 	const numericFields: Array<[keyof MemoryConfig, number]> = [
 		["similarityThreshold", DEFAULTS.similarityThreshold],
+		["displaySimilarityThreshold", DEFAULTS.displaySimilarityThreshold],
 		["maxMemories", DEFAULTS.maxMemories],
 		["maxProjectMemories", DEFAULTS.maxProjectMemories],
 		["maxStructuredMemories", DEFAULTS.maxStructuredMemories],

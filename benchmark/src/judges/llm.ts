@@ -54,11 +54,16 @@ export async function judge(prompt: string, config: Config): Promise<JudgeResult
   }
 }
 
-export async function answer(prompt: string, config: Config): Promise<string> {
+export async function answer(
+  prompt: string,
+  config: Config,
+  options?: { system?: string },
+): Promise<string> {
   const model = createModel(config);
 
   const { text } = await generateText({
     model,
+    ...(options?.system ? { system: options.system } : {}),
     prompt,
     // 400 tokens: tight limit forces concise, comprehensive list-style answers.
     // Increasing this causes the model to elaborate narrowly on a few items rather

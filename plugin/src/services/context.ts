@@ -3,6 +3,7 @@
  * Zero network calls, zero side effects — pure formatting.
  */
 
+import { SIMILARITY_THRESHOLD } from "../config.js";
 import { PLUGIN_CONFIG } from "../plugin-config.js";
 
 export interface StructuredMemory {
@@ -34,12 +35,15 @@ export interface MemoriesResponseMinimal {
 }
 
 // Ordered sections for the structured [MEMORY] block.
-const STRUCTURED_SECTIONS: Array<{ label: string; types: string[] }> = [
+const STRUCTURED_SECTIONS: Array<{ label: string; types: string[]; renderCap?: number }> = [
 	{ label: "Project Brief",    types: ["project-brief", "project-config"] },
-	{ label: "Architecture",     types: ["architecture"] },
+	{ label: "Architecture",     types: ["architecture", "architecture-pattern"] },
 	{ label: "Tech Context",     types: ["tech-context"] },
 	{ label: "Product Context",  types: ["product-context"] },
 	{ label: "Progress & Status", types: ["progress"] },
+	// Active Context: latest singleton memory — capped at 2,000 chars to prevent
+	// oversized memories from bloating the block (edge case: user manually adds one)
+	{ label: "Active Context",   types: ["active-context"], renderCap: 2000 },
 ];
 
 const SESSION_SUMMARY_TYPES = ["session-summary", "conversation"];
@@ -63,12 +67,25 @@ export function formatContextForPrompt(
 
 			parts.push(`\n## ${section.label}`);
 			items.forEach((mem) => {
-				const content = mem.memory || mem.chunk || "";
-				if (content) parts.push(`- ${content}`);
+				const rawContent = mem.memory || mem.chunk || "";
+				if (!rawContent) return;
+				// Apply per-section render cap (used by Active Context to prevent oversized blobs)
+				const content = section.renderCap && rawContent.length > section.renderCap
+					? rawContent.slice(0, section.renderCap) + "…"
+					: rawContent;
+				// architecture-pattern memories render with a '> pattern:' prefix for visual distinction
+				const memType = (mem.metadata?.type as string | undefined) ?? "";
+				if (memType === "architecture-pattern") {
+					parts.push(`> **pattern:** ${content}`);
+				} else {
+					parts.push(`- ${content}`);
+				}
 			});
 		}
 
-		// Last session — most recent session-summary only
+		// Recent sessions — up to 3 most recent session-summaries, newest first.
+		// Latest entry is full text; 2nd truncated at 600 chars; 3rd at 300 chars.
+		// Condensation is pure string truncation — no LLM call, zero latency cost.
 		const sessionItems: StructuredMemory[] = [];
 		for (const t of SESSION_SUMMARY_TYPES) {
 			if (byType[t]) sessionItems.push(...byType[t]);
@@ -79,11 +96,26 @@ export function formatContextForPrompt(
 				const tb = b.createdAt ?? "";
 				return tb.localeCompare(ta);
 			});
-			const latest = sorted[0];
-			const content = latest?.memory || latest?.chunk || "";
-			if (content) {
-				parts.push("\n## Last Session");
-				parts.push(`- ${content}`);
+			const recentSessions = sorted.slice(0, 3);
+			const sessionParts: string[] = [];
+
+			recentSessions.forEach((mem, idx) => {
+				const raw = mem.memory || mem.chunk || "";
+				if (!raw) return;
+				let content: string;
+				if (idx === 0) {
+					content = raw;                          // latest: full text
+				} else if (idx === 1) {
+					content = raw.length > 600 ? raw.slice(0, 600) + "…" : raw;
+				} else {
+					content = raw.length > 300 ? raw.slice(0, 300) + "…" : raw;
+				}
+				sessionParts.push(`- ${content}`);
+			});
+
+			if (sessionParts.length > 0) {
+				parts.push("\n## Recent Sessions");
+				parts.push(...sessionParts);
 			}
 		}
 	}
@@ -108,16 +140,22 @@ export function formatContextForPrompt(
 		...semanticItems.map((r) => ({ ...r, _source: "project" as const })),
 	].sort((a, b) => b.similarity - a.similarity);
 
-	if (allSemantic.length > 0) {
+	// Apply displaySimilarityThreshold — filter out low-confidence results from display.
+	// Note: retrieval still runs at similarityThreshold (0.45) for full recall;
+	// this is a separate, higher display floor to reduce noise in the block.
+	const displayThreshold = PLUGIN_CONFIG.displaySimilarityThreshold;
+	const filteredSemantic = allSemantic.filter((m) => m.similarity >= displayThreshold);
+
+	if (filteredSemantic.length > 0) {
 		parts.push("\n## Relevant to Current Task");
-		allSemantic.forEach((mem) => {
+		filteredSemantic.forEach((mem) => {
 			const pct = Math.round(mem.similarity * 100);
 			const content = mem.memory || mem.chunk || "";
 			if (!content) return;
 			const dateTag = mem.date ? `, ${mem.date}` : "";
 			parts.push(`- [${pct}%${dateTag}] ${content}`);
 			const snippet = mem.chunk?.trim();
-			if (snippet && snippet !== content && mem.similarity >= 0.55) {
+			if (snippet && snippet !== content && mem.similarity >= SIMILARITY_THRESHOLD) {
 				const isTranscript =
 					snippet.startsWith("[assistant]") || snippet.startsWith("[user]");
 				if (!isTranscript) {

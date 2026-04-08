@@ -70,6 +70,7 @@ export function runReport(cp: Checkpoint): BenchmarkReport {
     judgeModel:     cp.judgeModel,
     answeringModel: cp.answeringModel,
     timestamp:      new Date().toISOString(),
+    mode:           cp.mode ?? "retrieval",
     summary: { totalQuestions, correctCount, accuracy },
     byQuestionType,
     evaluations:    evals,

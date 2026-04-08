@@ -7,6 +7,7 @@ export type MemoryScope = "user" | "project";
 export type MemoryType =
 	| "project-brief"
 	| "architecture"
+	| "architecture-pattern"
 	| "tech-context"
 	| "product-context"
 	| "session-summary"
@@ -15,6 +16,7 @@ export type MemoryType =
 	| "error-solution"
 	| "preference"
 	| "learned-pattern"
+	| "active-context"
 	| "conversation";
 
 export type ConversationRole = "user" | "assistant" | "system" | "tool";

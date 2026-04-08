@@ -21,6 +21,13 @@ Extract memories from BOTH perspectives — not just stated facts, but also:
 - Project-specific constraints, requirements, or architecture decisions
 - Tool/command preferences (e.g. "use bun not npm", "run tests with X flag")
 
+GLOBAL RULE — prefer actionable over descriptive:
+A fact that tells the agent HOW to do something is more valuable than a fact that tells
+the agent something EXISTS. "Backend runs on port 8000, start with \`uvicorn src.main:app
+--reload\`" is better than "Backend uses FastAPI". "Uses cookie-based auth (HttpOnly, 1yr)
+because it survives page refreshes without JS token management" is better than "Uses
+cookie-based auth".
+
 Rules:
 - Each memory = one self-contained, searchable fact (1-2 sentences max for simple facts)
 - For bug fixes and debugging sequences, preserve the CAUSAL CHAIN: what broke → why it
@@ -38,10 +45,15 @@ Rules:
                         project — the first thing a new agent reads. Do NOT use for tech stack,
                         architecture, or implementation details; use "tech-context" and
                         "architecture" for those.
-    "architecture"    — System design, patterns, component relationships, critical paths
+    "architecture"    — System design, patterns, component relationships, critical paths, and the
+                        WHY behind design decisions. Capture rationale: "Uses event-sourcing for
+                        the order pipeline because replaying events is cheaper than a full DB scan
+                        during reconciliation" is better than "Uses event-sourcing".
     "tech-context"    — Tech stack, languages, frameworks, key dependencies, and environment
-                        constraints. NOT for specific commands or tool paths — use
-                        "project-config" for those.
+                        constraints. Include actionable details: the actual command to run, port
+                        number, or file path — not just a description. "Backend runs on port 8000,
+                        start with \`uvicorn src.main:app --reload\`" not "Backend uses FastAPI".
+                        NOT for specific commands or tool paths in isolation — use "project-config".
     "project-config"  — Build/run/test commands, tool paths, env vars, and workflow
                         preferences specific to this project (e.g. "run tests with
                         bun test", "use /opt/homebrew/bin/gh for GitHub ops").
@@ -58,6 +70,27 @@ Rules:
                         (or deliberately abandoned). Do NOT use for general project status updates.
     "preference"      — Cross-project patterns, personal preferences, workflow habits
     "learned-pattern" — Technical patterns, reusable solutions, established conventions
+    "active-context"  — Current work focus snapshot: what is being built right now, which files
+                        are changing, system state (what's running/broken), immediate next steps,
+                        known blockers. Write as a rich 3–6 sentence snapshot. Only extract when
+                        the conversation shows active implementation work (file edits, bash
+                        commands, architectural decisions) — skip for questions, discussions, or
+                        purely conversational turns.
+                        Example: "Implementing the OAuth2 refresh-token flow in
+                        src/auth/token.ts. The access-token expiry check in middleware.ts is
+                        complete; the refresh endpoint POST /auth/refresh is wired but returns
+                        500 — likely a missing scope claim in the JWT payload. Next: add 'offline'
+                        scope to the Google OAuth consent screen config and re-test."
+    "architecture-pattern" — A repeatable 'how to do X in this codebase' recipe: numbered steps,
+                        file paths, and code conventions specific to this project. Use when a
+                        pattern was established or demonstrated (e.g. "how to add a new API
+                        endpoint", "how to add a migration", "how to wire a new plugin hook").
+                        Example: "How to add a new API route: 1. Add route handler in
+                        src/routes/<name>.ts following the fetch_oura_data() pattern.
+                        2. Register in src/main.py with app.include_router(). 3. Add
+                        Depends(get_current_token) for auth. 4. Add schema in
+                        src/schemas/<name>.py." Renders alongside architecture descriptions —
+                        do NOT use for general system descriptions; use "architecture" for those.
 
 - Return ONLY a valid JSON array of objects — no markdown, no explanation, no prose:
   [{"memory": "...", "type": "..."}]
