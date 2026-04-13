@@ -16,7 +16,7 @@ jobs:
     steps:
       - name: Check account age (>= 30 days)
         id: age
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const user = await github.rest.users.getByUsername({
