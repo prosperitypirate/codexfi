@@ -55,10 +55,10 @@ An AI provider key for the OpenCode agent sessions is also required — set this
 
 | Tier | Tests | Command | Time | Requirements |
 |------|-------|---------|------|-------------|
-| Unit | 139 | `bun test src/unit/` | ~1s | None |
-| Integration | 31 | `bun test src/integration/` | ~3s | `VOYAGE_API_KEY` |
+| Unit | 171 | `bun test src/unit/` | ~1s | None |
+| Integration | 34 | `bun test src/integration/` | ~4s | `VOYAGE_API_KEY` |
 | Stress | 3 | `bun test src/stress/` | ~1s | None |
-| E2E | 13 scenarios | `bun run test:e2e` | ~10min | Live opencode + API keys |
+| E2E | 15 scenarios | `bun run test:e2e` | ~10min | Live opencode + API keys |
 
 ### Stress tests (concurrent multi-agent safety)
 
@@ -82,7 +82,7 @@ bun install                    # first time only
 bun test src/unit/             # unit tests only
 bun test src/integration/      # integration tests only
 bun test src/stress/           # concurrent stress tests only
-bun run test:e2e               # all 13 E2E scenarios (live dashboard at localhost:4243)
+bun run test:e2e               # all 15 E2E scenarios (live dashboard at localhost:4243)
 bun run test:e2e:scenario 01   # single E2E scenario
 ```
 
@@ -91,6 +91,8 @@ Each run is also saved to `results/` (gitignored). After each scenario, the test
 **automatically deletes all memories it created** from the store.
 
 ## Latest run results (2026-04-06) — SQLite WAL store (PR #151)
+
+> **Note:** Snapshot from PR #151. Suite has since grown to 171 unit / 34 integration / 15 E2E. Run locally for fresh numbers; see CI for per-PR results.
 
 Full run against `feat/pure-ts-vector-store` branch. Storage: bun:sqlite with WAL mode.
 Extraction via Anthropic Haiku.
@@ -183,6 +185,8 @@ OpenCode, so the config is no longer affected. See issue #155 for forensic detai
 | 11 | System Prompt Memory Injection | [MEMORY] block is injected via `system.transform` into the system prompt (not as a synthetic message part); agent references seeded facts |
 | 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories as the user switches topics mid-session |
 | 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode, re-fetches memories for Turn 1 visibility, background enrichment fires after first response |
+| 14 | Active-Context Singleton Aging | New `active-context` insert deletes prior ones for the project; only the latest survives; agent recalls the current focus from `## Active Context` injection |
+| 15 | Recent Sessions Shows Last 3 Summaries | `## Recent Sessions` section renders the latest 3 `session-summary` memories with truncation; older summaries do not appear |
 
 ## Architecture
 
@@ -208,7 +212,7 @@ testing/
 │   │   │   ├── server.ts      — Bun.serve on port 4243
 │   │   │   └── page.ts        — self-contained HTML live dashboard
 │   │   └── scenarios/
-│   │       ├── 01-cross-session.ts ... 13-auto-init-turn1.ts
+│   │       ├── 01-cross-session.ts ... 15-recent-sessions-three.ts
 │   ├── results/               — gitignored; JSON output of each run
 │   ├── package.json
 │   └── tsconfig.json
