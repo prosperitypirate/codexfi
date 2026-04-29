@@ -204,7 +204,20 @@ async function extractAndSave(
 
 		const results = await store.ingest(sanitizedMessages, tags.project);
 
-		log("auto-save: done", { sessionID, project: tags.project, count: results.length });
+		// Debug: log extracted types so we can see what the LLM is producing
+		const typeBreakdown = results.reduce<Record<string, number>>((acc, r) => {
+			const t = r.type || "unknown";
+			acc[t] = (acc[t] ?? 0) + 1;
+			return acc;
+		}, {});
+		const hasActiveContext = results.some(r => r.type === "active-context");
+		log("auto-save: done", {
+			sessionID,
+			project: tags.project,
+			count: results.length,
+			types: typeBreakdown,
+			activeContextExtracted: hasActiveContext,
+		});
 	} catch (err) {
 		log("auto-save: failed", { sessionID, project: tags.project, error: String(err) });
 	}

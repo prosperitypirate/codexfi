@@ -70,12 +70,15 @@ Rules:
                         (or deliberately abandoned). Do NOT use for general project status updates.
     "preference"      — Cross-project patterns, personal preferences, workflow habits
     "learned-pattern" — Technical patterns, reusable solutions, established conventions
-    "active-context"  — Current work focus snapshot: what is being built right now, which files
-                        are changing, system state (what's running/broken), immediate next steps,
-                        known blockers. Write as a rich 3–6 sentence snapshot. Only extract when
-                        the conversation shows active implementation work (file edits, bash
-                        commands, architectural decisions) — skip for questions, discussions, or
-                        purely conversational turns.
+    "active-context"  — Current work focus snapshot: what is being built, investigated,
+                        designed, debugged, or planned right now; which files/areas are
+                        involved; system state (what's running/broken); immediate next steps;
+                        known blockers. Write as a rich 3–6 sentence snapshot. Extract whenever
+                        the session has a clear current focus — this includes implementation
+                        work (file edits, bash, decisions) AND discussions, investigations,
+                        triage, planning, and design conversations. Skip only for purely
+                        conversational turns with no project-relevant focus (greetings,
+                        meta-questions about the assistant itself).
                         Example: "Implementing the OAuth2 refresh-token flow in
                         src/auth/token.ts. The access-token expiry check in middleware.ts is
                         complete; the refresh endpoint POST /auth/refresh is wired but returns
@@ -83,8 +86,10 @@ Rules:
                         scope to the Google OAuth consent screen config and re-test."
     "architecture-pattern" — A repeatable 'how to do X in this codebase' recipe: numbered steps,
                         file paths, and code conventions specific to this project. Use when a
-                        pattern was established or demonstrated (e.g. "how to add a new API
-                        endpoint", "how to add a migration", "how to wire a new plugin hook").
+                        pattern is established, demonstrated, applied, or explained as a
+                        repeatable procedure (e.g. "how to add a new API endpoint", "how to add
+                        a migration", "how to wire a new plugin hook"). Extract even from
+                        explanations or discussions if the steps are concrete and reusable.
                         Example: "How to add a new API route: 1. Add route handler in
                         src/routes/<name>.ts following the fetch_oura_data() pattern.
                         2. Register in src/main.py with app.include_router(). 3. Add

@@ -245,10 +245,10 @@ async function ageProgress(userId: string, newId: string): Promise<void> {
 async function ageActiveContext(userId: string, newId: string): Promise<void> {
 	try {
 		const rows = await getMemoriesByType(userId, "active-context");
-		for (const row of rows) {
-			if ((row.id as string) !== newId) {
-				store.deleteById(row.id as string);
-			}
+		const toDelete = rows.filter(row => (row.id as string) !== newId);
+		console.log(`[codexfi:store] ageActiveContext | userId=${userId} | existing=${rows.length} | deleting=${toDelete.length} | newId=${newId}`);
+		for (const row of toDelete) {
+			store.deleteById(row.id as string);
 		}
 	} catch (e) {
 		console.warn("Aging active-context error:", e);
@@ -351,7 +351,7 @@ export async function ingest(
 				"store update (dedup)",
 				DB_RETRY,
 			);
-			results.push({ id: dup.id as string, memory: factText, event: "UPDATE" });
+			results.push({ id: dup.id as string, memory: factText, type: factType, event: "UPDATE" });
 		} else {
 			// New insert — full pipeline: add, aging, contradiction detection
 			const memId = randomUUID();
@@ -375,10 +375,14 @@ export async function ingest(
 				"store write (new memory)",
 				DB_RETRY,
 			);
-			results.push({ id: memId, memory: factText, event: "ADD" });
+			results.push({ id: memId, memory: factText, type: factType, event: "ADD" });
 
 			if (factType) {
 				await applyAgingRules(safeUserId, factType, memId);
+			}
+
+			if (factType === "active-context") {
+				console.log(`[codexfi:store] active-context stored | id=${memId} | preview="${factText.slice(0, 120).replace(/\n/g, " ")}"`);
 			}
 
 			// Contradiction detection — mark stale memories as superseded

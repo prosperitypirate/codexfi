@@ -73,6 +73,7 @@ export type SearchResult = z.infer<typeof SearchResultSchema>;
 export const IngestResultSchema = z.object({
 	id: z.string(),
 	memory: z.string(),
+	type: z.string(),
 	event: z.enum(["ADD", "UPDATE"]),
 });
 
