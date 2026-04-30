@@ -73,7 +73,8 @@ export type SearchResult = z.infer<typeof SearchResultSchema>;
 export const IngestResultSchema = z.object({
 	id: z.string(),
 	memory: z.string(),
-	type: z.string(),
+	/** Memory type as determined by the extraction LLM — always a non-empty string. */
+	type: z.string().min(1),
 	event: z.enum(["ADD", "UPDATE"]),
 });
 

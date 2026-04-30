@@ -50,6 +50,13 @@ describe("IngestResultSchema", () => {
 		}
 	});
 
+	test("type rejects empty strings — enforces .min(1) on schema", () => {
+		// Empty string type is meaningless and indicates a bug in the extractor
+		// or fallback chain. The schema now enforces non-empty at parse time.
+		const empty = { id: "abc", memory: "x", type: "", event: "ADD" };
+		expect(IngestResultSchema.safeParse(empty).success).toBe(false);
+	});
+
 	test("event must be ADD or UPDATE", () => {
 		const bad = { id: "x", memory: "y", type: "z", event: "DELETE" };
 		expect(IngestResultSchema.safeParse(bad).success).toBe(false);
