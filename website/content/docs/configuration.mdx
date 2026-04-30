@@ -27,10 +27,11 @@ The config file lives at `~/.codexfi/codexfi.jsonc`. It is created automatically
 
   // ── Plugin Settings ───────────────────────────────────────────────
   "similarityThreshold": 0.45,
+  "displaySimilarityThreshold": 0.60,
   "maxMemories": 20,
   "maxProjectMemories": 20,
-  "maxStructuredMemories": 30,
-  "maxProfileItems": 5,
+  "maxStructuredMemories": 50,
+  "maxProfileItems": 8,
   "compactionThreshold": 0.80,
   "turnSummaryInterval": 5
 }
@@ -92,6 +93,15 @@ The plugin falls back through all configured providers automatically. If the pri
 
 Minimum cosine similarity score for a memory to appear in search results. Lower values return more results (potentially less relevant); higher values are stricter.
 
+### `displaySimilarityThreshold`
+
+- **Default:** `0.60`
+- **Range:** `0.0` to `1.0`
+
+Minimum cosine similarity score for a memory to appear in the **`## Relevant to Current Task`** section of the `[MEMORY]` block. This is a separate, higher display floor on top of `similarityThreshold` — retrieval still runs at `similarityThreshold` for full recall, but only results scoring above `displaySimilarityThreshold` are shown.
+
+Raise this value to reduce noise in context; lower it to surface more loosely-related memories.
+
 ### `maxMemories`
 
 - **Default:** `20`
@@ -106,13 +116,13 @@ Maximum number of project-scoped memories retrieved during structured fetches.
 
 ### `maxStructuredMemories`
 
-- **Default:** `30`
+- **Default:** `50`
 
 Maximum number of memories retrieved for structured sections (Project Brief, Architecture, Tech Context, etc.) in the `[MEMORY]` block.
 
 ### `maxProfileItems`
 
-- **Default:** `5`
+- **Default:** `8`
 
 Maximum number of user preference items shown in the "User Preferences" section of the `[MEMORY]` block.
 

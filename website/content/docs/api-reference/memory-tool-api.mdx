@@ -42,7 +42,7 @@ memory({
 |-----------|----------|---------|-------------|
 | `content` | Yes | — | The memory text to store |
 | `scope` | No | `"project"` | `"project"` or `"user"` |
-| `type` | No | `"learned-pattern"` | One of the 11 [memory types](/docs/how-it-works/memory-types) |
+| `type` | No | `"learned-pattern"` | One of the 13 [memory types](/docs/how-it-works/memory-types) |
 
 The memory goes through the same pipeline as automatically extracted facts: embedding, deduplication, and contradiction detection.
 
@@ -168,9 +168,11 @@ When using `mode: "add"`, set the `type` parameter to categorize the memory:
 |------|------------|
 | `project-brief` | What the project is, its purpose |
 | `architecture` | System design, component relationships |
+| `architecture-pattern` | Repeatable workflows, recipes, procedural conventions (e.g. PR workflow, migration patterns) |
 | `tech-context` | Stack, languages, frameworks, key dependencies — not specific commands or tool paths (use `project-config`) |
 | `product-context` | Features, goals, product decisions |
 | `progress` | Current state, what's done, what's blocked |
+| `active-context` | What is being worked on right now in this session (singleton — only latest survives) |
 | `project-config` | Config preferences, run commands, env setup |
 | `error-solution` | Bug fixes, workarounds discovered |
 | `preference` | User coding preferences (typically user-scoped) |

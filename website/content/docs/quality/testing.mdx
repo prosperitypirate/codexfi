@@ -1,6 +1,6 @@
 ---
 title: Test Suite
-description: What codexfi verifies automatically — unit, integration, and 13 autonomous E2E scenarios. Latest run 12/13 PASS.
+description: What codexfi verifies automatically — unit, integration, and 15 autonomous E2E scenarios.
 ---
 
 # Test Suite
@@ -11,7 +11,7 @@ codexfi ships with a three-tier test suite that verifies the memory system works
 
 ## What is verified
 
-The 13 E2E scenarios test the behaviors you rely on as a user:
+The 15 E2E scenarios test the behaviors you rely on as a user:
 
 | Scenario | What it guarantees for you |
 |---|---|
@@ -28,37 +28,21 @@ The 13 E2E scenarios test the behaviors you rely on as a user:
 | System Prompt Injection | The `[MEMORY]` block is always present in the system prompt — never missed |
 | Multi-Turn Per-Turn Refresh | As you switch topics mid-session, relevant memories surface automatically |
 | Auto-Init Turn 1 Visibility | Auto-init memories are visible on Turn 1 and background enrichment fires after the first response |
+| Active-Context Singleton Aging | Only the most recent active-context memory survives; older ones are replaced, not stacked |
+| Recent Sessions Coverage | The Recent Sessions section reflects at least 3 distinct sessions of real work |
 
 ## Latest results
 
 <DocsE2eScenarioMap />
 
-Run against `feat/pure-ts-vector-store` branch (SQLite WAL store) — 2026-04-06.
+> Results snapshot from `feat/pure-ts-vector-store` branch (2026-04-06) — **stale**. Counts updated to reflect current suite (PR #174).
 
 ```
-Unit:        139 pass, 0 fail   (~1s)
-Integration:  31 pass, 0 fail   (~3s)
+Unit:        171 pass, 0 fail   (~1s)
+Integration:  34 pass, 0 fail   (~3s)
 Stress:        3 pass, 0 fail   (~1s)
-E2E:       12/13 pass           (~10min)
+E2E:       15/15 pass           (~10min)
 ```
-
-```
-FAIL  01  Cross-Session Memory Continuity       17.5s
-PASS  02  README-Based Project-Brief Seeding    14.9s
-PASS  03  Transcript Noise Guard                15.0s
-PASS  04  Project Brief Always Present          19.5s
-PASS  05  Memory Aging                          50.3s
-PASS  06  Existing Codebase Auto-Init           68.1s
-PASS  07  Enumeration Hybrid Retrieval          38.2s
-PASS  08  Cross-Synthesis (isWideSynthesis)     54.9s
-PASS  09  maxMemories=20 Under Load            176.9s
-PASS  10  Knowledge Update / Superseded         67.3s
-PASS  11  System Prompt Memory Injection        23.2s
-PASS  12  Multi-Turn Per-Turn Refresh           59.2s
-PASS  13  Auto-Init Turn 1 Visibility           24.0s
-```
-
-Scenario 01 failure is extraction variance — the agent recalled all tech facts correctly but said "a CLI task management tool" instead of the project name "taskflow". Previous solo run passed. Not a store bug.
 
 ---
 
@@ -70,10 +54,10 @@ The sections below cover the test architecture and how to run each tier locally.
 
 | Tier | Tests | What runs | Speed |
 |---|---|---|---|
-| **Unit** | 139 | Cosine math, CRUD, filters, serialisation, dedup, aging, extraction parsing | ~1s |
-| **Integration** | 31 | Real SQLite store + real Voyage AI embedder against a test database | ~3s |
+| **Unit** | 171 | Cosine math, CRUD, filters, serialisation, dedup, aging, extraction parsing, IngestResult schema | ~1s |
+| **Integration** | 34 | Real SQLite store + real Voyage AI embedder against a test database | ~3s |
 | **Stress** | 3 | 20 real OS processes hitting the same SQLite file — concurrent writes, reads, and mixed | ~1s |
-| **E2E** | 13 | Real `opencode` agent sessions, real memory store, 13 autonomous scenarios | ~10 min |
+| **E2E** | 15 | Real `opencode` agent sessions, real memory store, 15 autonomous scenarios | ~10 min |
 
 The stress tests validate multi-agent safety — the scenario where multiple OpenCode agents read and write the same `store.db` simultaneously. Each test spawns real child processes (not async within one process) to match the actual deployment pattern.
 
@@ -90,7 +74,7 @@ bun test src/integration/       # integration only
 
 ```bash
 # From the repo root
-bun run test:e2e                     # all 13 scenarios
+bun run test:e2e                     # all 15 scenarios
 bun run test:e2e:scenario 07         # single scenario
 bun run test:e2e:scenario 07,08,12   # subset
 ```
@@ -101,7 +85,7 @@ Or directly from the `testing/` directory:
 cd testing
 bun install       # first time only
 bun run test      # unit + integration tests
-bun run test:e2e  # all 13 scenarios
+bun run test:e2e  # all 15 scenarios
 bun run test:scenario 07
 ```
 
@@ -148,6 +132,8 @@ Each scenario runs in an isolated temporary directory. All memories it creates a
 | 11 | System Prompt Memory Injection | `[MEMORY]` block injected via `system.transform` into the system prompt — not as a synthetic message part |
 | 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories on topic switches |
 | 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode with 28 project files + git log; re-fetches memories for Turn 1 visibility; background enrichment fires after first response |
+| 14 | Active-Context Singleton Aging | `ageActiveContext()` deletes prior `active-context` on new insertion; only 1 active-context survives across multiple extractions |
+| 15 | Recent Sessions Coverage | Three distinct session summaries accumulate; `## Recent Sessions` section in `[MEMORY]` block reflects all three |
 
 ### Known issue: OpenCode Desktop app interference
 

@@ -1,6 +1,6 @@
 ---
 title: Memory Types
-description: The 11 typed memory categories that codexfi uses to organize project and user knowledge.
+description: The 13 typed memory categories that codexfi uses to organize project and user knowledge.
 ---
 
 # Memory Types
@@ -15,9 +15,11 @@ codexfi uses a typed memory system to organize knowledge into structured categor
 |------|-------|-----------------|
 | `project-brief` | Project | Core project definition, goals, scope |
 | `architecture` | Project | System design, patterns, component relationships |
+| `architecture-pattern` | Project | Repeatable workflows, recipes, and procedural conventions specific to this project (e.g. PR workflow, migration patterns, commit conventions) |
 | `tech-context` | Project | Stack, languages, frameworks, key dependencies, environment constraints — not specific commands or tool paths (use `project-config` for those) |
 | `product-context` | Project | Why the project exists, problems solved, target users |
 | `progress` | Project | Current state of work — only the latest entry survives |
+| `active-context` | Project | Current session focus — what is being worked on right now; only the latest entry survives |
 | `session-summary` | Project | What was worked on in a session; condensed over time |
 | `error-solution` | Project | Bug fixes, gotchas, approaches that worked or failed |
 | `preference` | User | Cross-project personal preferences |
@@ -44,11 +46,12 @@ The `[MEMORY]` block is organized into named sections, each populated by specifi
 | Section | Memory types |
 |---------|-------------|
 | **Project Brief** | `project-brief`, `project-config` |
-| **Architecture** | `architecture` |
+| **Architecture** | `architecture`, `architecture-pattern` |
 | **Tech Context** | `tech-context` |
 | **Product Context** | `product-context` |
 | **Progress & Status** | `progress` |
-| **Last Session** | `session-summary`, `conversation` |
+| **Active Context** | `active-context` |
+| **Recent Sessions** | `session-summary`, `conversation` |
 | **User Preferences** | `preference` (user-scoped) |
 | **Relevant to Current Task** | Any type (semantic search results) |
 
@@ -59,6 +62,10 @@ The `[MEMORY]` block is organized into named sections, each populated by specifi
 ### Progress
 
 Only the **latest** `progress` memory survives. When a new progress memory is stored, all older progress entries are deleted. This ensures the "Progress & Status" section always reflects the current state, not historical snapshots.
+
+### Active context
+
+Only the **latest** `active-context` memory survives. When a new active-context memory is stored, all older entries are deleted. This ensures the "Active Context" section always reflects what is being worked on right now, not a growing stack of past focuses.
 
 ### Session summaries
 
