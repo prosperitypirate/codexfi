@@ -48,7 +48,7 @@ Each subsequent user message triggers a single semantic search (~300ms) that ref
 
 ### Every LLM call (system.transform)
 
-The `[MEMORY]` block is rebuilt from the cache and injected into the system prompt. This happens on every LLM call, not just the first. The block contains structured sections (Project Brief, Architecture, etc.) plus semantically matched memories. Because injection happens through the system prompt — not a tool call or conversation turn — it consumes no conversation context tokens.
+The `[MEMORY]` block is rebuilt from the cache and injected into the system prompt. This happens on every LLM call, not just the first. The block contains structured sections (Project Brief, Architecture, Active Context, Recent Sessions, etc.) plus semantically matched memories. Because injection happens through the system prompt — not a tool call or conversation turn — it consumes no conversation context tokens.
 
 ## Data flow: storage
 
@@ -58,7 +58,7 @@ The `[MEMORY]` block is rebuilt from the cache and injected into the system prom
 2. The configured extraction LLM analyzes the conversation and returns a JSON array of typed facts
 3. Each fact is embedded into a 1024-dimension vector using `voyage-code-3`
 4. **Deduplication** — cosine similarity check against existing memories (threshold: 0.12 general, 0.25 structural types). Duplicates trigger an update instead of an insert.
-5. **Aging rules** — `progress` type: only the latest survives. `session-summary`: capped at 3; oldest condensed into `learned-pattern`.
+5. **Aging rules** — `progress` type: only the latest survives. `active-context` type: only the latest survives. `session-summary`: capped at 3; oldest condensed into `learned-pattern`.
 6. **Contradiction detection** — nearby memories are checked by the LLM for semantic contradictions. Stale memories are marked as superseded.
 
 A 15-second cooldown prevents duplicate processing from OpenCode's double-fire of the completion event.

@@ -1,10 +1,10 @@
 /**
- * Animated diagram of all 11 memory types organized by project scope versus user scope.
+ * Animated diagram of all 13 memory types organized by project scope versus user scope.
  * @component
  */
 export function DocsMemoryTaxonomy() {
   return (
-    <svg viewBox="0 0 600 280" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A map of all 11 memory types organized by project scope versus user scope.">
+    <svg viewBox="0 0 600 340" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A map of all 13 memory types organized by project scope versus user scope.">
       <title>Memory Taxonomy</title>
       <defs>
         <filter id="glow-mt">
@@ -17,19 +17,21 @@ export function DocsMemoryTaxonomy() {
           
           @media (prefers-reduced-motion: no-preference) {
             .badge-mt { animation: fadeIn-mt 0.4s ease forwards; }
-            .badge-0 { animation-delay: 0.0s; }
-            .badge-1 { animation-delay: 0.1s; }
-            .badge-2 { animation-delay: 0.2s; }
-            .badge-3 { animation-delay: 0.3s; }
-            .badge-4 { animation-delay: 0.4s; }
-            .badge-5 { animation-delay: 0.5s; }
-            .badge-6 { animation-delay: 0.6s; }
-            .badge-7 { animation-delay: 0.7s; }
-            .badge-8 { animation-delay: 0.8s; }
-            .badge-9 { animation-delay: 0.9s; }
+            .badge-0  { animation-delay: 0.0s; }
+            .badge-1  { animation-delay: 0.1s; }
+            .badge-2  { animation-delay: 0.2s; }
+            .badge-3  { animation-delay: 0.3s; }
+            .badge-4  { animation-delay: 0.4s; }
+            .badge-5  { animation-delay: 0.5s; }
+            .badge-6  { animation-delay: 0.6s; }
+            .badge-7  { animation-delay: 0.7s; }
+            .badge-8  { animation-delay: 0.8s; }
+            .badge-9  { animation-delay: 0.9s; }
+            .badge-10 { animation-delay: 1.0s; }
+            .badge-11 { animation-delay: 1.1s; }
             
-            .badge-user-mt { animation: fadeIn-mt 0.4s ease forwards; animation-delay: 1.2s; }
-            .glow-badge-mt { animation: pulseGlow-mt 2s ease-in-out infinite alternate; animation-delay: 1.6s; }
+            .badge-user-mt { animation: fadeIn-mt 0.4s ease forwards; animation-delay: 1.4s; }
+            .glow-badge-mt { animation: pulseGlow-mt 2s ease-in-out infinite alternate; animation-delay: 1.8s; }
 
             @keyframes fadeIn-mt {
               to { opacity: 1; }
@@ -46,11 +48,10 @@ export function DocsMemoryTaxonomy() {
       </defs>
 
       {/* Dividers & Headers */}
-      <line x1="450" y1="20" x2="450" y2="260" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" className="stroke-border" />
+      <line x1="450" y1="20" x2="450" y2="320" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" className="stroke-border" />
       <text x="30" y="24" fontSize="10" letterSpacing="1" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">PROJECT SCOPE</text>
       <text x="460" y="24" fontSize="10" letterSpacing="1" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">USER SCOPE</text>
 
-      {/* Project Scope Badges */}
       {/* Col 1 */}
       <g className="badge-mt badge-0" transform="translate(30, 50)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
@@ -69,10 +70,15 @@ export function DocsMemoryTaxonomy() {
       </g>
       <g className="badge-mt badge-6" transform="translate(30, 170)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
+        <circle cx="14" cy="14" r="3" fill="#e879f9" />
+        <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">active-context</text>
+      </g>
+      <g className="badge-mt badge-8" transform="translate(30, 210)">
+        <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#c084fc" />
         <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">error-solution</text>
       </g>
-      <g className="badge-mt badge-8" transform="translate(30, 210)">
+      <g className="badge-mt badge-10" transform="translate(30, 250)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#a855f7" />
         <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">project-config</text>
@@ -87,26 +93,31 @@ export function DocsMemoryTaxonomy() {
       <g className="badge-mt badge-3" transform="translate(240, 90)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#a855f7" />
-        <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">product-context</text>
+        <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">architecture-pattern</text>
       </g>
       <g className="badge-mt badge-5" transform="translate(240, 130)">
+        <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
+        <circle cx="14" cy="14" r="3" fill="#a855f7" />
+        <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">product-context</text>
+      </g>
+      <g className="badge-mt badge-7" transform="translate(240, 170)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#e879f9" />
         <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">session-summary</text>
       </g>
-      <g className="badge-mt badge-7" transform="translate(240, 170)">
+      <g className="badge-mt badge-9" transform="translate(240, 210)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#c084fc" />
         <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">learned-pattern</text>
       </g>
-      <g className="badge-mt badge-9" transform="translate(240, 210)">
+      <g className="badge-mt badge-11" transform="translate(240, 250)">
         <rect width="180" height="28" rx="14" className="fill-card stroke-border" strokeWidth="1.5" />
         <circle cx="14" cy="14" r="3" fill="#c084fc" />
         <text x="26" y="18" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground">conversation</text>
       </g>
 
       {/* User Scope */}
-      <g transform="translate(460, 130)">
+      <g transform="translate(460, 150)">
         <g className="glow-badge-mt" filter="url(#glow-mt)">
           <rect width="130" height="28" rx="14" className="fill-transparent stroke-[#4ade80]" strokeWidth="2" />
         </g>
