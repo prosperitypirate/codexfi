@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/prosperitypirate/codexfi/compare/v0.7.0...v0.7.1) (2026-04-30)
+
+
+### Bug Fixes
+
+* **plugin:** restore active-context + architecture-pattern extraction ([#174](https://github.com/prosperitypirate/codexfi/issues/174)) ([6b9db84](https://github.com/prosperitypirate/codexfi/commit/6b9db842f893c1b06521470fb797c2f80f668f03))
+
 ## [0.7.0](https://github.com/prosperitypirate/codexfi/compare/v0.6.1...v0.7.0) (2026-04-08)
 
 
