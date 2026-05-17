@@ -10,6 +10,12 @@ import { tmpdir } from "node:os";
 // We can't directly instantiate CostLedger/ActivityLog since they're exported
 // as singletons. But we CAN test the singletons with fresh temp dirs.
 import { ledger, activityLog } from "../../../plugin/src/telemetry.js";
+import {
+	EMBEDDING_MODEL,
+	XAI_EXTRACTION_MODEL,
+	ANTHROPIC_EXTRACTION_MODEL,
+	GOOGLE_EXTRACTION_MODEL,
+} from "../../../plugin/src/config.js";
 
 let tempDir: string;
 
@@ -42,6 +48,7 @@ describe("CostLedger", () => {
 		// $0.18 per M tokens
 		expect(snap.voyage.cost_usd).toBeCloseTo(0.18, 4);
 		expect(snap.total_cost_usd).toBeCloseTo(0.18, 4);
+		expect(snap.voyage.model).toBe(EMBEDDING_MODEL);
 	});
 
 	test("records Anthropic costs correctly", async () => {
@@ -52,6 +59,7 @@ describe("CostLedger", () => {
 		expect(snap.anthropic.completion_tokens).toBe(10_000);
 		// $1.00/M input + $5.00/M output = $0.10 + $0.05 = $0.15
 		expect(snap.anthropic.cost_usd).toBeCloseTo(0.15, 4);
+		expect(snap.anthropic.model).toBe(ANTHROPIC_EXTRACTION_MODEL);
 	});
 
 	test("records xAI costs with cached tokens", async () => {
@@ -64,6 +72,16 @@ describe("CostLedger", () => {
 		expect(snap.xai.completion_tokens).toBe(2_000);
 		// (10k-5k)*0.20/M + 5k*0.05/M + 2k*0.50/M = 0.001 + 0.00025 + 0.001 = 0.00225
 		expect(snap.xai.cost_usd).toBeCloseTo(0.00225, 6);
+		expect(snap.xai.model).toBe(XAI_EXTRACTION_MODEL);
+	});
+
+	test("records Google costs correctly", async () => {
+		await ledger.recordGoogle(50_000, 5_000);
+		const snap = ledger.snapshot();
+		expect(snap.google.calls).toBe(1);
+		expect(snap.google.prompt_tokens).toBe(50_000);
+		expect(snap.google.completion_tokens).toBe(5_000);
+		expect(snap.google.model).toBe(GOOGLE_EXTRACTION_MODEL);
 	});
 
 	test("accumulates multiple calls", async () => {

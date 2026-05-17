@@ -150,6 +150,7 @@ class CostLedger {
 		v.calls++;
 		v.tokens += tokens;
 		v.cost_usd = +(v.cost_usd + cost).toFixed(8);
+		v.model = EMBEDDING_MODEL;
 		this.updateTotal();
 		await this.save();
 	}
