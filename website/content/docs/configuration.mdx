@@ -43,7 +43,7 @@ The config file lives at `~/.codexfi/codexfi.jsonc`. It is created automatically
 |-----|----------|---------|
 | `voyageApiKey` | Yes | Voyage AI embeddings (`voyage-code-3`) |
 | `anthropicApiKey` | One of three | Extraction via Claude Haiku 4.5 (default) |
-| `xaiApiKey` | One of three | Extraction via Grok 4.1 Fast |
+| `xaiApiKey` | One of three | Extraction via Grok 4.3 |
 | `googleApiKey` | One of three | Extraction via Gemini 3 Flash |
 
 At minimum, you need `voyageApiKey` plus one extraction provider key.
@@ -79,7 +79,7 @@ You can also set the provider during `codexfi install` (interactive prompt or `-
 | Provider | Model | Speed | Notes |
 |----------|-------|-------|-------|
 | `anthropic` (default) | `claude-haiku-4-5` | ~14s/session | Most consistent extraction |
-| `xai` | `grok-4-1-fast-non-reasoning` | ~5s/session | Fastest, cheapest |
+| `xai` | `grok-4.3` | ~5s/session | Fastest, cheapest |
 | `google` | `gemini-3-flash-preview` | ~21s/session | Native JSON response mode |
 
 The plugin falls back through all configured providers automatically. If the primary fails, it tries the next one in the fallback order: `anthropic` > `xai` > `google`.
