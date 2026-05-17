@@ -23,7 +23,7 @@ const config = {
         headers: [
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://prosperitypirate.com https://www.prosperitypirate.com",
+            value: "frame-ancestors 'self' https://prosperitypirate.com https://www.prosperitypirate.com http://localhost:3000",
           },
         ],
       },
