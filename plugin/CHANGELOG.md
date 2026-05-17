@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.2](https://github.com/prosperitypirate/codexfi/compare/v0.7.1...v0.7.2) (2026-05-17)
+
+
+### Bug Fixes
+
+* **xai:** migrate to grok-4.3 with none reasoning effort ([#189](https://github.com/prosperitypirate/codexfi/issues/189)) ([41c85c2](https://github.com/prosperitypirate/codexfi/commit/41c85c20e2d3ee4f74c7e78ce8d6aa5ab62f38b8))
+
 ## [0.7.1](https://github.com/prosperitypirate/codexfi/compare/v0.7.0...v0.7.1) (2026-04-30)
 
 
