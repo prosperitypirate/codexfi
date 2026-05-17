@@ -68,6 +68,7 @@ async function callXai(system: string, user: string): Promise<string> {
 			],
 			max_tokens: LLM_MAX_TOKENS,
 			temperature: LLM_TEMPERATURE,
+			reasoning_effort: "none",
 		}),
 	});
 

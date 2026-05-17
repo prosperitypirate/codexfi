@@ -822,7 +822,7 @@ const ALL_TYPES = [
 
 const API_LABELS = { xai: "xAI", anthropic: "Anthropic", google: "Google", voyage: "Voyage" };
 const API_MODELS = {
-	xai: "grok-4-fast",
+	xai: "grok-4.3",
 	anthropic: "claude-haiku-4-5",
 	google: "gemini-3-flash",
 	voyage: "voyage-code-3",
@@ -1413,7 +1413,7 @@ function costProvider(api, data) {
 	if (!data) return "";
 	var h = '<div class="cost-provider">';
 	h += '<div class="cost-provider-header">';
-	h += '<span class="cost-provider-name">' + (API_LABELS[api] || api) + ' \\u00b7 ' + (API_MODELS[api] || "") + '</span>';
+	h += '<span class="cost-provider-name">' + (API_LABELS[api] || api) + ' \\u00b7 ' + (data.model || API_MODELS[api] || "") + '</span>';
 	h += '<span class="cost-provider-total cost-' + api + '">' + fmtUSD(data.cost_usd) + '</span>';
 	h += '</div>';
 	h += '<div class="cost-row"><span>calls</span><span class="cost-row-value">' + (data.calls || 0).toLocaleString() + '</span></div>';

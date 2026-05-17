@@ -229,7 +229,7 @@ When OpenCode truncates the conversation, the `[MEMORY]` block is unaffected (it
 | Provider | Model | Speed | Benchmark | Notes |
 |---|---|---|---|---|
 | **Anthropic** (default) | `claude-haiku-4-5` | ~14s/session | **93.5% avg** (3pp variance) | Most consistent |
-| **xAI** | `grok-4-1-fast-non-reasoning` | ~5s/session | ~86.5% avg (16pp variance) | Fastest, cheapest |
+| **xAI** | `grok-4.3` | ~5s/session | ~86.5% avg (16pp variance) | Fastest, cheapest |
 | **Google** | `gemini-3-flash-preview` | ~21s/session | — | Native JSON mode |
 
 Switch via `EXTRACTION_PROVIDER=xai` (or `anthropic`, `google`). Extraction runs in the background — latency is invisible to users.

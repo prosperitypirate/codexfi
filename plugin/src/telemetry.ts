@@ -17,6 +17,7 @@ import {
 	GOOGLE_PRICE_INPUT_PER_M,
 	GOOGLE_PRICE_OUTPUT_PER_M,
 	VOYAGE_PRICE_PER_M,
+	XAI_EXTRACTION_MODEL,
 	XAI_PRICE_CACHED_PER_M,
 	XAI_PRICE_INPUT_PER_M,
 	XAI_PRICE_OUTPUT_PER_M,
@@ -39,10 +40,10 @@ interface VoyageBucket {
 }
 
 interface LedgerData {
-	xai: CostBucket & { cached_tokens: number };
-	google: CostBucket;
-	anthropic: CostBucket;
-	voyage: VoyageBucket;
+	xai: CostBucket & { cached_tokens: number; model?: string };
+	google: CostBucket & { model?: string };
+	anthropic: CostBucket & { model?: string };
+	voyage: VoyageBucket & { model?: string };
 	total_cost_usd: number;
 	last_updated: string;
 }
@@ -104,6 +105,7 @@ class CostLedger {
 		x.cached_tokens += cachedTokens;
 		x.completion_tokens += completionTokens;
 		x.cost_usd = +(x.cost_usd + cost).toFixed(8);
+		x.model = XAI_EXTRACTION_MODEL;
 		this.updateTotal();
 		await this.save();
 	}
@@ -120,6 +122,7 @@ class CostLedger {
 		g.prompt_tokens += promptTokens;
 		g.completion_tokens += completionTokens;
 		g.cost_usd = +(g.cost_usd + cost).toFixed(8);
+		g.model = GOOGLE_EXTRACTION_MODEL;
 		this.updateTotal();
 		await this.save();
 	}
@@ -136,6 +139,7 @@ class CostLedger {
 		a.prompt_tokens += promptTokens;
 		a.completion_tokens += completionTokens;
 		a.cost_usd = +(a.cost_usd + cost).toFixed(8);
+		a.model = ANTHROPIC_EXTRACTION_MODEL;
 		this.updateTotal();
 		await this.save();
 	}
