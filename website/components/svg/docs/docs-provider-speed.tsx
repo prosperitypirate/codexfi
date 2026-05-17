@@ -56,7 +56,7 @@ export function DocsProviderSpeed() {
       {/* Card 2: xAI */}
       <rect x="185" y="15" width="150" height="130" rx="10" className="fill-card stroke-border" strokeWidth="1.5" />
       <text x="200" y="45" fontSize="12" fontWeight="600" fontFamily="var(--font-mono, monospace)" className="fill-foreground">xAI</text>
-      <text x="200" y="59" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">grok-4-1-fast</text>
+      <text x="200" y="59" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground">grok-4.3</text>
       <text x="200" y="90" fontSize="22" fontWeight="700" fontFamily="var(--font-mono, monospace)" fill="#4ade80">~5s</text>
       
       {/* Badge */}

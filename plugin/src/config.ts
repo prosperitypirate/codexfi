@@ -68,7 +68,7 @@ export const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
  *   3. "anthropic" (default)
  *
  * "anthropic" — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
- * "xai"       — Grok 4.1 Fast via api.x.ai (fastest, higher variance)
+ * "xai"       — Grok 4.3 via api.x.ai (fastest, higher variance)
  * "google"    — Gemini 3 Flash via native generateContent API
  */
 const envProvider = process.env.EXTRACTION_PROVIDER;
@@ -89,7 +89,7 @@ export const EXTRACTION_PROVIDER: ExtractionProvider =
 // ── Model identifiers ───────────────────────────────────────────────────────────
 
 export const XAI_BASE_URL = "https://api.x.ai/v1";
-export const XAI_EXTRACTION_MODEL = "grok-4-1-fast-non-reasoning";
+export const XAI_EXTRACTION_MODEL = "grok-4.3";
 
 export const GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
 export const GOOGLE_EXTRACTION_MODEL = "gemini-3-flash-preview";
