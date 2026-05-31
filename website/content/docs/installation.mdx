@@ -120,13 +120,27 @@ See the [OpenCode setup guide](/docs/guides/opencode-setup) for the recommended 
 
 ## Updating
 
-OpenCode auto-installs npm plugins at startup and caches them in `~/.cache/opencode/node_modules/`. This means updates are automatic — you always get the latest version without manual action.
+OpenCode installs plugins on first use and **pins the resolved version** in its cache (`~/.cache/opencode/packages/codexfi@latest/package.json` and `package-lock.json`). Once a version is cached, OpenCode keeps using it — **updates are not automatic**, even when the `plugin` array lists `codexfi` without a version. You stay on the pinned version until you explicitly update the cache.
 
-To force a reinstall:
+To update to the latest release, refresh the cached package and then restart OpenCode:
 
 ```bash
-bunx codexfi install
+# Update the version OpenCode has cached
+npm install codexfi@latest --prefix ~/.cache/opencode/packages/codexfi@latest
+
+# Then fully restart OpenCode (quit and reopen the desktop app,
+# or restart the CLI) so the new version is loaded.
 ```
+
+> **Desktop app:** the cache is shared, but the app must be fully quit and reopened for the new version to take effect — reloading a session is not enough.
+
+You can confirm the active version at any time:
+
+```bash
+cat ~/.cache/opencode/packages/codexfi@latest/package.json | grep '"codexfi"'
+```
+
+To pin a specific release instead of the latest, replace `codexfi@latest` with `codexfi@<version>` (for example `codexfi@0.7.3`).
 
 ## Uninstalling
 
