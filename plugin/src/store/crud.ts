@@ -9,8 +9,8 @@
  *   Read:  BLOB (Buffer) → Float32Array
  */
 
-import type { SQLQueryBindings } from "bun:sqlite";
 import { getDb } from "./sqlite.js";
+import type { Bindings } from "./driver.js";
 import type { MemoryRecord, AddRecord, UpdateValues, FilterOptions } from "./types.js";
 
 // ── Vector encoding ─────────────────────────────────────────────────────────────
@@ -23,8 +23,10 @@ function vectorToBlob(v: Float32Array): Buffer {
 	return Buffer.from(v.buffer, v.byteOffset, v.byteLength);
 }
 
-function blobToVector(blob: Buffer): Float32Array {
-	// Copy to a fresh ArrayBuffer to guarantee alignment
+function blobToVector(blob: Uint8Array): Float32Array {
+	// Copy to a fresh ArrayBuffer to guarantee alignment.
+	// node:sqlite returns BLOBs as Uint8Array, bun:sqlite as Buffer (a Uint8Array
+	// subclass) — `new Uint8Array(blob)` normalises both.
 	const copy = new Uint8Array(blob).buffer;
 	return new Float32Array(copy);
 }
@@ -36,7 +38,7 @@ interface RawRow {
 	id: string;
 	memory: string;
 	user_id: string;
-	vector: Buffer;
+	vector: Uint8Array;
 	metadata_json: string;
 	created_at: string;
 	updated_at: string;
@@ -107,7 +109,7 @@ export function update(where: { id: string }, values: UpdateValues): void {
 	const db = getDb();
 
 	const setClauses: string[] = [];
-	const params: SQLQueryBindings[] = [];
+	const params: Bindings[] = [];
 
 	if (values.memory !== undefined) { setClauses.push("memory = ?"); params.push(values.memory); }
 	if (values.updated_at !== undefined) { setClauses.push("updated_at = ?"); params.push(values.updated_at); }
@@ -150,7 +152,7 @@ export function scan(
 ): MemoryRecord[] {
 	const limit = options.limit ?? 10_000;
 	const whereClauses: string[] = [];
-	const params: SQLQueryBindings[] = [];
+	const params: Bindings[] = [];
 
 	if (filter.user_id !== undefined) {
 		whereClauses.push("user_id = ?");
