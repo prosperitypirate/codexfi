@@ -35,7 +35,13 @@
 
 import { createRequire } from "node:module";
 
-/** Values that can be bound to a parameterised statement. */
+/**
+ * Values that can be bound to a parameterised statement placeholder.
+ *
+ * Covers every SQLite storage class the store uses: TEXT (`string`),
+ * INTEGER/REAL (`number`/`bigint`/`boolean`), NULL (`null`), and BLOB
+ * (`Uint8Array` — `Buffer` is a subclass, so vector blobs bind directly).
+ */
 export type Bindings =
 	| string
 	| number
@@ -44,10 +50,18 @@ export type Bindings =
 	| null
 	| Uint8Array;
 
-/** A prepared statement — run/get/all accept positional parameters. */
+/**
+ * A compiled, reusable prepared statement.
+ *
+ * Both drivers expose the same `run`/`get`/`all` surface and accept positional
+ * (`?`) or numbered (`?1`) placeholders bound via trailing parameters.
+ */
 export interface Statement {
+	/** Execute the statement for its side effects (INSERT/UPDATE/DELETE). */
 	run(...params: Bindings[]): unknown;
+	/** Execute and return the first matching row, or `undefined`/`null` if none. */
 	get(...params: Bindings[]): unknown;
+	/** Execute and return all matching rows as an array. */
 	all(...params: Bindings[]): unknown[];
 }
 
@@ -63,12 +77,25 @@ export interface DatabaseLike {
 	close(): void;
 }
 
-/** True when running under the Bun runtime (CLI/TUI); false under Node/Electron. */
+/**
+ * Detect whether the current process is running under the Bun runtime.
+ *
+ * Used to choose the matching built-in SQLite driver. Bun hosts the opencode
+ * CLI/TUI; Node (Electron `utilityProcess`) hosts the desktop sidecar.
+ *
+ * @returns `true` under Bun (CLI/TUI), `false` under Node/Electron (desktop).
+ */
 export function isBun(): boolean {
 	return typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 }
 
-/** Human-readable name of the active SQLite driver — for diagnostics/logging. */
+/**
+ * The name of the SQLite driver that will be selected for the active runtime.
+ *
+ * Diagnostic helper — surfaced in logs/tests to confirm which builtin is live.
+ *
+ * @returns `"bun:sqlite"` under Bun, `"node:sqlite"` under Node/Electron.
+ */
 export function driverName(): "bun:sqlite" | "node:sqlite" {
 	return isBun() ? "bun:sqlite" : "node:sqlite";
 }
@@ -79,7 +106,12 @@ const requireBuiltin = createRequire(import.meta.url);
 
 /**
  * Open (or create) a SQLite database at `path`, returning a runtime-agnostic
- * handle. The correct native driver is selected and loaded lazily here.
+ * handle. The correct native driver (`bun:sqlite` or `node:sqlite`) is selected
+ * for the active runtime and loaded lazily via a computed `require`.
+ *
+ * @param path - Absolute filesystem path to the SQLite database file. Created
+ *   if it does not exist (the caller is responsible for the parent directory).
+ * @returns A {@link DatabaseLike} handle wrapping the runtime-specific driver.
  */
 export function openDatabase(path: string): DatabaseLike {
 	// Computed specifier — prevents the wrong builtin from being statically
