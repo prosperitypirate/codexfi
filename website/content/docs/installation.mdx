@@ -120,7 +120,7 @@ See the [OpenCode setup guide](/docs/guides/opencode-setup) for the recommended 
 
 ## Updating
 
-OpenCode installs plugins on first use and **pins the resolved version** in its cache (`~/.cache/opencode/packages/.../package.json` and `package-lock.json`). Once a version is cached, OpenCode keeps using it — **updates are not automatic**, even when the `plugin` array lists `codexfi` without a version. You stay on the pinned version until you explicitly update the cache.
+OpenCode installs plugins on first use and **pins the resolved version** in its cache (`~/.cache/opencode/packages/codexfi@latest/package.json` and `package-lock.json`). Once a version is cached, OpenCode keeps using it — **updates are not automatic**, even when the `plugin` array lists `codexfi` without a version. You stay on the pinned version until you explicitly update the cache.
 
 To update to the latest release, refresh the cached package and then restart OpenCode:
 
