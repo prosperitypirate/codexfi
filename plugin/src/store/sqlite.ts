@@ -1,7 +1,10 @@
 /**
  * store/sqlite.ts — SQLite connection management with WAL mode.
  *
- * Uses bun:sqlite (zero npm deps, built into Bun runtime).
+ * Uses a runtime-adaptive driver (see driver.ts): `bun:sqlite` under Bun
+ * (CLI/TUI) and `node:sqlite` under Node/Electron (desktop sidecar). Both are
+ * built-in — zero npm/native dependencies on either runtime.
+ *
  * WAL mode enables concurrent readers + serialised writers via busy_timeout.
  *
  * Connection lifecycle:
@@ -14,12 +17,12 @@
  *   _resetForTests()   — close + clear so init() re-opens fresh
  */
 
-import { Database } from "bun:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { CREATE_TABLE, CREATE_INDEXES } from "./schema.js";
+import { openDatabase, type DatabaseLike } from "./driver.js";
 
-let db: Database | null = null;
+let db: DatabaseLike | null = null;
 let currentPath: string | null = null;
 
 /**
@@ -36,7 +39,7 @@ export function open(dbPath: string): void {
 
 	mkdirSync(dirname(dbPath), { recursive: true });
 
-	db = new Database(dbPath);
+	db = openDatabase(dbPath);
 
 	// Set busy_timeout FIRST — all subsequent PRAGMAs may need the write lock
 	// and must wait instead of failing with SQLITE_BUSY
@@ -72,7 +75,7 @@ export function close(): void {
  * Get the active Database instance.
  * @throws Error if the database has not been opened yet.
  */
-export function getDb(): Database {
+export function getDb(): DatabaseLike {
 	if (!db) {
 		throw new Error("[codexfi] SQLite database not initialized — call init() first");
 	}

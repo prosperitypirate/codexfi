@@ -6,6 +6,7 @@
  */
 
 import { DATA_DIR } from "./config.js";
+import { readJsonFile, writeTextFile } from "./fsx.js";
 
 class NameRegistry {
 	private data: Record<string, string> = {};
@@ -14,10 +15,7 @@ class NameRegistry {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/names.json`;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.data = await file.json();
-			}
+			this.data = (await readJsonFile<Record<string, string>>(this.path)) ?? {};
 		} catch {
 			this.data = {};
 		}
@@ -26,7 +24,7 @@ class NameRegistry {
 	private async save(): Promise<void> {
 		if (!this.path) return;
 		try {
-			await Bun.write(this.path, JSON.stringify(this.data, null, 2));
+			await writeTextFile(this.path, JSON.stringify(this.data, null, 2));
 		} catch (e) {
 			console.warn("Name registry save error:", e);
 		}
@@ -46,10 +44,8 @@ class NameRegistry {
 	async load(): Promise<void> {
 		if (!this.path) return;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.data = await file.json();
-			}
+			const loaded = await readJsonFile<Record<string, string>>(this.path);
+			if (loaded) this.data = loaded;
 		} catch {
 			// Non-fatal — keep existing data
 		}
