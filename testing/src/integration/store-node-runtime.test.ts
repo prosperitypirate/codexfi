@@ -25,6 +25,8 @@ import { tmpdir } from "node:os";
 
 const STORE_ENTRY = resolve(__dirname, "../../../plugin/src/store/index.ts");
 const DRIVER_ENTRY = resolve(__dirname, "../../../plugin/src/store/driver.ts");
+const NAMES_ENTRY = resolve(__dirname, "../../../plugin/src/names.ts");
+const TELEMETRY_ENTRY = resolve(__dirname, "../../../plugin/src/telemetry.ts");
 
 let workDir: string;
 let bundlePath: string;
@@ -44,11 +46,13 @@ beforeAll(async () => {
 	// Probe imports the REAL store + driver and performs a full round-trip.
 	const probeTs = join(workDir, "probe.ts");
 	writeFileSync(probeTs, `
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import * as store from ${JSON.stringify(STORE_ENTRY)};
 import { driverName } from ${JSON.stringify(DRIVER_ENTRY)};
+import { nameRegistry } from ${JSON.stringify(NAMES_ENTRY)};
+import { ledger, activityLog } from ${JSON.stringify(TELEMETRY_ENTRY)};
 
 const dir = mkdtempSync(join(tmpdir(), "codexfi-node-db-"));
 store._setStorePathForTests(dir);
@@ -75,13 +79,33 @@ for (let i = 0; i < vec.length && identical; i++) {
 const results = store.search(vec, { limit: 3 });
 const top = results[0];
 
-console.log(JSON.stringify({
-  driver: driverName(),
-  count: store.countRows(),
-  vectorIdentical: identical,
-  topId: top ? top.id : null,
-  topDistance: top ? Number(top._distance.toFixed(6)) : null,
-}));
+// Exercise the telemetry/names hot path — these use the cross-runtime fsx
+// helpers. Under Node, the previous Bun.file/Bun.write calls threw
+// "Bun is not defined", silently breaking name + cost persistence (#198).
+const main = async () => {
+  await nameRegistry.init(dir);
+  await nameRegistry.register("u", "Display Name");
+  await ledger.init(dir);
+  await ledger.recordVoyage(1234);
+  await activityLog.init(dir);
+  activityLog.recordVoyage(1234, 0.0001);
+  // Give the fire-and-forget activity save a tick to flush.
+  await new Promise((r) => setTimeout(r, 50));
+
+  const names = JSON.parse(readFileSync(join(dir, "names.json"), "utf8"));
+  const costs = JSON.parse(readFileSync(join(dir, "costs.json"), "utf8"));
+
+  console.log(JSON.stringify({
+    driver: driverName(),
+    count: store.countRows(),
+    vectorIdentical: identical,
+    topId: top ? top.id : null,
+    topDistance: top ? Number(top._distance.toFixed(6)) : null,
+    nameSaved: names.u === "Display Name",
+    costSaved: costs.voyage && costs.voyage.calls === 1,
+  }));
+};
+main().catch((e) => { console.error("FAIL:", e && e.message ? e.message : String(e)); process.exit(1); });
 `.trimStart());
 
 	// Bundle for the Node target — same as the shipped plugin build.
@@ -97,8 +121,8 @@ console.log(JSON.stringify({
 	}
 });
 
-describe("store round-trip under Node runtime (node:sqlite)", () => {
-	test("loads, persists and reads a Float32 vector BLOB byte-identically (#198)", async () => {
+describe("store + telemetry round-trip under Node runtime (node:sqlite + fsx)", () => {
+	test("loads, persists store/names/costs and reads a Float32 vector BLOB byte-identically (#198)", async () => {
 		const proc = Bun.spawn(["node", "--no-warnings", bundlePath], {
 			cwd: workDir,
 			stdout: "pipe",
@@ -124,6 +148,7 @@ describe("store round-trip under Node runtime (node:sqlite)", () => {
 		const result = JSON.parse(line) as {
 			driver: string; count: number; vectorIdentical: boolean;
 			topId: string | null; topDistance: number | null;
+			nameSaved: boolean; costSaved: boolean;
 		};
 
 		expect(result.driver).toBe("node:sqlite"); // confirms the Node path ran
@@ -131,5 +156,7 @@ describe("store round-trip under Node runtime (node:sqlite)", () => {
 		expect(result.vectorIdentical).toBe(true); // byte-identical BLOB round-trip
 		expect(result.topId).toBe("m1");
 		expect(result.topDistance).toBe(0); // identical vector → zero cosine distance
+		expect(result.nameSaved).toBe(true); // NameRegistry.save() works under Node (no Bun.write)
+		expect(result.costSaved).toBe(true); // CostLedger.save() works under Node (no Bun.write)
 	}, 30_000);
 });

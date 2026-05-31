@@ -4,6 +4,8 @@
  * Used by store.ts (write conflicts) and extractor.ts (provider fallback).
  */
 
+import { sleep } from "./fsx.js";
+
 export interface RetryConfig {
 	/** Maximum number of retry attempts (not counting the first attempt). */
 	maxRetries: number;
@@ -102,7 +104,7 @@ export async function withRetry<T>(
 			const delay = baseDelay + (Math.random() * 2 - 1) * jitterRange;
 
 			logFn(`${label} attempt ${attempt + 1} failed, retrying in ${Math.round(delay)}ms`);
-			await Bun.sleep(delay);
+			await sleep(delay);
 		}
 	}
 

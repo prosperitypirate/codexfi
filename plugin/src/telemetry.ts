@@ -22,6 +22,7 @@ import {
 	XAI_PRICE_INPUT_PER_M,
 	XAI_PRICE_OUTPUT_PER_M,
 } from "./config.js";
+import { readJsonFile, writeTextFile } from "./fsx.js";
 
 // ── CostLedger ──────────────────────────────────────────────────────────────────
 
@@ -66,10 +67,7 @@ class CostLedger {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/costs.json`;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.data = await file.json();
-			}
+			this.data = (await readJsonFile<LedgerData>(this.path)) ?? freshLedger();
 		} catch {
 			this.data = freshLedger();
 		}
@@ -78,7 +76,7 @@ class CostLedger {
 	private async save(): Promise<void> {
 		if (!this.path) return;
 		try {
-			await Bun.write(this.path, JSON.stringify(this.data, null, 2));
+			await writeTextFile(this.path, JSON.stringify(this.data, null, 2));
 		} catch (e) {
 			console.warn("Cost ledger save error:", e);
 		}
@@ -166,10 +164,8 @@ class CostLedger {
 	async load(): Promise<void> {
 		if (!this.path) return;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.data = await file.json();
-			}
+			const loaded = await readJsonFile<LedgerData>(this.path);
+			if (loaded) this.data = loaded;
 		} catch {
 			// Non-fatal — keep existing data if file read fails
 		}
@@ -203,10 +199,7 @@ class ActivityLog {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/activity.json`;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.entries = await file.json();
-			}
+			this.entries = (await readJsonFile<ActivityEntry[]>(this.path)) ?? [];
 		} catch {
 			this.entries = [];
 		}
@@ -215,7 +208,7 @@ class ActivityLog {
 	private async save(): Promise<void> {
 		if (!this.path) return;
 		try {
-			await Bun.write(this.path, JSON.stringify(this.entries));
+			await writeTextFile(this.path, JSON.stringify(this.entries));
 		} catch {
 			// Non-fatal — activity log is ephemeral data
 		}
@@ -228,10 +221,8 @@ class ActivityLog {
 	async load(): Promise<void> {
 		if (!this.path) return;
 		try {
-			const file = Bun.file(this.path);
-			if (await file.exists()) {
-				this.entries = await file.json();
-			}
+			const loaded = await readJsonFile<ActivityEntry[]>(this.path);
+			if (loaded) this.entries = loaded;
 		} catch {
 			// Non-fatal — keep existing entries
 		}
