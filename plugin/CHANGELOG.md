@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.3](https://github.com/prosperitypirate/codexfi/compare/v0.7.2...v0.7.3) (2026-05-31)
+
+
+### Bug Fixes
+
+* **plugin:** runtime-adaptive SQLite driver for Node/Electron desktop ([#198](https://github.com/prosperitypirate/codexfi/issues/198)) ([#199](https://github.com/prosperitypirate/codexfi/issues/199)) ([546e099](https://github.com/prosperitypirate/codexfi/commit/546e099e0b79e3dff841d30d21a2a41faa3e1b18))
+
 ## [0.7.2](https://github.com/prosperitypirate/codexfi/compare/v0.7.1...v0.7.2) (2026-05-17)
 
 
