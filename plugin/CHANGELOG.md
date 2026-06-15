@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.4](https://github.com/prosperitypirate/codexfi/compare/v0.7.3...v0.7.4) (2026-06-15)
+
+
+### Bug Fixes
+
+* **deps:** resolve all Dependabot security alerts (batch 3) ([#207](https://github.com/prosperitypirate/codexfi/issues/207)) ([a81b599](https://github.com/prosperitypirate/codexfi/commit/a81b5994a822ceaf1ecbb5328b7ac98e195a42eb)), closes [#205](https://github.com/prosperitypirate/codexfi/issues/205) [#206](https://github.com/prosperitypirate/codexfi/issues/206)
+
 ## [0.7.3](https://github.com/prosperitypirate/codexfi/compare/v0.7.2...v0.7.3) (2026-05-31)
 
 
