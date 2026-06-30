@@ -17,8 +17,8 @@
 		"smoke:e2e": "bun run src/smoke-e2e.ts"
 	},
 	"dependencies": {
-		"@opencode-ai/plugin": "^1.16.2",
-		"@opencode-ai/sdk": "^1.16.2",
+		"@opencode-ai/plugin": "^1.17.11",
+		"@opencode-ai/sdk": "^1.17.11",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
