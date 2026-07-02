@@ -165,7 +165,19 @@ Rules:
 - Be specific: name files, functions, features where relevant
 - Target 200-300 words
 - Return ONLY a valid JSON array with exactly ONE object:
-  [{{"memory": "...", "type": "session-summary"}}]`;
+  [{{"memory": "...", "type": "session-summary"}}]
+
+Avoid — do NOT describe the memory system itself:
+- Do not narrate memory operations ("memory ops used", "saved to memory", "used the
+  memory tool", "stored a preference")
+- Do not describe the [MEMORY] block, its sections, or how memories are injected
+  ("verified [MEMORY] block visibility", "confirmed structured sections rendered")
+- Do not frame the session as being about testing, verifying, or demonstrating the
+  memory/recall system, UNLESS the actual coding work of this session was building or
+  fixing that memory system's code (in which case describe it like any other feature:
+  what was built, in which files, why — not as self-referential narration)
+- Focus entirely on the actual work performed: the features, bugs, decisions, and
+  code — never on the act of remembering it`;
 
 export const SUMMARY_USER = `\
 Summarize this coding session:

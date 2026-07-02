@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.5](https://github.com/prosperitypirate/codexfi/compare/v0.7.4...v0.7.5) (2026-07-02)
+
+
+### Bug Fixes
+
+* **plugin:** add anti-recursion guard to session-summary prompt ([#217](https://github.com/prosperitypirate/codexfi/issues/217)) ([7e16dc3](https://github.com/prosperitypirate/codexfi/commit/7e16dc3357ef736d490865e8ba331de6f7da08a9))
+
 ## [0.7.4](https://github.com/prosperitypirate/codexfi/compare/v0.7.3...v0.7.4) (2026-06-15)
 
 
