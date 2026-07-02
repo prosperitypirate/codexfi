@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.6](https://github.com/prosperitypirate/codexfi/compare/v0.7.5...v0.7.6) (2026-07-02)
+
+
+### Bug Fixes
+
+* **plugin:** fix structural section starvation and enumeration retrieval ordering ([#219](https://github.com/prosperitypirate/codexfi/issues/219)) ([df0c5a9](https://github.com/prosperitypirate/codexfi/commit/df0c5a9e7762ed321fdb52bd615487ab0b772e4f))
+
 ## [0.7.5](https://github.com/prosperitypirate/codexfi/compare/v0.7.4...v0.7.5) (2026-07-02)
 
 
