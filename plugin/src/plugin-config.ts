@@ -85,9 +85,14 @@ const DEFAULTS = {
 	displaySimilarityThreshold: 0.60,
 	maxMemories: 20,
 	maxProjectMemories: 20,
-	// Raised from 30 → 50: active-context and architecture-pattern need budget room.
-	// Zero LanceDB scan performance impact (scan already reads up to 10K rows).
-	maxStructuredMemories: 50,
+	// Raised from 30 → 50 → 100: the structural fetch is now scoped to only
+	// rendered types (RENDERED_STRUCTURAL_TYPES, see services/context.ts) so
+	// this no longer needs to double as a global anti-starvation cap — 100
+	// gives comfortable headroom over PER_TYPE_CAPS' ~56 theoretical max so
+	// per-type caps are the binding constraint, not this pre-fetch limit.
+	// See issue #201. Zero LanceDB scan performance impact (scan already
+	// reads up to 10K rows).
+	maxStructuredMemories: 100,
 	// Raised from 5 → 8: User Preferences section was too sparse.
 	maxProfileItems: 8,
 	injectProfile: true,

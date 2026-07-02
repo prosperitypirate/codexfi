@@ -201,7 +201,57 @@ Ingest total: 353.8s (25 sessions) · ~13.6s/session mean · Total run time: 30m
 
 ## Results
 
-### pr138-richer-memory-block — 200 questions · 25 sessions · run `pr138-richer-memory-block` ← current
+### pr219-structural-starvation — 200 questions · 25 sessions · runs `baseline-201-*` / `after-201-*` ← current
+
+> Model: `claude-sonnet-4-6` (judge + answerer) · extractor: **xAI Grok** (benchmark defaults `EXTRACTION_PROVIDER=anthropic`; with no Anthropic key configured it fell back to the machine's configured xAI provider — by design, not an error) · **PR #219 / issue #201: structural section starvation fix**
+>
+> Unlike prior single-run entries, this is a **before/after study** gated on the block-quality benchmark. Baseline = `main`; after = the PR branch. The fix scopes the structural `[MEMORY]` fetch to only renderable types (excluding high-volume `learned-pattern`/`error-solution`/`preference` that were consuming ~46% of the fetch window without ever rendering), centralizes per-type capping, adds cross-section dedup, and fixes two adjacent bugs (enumeration oldest-N-when-limited; `type` column drift on dedup refresh).
+>
+> **Extractor caveat:** these runs use xAI extraction, which this README documents as having a wide variance band (±16pp / ~±3 questions — see "Ingest nondeterminism"). The valid comparison is **baseline vs after with the same extractor**, not against Anthropic-extractor runs like pr138 (91.5%).
+
+**Two benchmark modes were run. They measure different things and are not comparable to each other:**
+
+- **Retrieval mode** (standard pipeline, K=20 semantic search — same as every historical run): answers from full semantic retrieval.
+- **Block-quality mode** (`--mode block-quality`): answers from the assembled structural `[MEMORY]` block **only**, with no semantic-search fallback. This isolates exactly what this PR changes, which is why absolute scores are far lower than retrieval mode and must **not** be compared to the historical retrieval numbers.
+
+#### Retrieval mode — overall 93.0% → 87.0%
+
+| Category | Baseline (`main`) | After (PR #219) | Δ |
+|---|---|---|---|
+| tech-stack | 100% | 96% | −4 |
+| architecture | 100% | 96% | −4 |
+| preference | 100% | 100% | 0 |
+| abstention | 100% | 100% | 0 |
+| session-continuity | 96% | 92% | −4 |
+| cross-session-synthesis | 68% | 68% | 0 |
+| error-solution | 92% | 84% | −8 |
+| knowledge-update | 88% | 60% | −28 |
+| **Overall** | **93.0%** (186/200) | **87.0%** (174/200) | **−6.0pp** |
+| Hit@20 / MRR | 86.0% / 0.719 | 79.0% / 0.645 | |
+
+> The −6pp is dominated by **knowledge-update 88→60** — the ORM/Aerich "switch" sessions this README already flags as an extraction-variance hotspot (cf. the embedded-v5 note: an identical 60% knowledge-update artifact with confirmed-correct store/retrieval code). A per-question flip trace found only **3 of 15** regressions touch code this PR changed, and that mechanism was net-neutral (3 regressed / 3 improved). Read as extraction variance, not a code regression.
+
+#### Block-quality mode — overall 58.5% → 57.0% (the primary test for issue #201)
+
+| Category | Baseline (`main`) | After (PR #219) | Δ |
+|---|---|---|---|
+| abstention | 100% | 100% | 0 |
+| architecture | 80% | 80% | 0 |
+| tech-stack | 64% | 64% | 0 |
+| preference | 56% | 56% | 0 |
+| knowledge-update | 44% | 44% | 0 |
+| cross-session-synthesis | 20% | 36% | **+16** |
+| session-continuity | 60% | 48% | −12 |
+| error-solution | 44% | 28% | −16 |
+| **Overall** | **58.5%** (117/200) | **57.0%** (114/200) | **−1.5pp** |
+
+> **Verdict: a real tradeoff, not a clean win.** The `abstention` canary held at 100% (no dilution-driven false-answering — the primary risk of enlarging the block). `cross-session-synthesis`, the most starvation-limited category, improved **+16pp**. The `error-solution`/`session-continuity` drops are partly a genuine **crowding-out** effect: with atomic types no longer padding the window, per-type caps now bind and select a different newest-N, so a fact the old (accidentally generous) window happened to surface can be squeezed out (traced example: Q125, uvicorn-workers rate-limiting). That is the caps working as designed — the honest framing is *better wide-synthesis coverage at the cost of some narrow single-fact recall*. Independent extraction noise between the two ingest passes also contributes and can't be fully separated without averaged runs.
+>
+> **Follow-up:** re-validate with 3–5 averaged runs per side to quantify tradeoff vs. noise (tracked against #201).
+
+---
+
+### pr138-richer-memory-block — 200 questions · 25 sessions · run `pr138-richer-memory-block`
 
 > Model: `claude-sonnet-4-6` (judge + answerer) · `claude-haiku-4-5` (extractor) · K=20 retrieval · **PR #138: richer [MEMORY] block** · Total run time: **34m 48s**
 >
@@ -637,6 +687,10 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 
 ## Version History
 
+### pr219-structural-starvation (runs `baseline-201-*` / `after-201-*`) — retrieval **93.0% → 87.0%** · block-quality **58.5% → 57.0%** · extractor: xAI Grok
+
+Before/after study for PR #219 / issue #201 (structural section starvation). Fixes the structural `[MEMORY]` fetch pulling the newest-N across *all* types — so high-volume atomic types (`learned-pattern`/`error-solution`/`preference`, which never render structurally) were consuming ~46% of the window and starving the sections that do render. Now scoped to renderable types only, with per-type caps as the binding constraint; plus cross-section dedup and two adjacent bug fixes (enumeration oldest-N-when-limited, `type` column drift on dedup refresh). **Block-quality mode** (structural block only, no semantic fallback — the direct test): `cross-session-synthesis` **+16pp** (20→36%), `abstention` held 100% (no dilution), overall −1.5pp within noise; the `error-solution`/`session-continuity` dips are a real crowding-out tradeoff (per-type caps now select a different newest-N) plus extraction noise. **Retrieval mode** −6pp, dominated by knowledge-update 88→60 (the documented ORM-switch extraction-variance hotspot; flip trace showed only 3/15 regressions touch changed code, net-neutral). xAI extraction → wide variance band applies; valid comparison is baseline-vs-after only. Follow-up: 3–5 averaged runs to separate tradeoff from noise (tracked on #201).
+
 ### pr138-richer-memory-block (run `pr138-richer-memory-block`) — **91.5%** · Embedded pure TS vector store · extractor: Anthropic Haiku 4.5 · 34m 48s
 
 200 questions, 25 sessions. Benchmark of PR #138 display-layer changes: `displaySimilarityThreshold` (retrieve broadly at 0.45, render only ≥0.55), `active-context` singleton memory type with automatic aging, `architecture-pattern` sub-type, Recent Sessions (3 summaries with progressive truncation instead of 1), and `STRUCTURED_SECTIONS` array for extensible memory block rendering. Score 91.5% (183/200) — comfortably within the Haiku extraction variance band (85.5–95.0%). 3 categories at 100% (preference, error-solution, abstention), cross-synthesis at 68% (weakest, unchanged from haiku-run1/run3). These are display-layer changes that don't affect the Tier 1 extraction/retrieval pipeline the benchmark measures; the score confirms no regressions from the new rendering logic. Retrieval quality: Hit@20 86%, MRR 0.655, NDCG 0.687. Ingest: 382s total (14.8s/session mean).
@@ -661,7 +715,7 @@ xAI extractor at temperature=0 produces 70–81 unique memories per run with 16p
 
 200 questions, 25 sessions. First benchmark with Anthropic `claude-haiku-4-5` as extraction provider (replacing xAI Grok). Identical backend code and retrieval settings as `causal-chain-synthesis-arch`. Scored 92.0% (184/200) — consistent with the middle of Grok's variance range (78.5–94.5%), but with expected lower variance across runs. Error-solution 100%, tech/arch/continuity/abstain all 96%, synthesis 68% (weakest). Ingest total 367s (~14.7s/session mean) — ~3x slower than Grok (~5s/session) but ~2x faster than Gemini (~21s/session).
 
-### causal-chain-synthesis-arch (run `causal-chain-synthesis-arch`) — **94.5%** ← current xAI baseline
+### causal-chain-synthesis-arch (run `causal-chain-synthesis-arch`) — **94.5%** ← xAI reference baseline
 
 200 questions, 25 sessions. Two changes: (1) extraction prompt now preserves causal chains for error-solution memories instead of compressing to 1-2 sentences — genuine backend improvement to extraction quality. (2) `SYNTHESIS_TYPES` introduced: cross-synthesis queries now include `architecture`-type memories in hybrid retrieval while pure enumeration stays narrow. Architecture 92% → 100%, error-solution 92% → 100%, cross-synthesis 76% → 80%. Overall 92.0% → 94.5% (+2.5pp, +5 questions).
 
@@ -787,12 +841,15 @@ Every run automatically:
 ```bash
 bun run bench run                   # full run (200 questions)
 bun run bench run -r my-run         # named run — safe to interrupt and resume
+bun run bench run --mode block-quality -r my-run  # answer from the structural [MEMORY] block only (no semantic fallback)
 bun run bench run --no-cleanup      # keep memories for debugging
 bun run bench run --limit 10        # smoke test (~1 min)
 bun run bench serve -r <id>         # re-open dashboard for a completed run
 bun run bench status -r <id>        # print checkpoint status
 bun run bench list                  # list all past runs with scores
 ```
+
+> **Modes.** The default (retrieval) mode answers from full K=20 semantic search — this is what every historical run above measures. `--mode block-quality` answers from the assembled structural `[MEMORY]` block **only**, with no semantic-search fallback; it isolates structural-injection quality (used to gate PR #219 / issue #201). Absolute block-quality scores are far lower than retrieval scores and the two modes are **not** comparable.
 
 ### Pipeline
 

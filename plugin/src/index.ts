@@ -17,6 +17,8 @@ import { nameRegistry } from "./names.js";
 import { ledger, activityLog } from "./telemetry.js";
 import {
 	formatContextForPrompt,
+	applyPerTypeCaps,
+	RENDERED_STRUCTURAL_TYPES,
 	type StructuredMemory,
 	type ProfileResult,
 	type MemoriesResponseMinimal,
@@ -49,26 +51,41 @@ const ENUMERATION_REGEX = /\b(list\s+all|list\s+every|all\s+the\s+\w+|every\s+(e
 
 const WIDE_SYNTHESIS_REGEX = /\b(both\s+(projects?|the)|across\s+both|end[\s-]to[\s-]end|how\s+has.{0,30}evolved|sequence\s+of.{0,20}decisions?)\b/i;
 
-// ── Per-type soft caps — prevent any single type from crowding out others.
-// Singletons (progress, active-context) are handled by aging rules and need
-// no cap. Session-summary is capped separately. Caps are soft: excess entries
-// are simply sliced off after grouping (already sorted newest-first by list()).
-const PER_TYPE_CAPS: Record<string, number> = {
-	"project-brief":        8,
-	"project-config":       8,
-	"architecture":         12,
-	"architecture-pattern": 12,
-	"tech-context":         8,
-	"product-context":      8,
-};
+// ── Per-type soft caps — see services/context.ts for PER_TYPE_CAPS/applyPerTypeCaps
+// (relocated there so benchmark/src/pipeline/block-quality.ts can share the same
+// capping logic; index.ts's exports are all scanned and invoked as plugin hooks
+// by OpenCode's loader, so non-hook utilities can't safely live here).
 
-/** Apply per-type soft caps in-place, slicing excess entries from each type. */
-function applyPerTypeCaps(byType: Record<string, StructuredMemory[]>): void {
-	for (const [type, cap] of Object.entries(PER_TYPE_CAPS)) {
-		if (byType[type] && byType[type].length > cap) {
-			byType[type] = byType[type].slice(0, cap);
-		}
+/**
+ * Bucket a flat memory list (as returned by listMemories()/listStructuredMemories())
+ * by metadata.type and apply per-type caps. Single source of truth for building
+ * the structured-sections map — replaces 3 previously-duplicated inline blocks,
+ * one of which (the enrichment path) was missing the applyPerTypeCaps() call
+ * entirely. See issue #201.
+ */
+function buildStructuredSections(
+	memories: Array<{
+		id: string;
+		summary: string;
+		createdAt: string;
+		metadata?: Record<string, unknown>;
+	}>,
+): Record<string, StructuredMemory[]> {
+	const byType: Record<string, StructuredMemory[]> = {};
+	for (const m of memories) {
+		const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
+		const key = memType || "other";
+		if (!byType[key]) byType[key] = [];
+		byType[key].push({
+			id: m.id,
+			memory: m.summary,
+			similarity: 1,
+			metadata: m.metadata as Record<string, unknown> | undefined,
+			createdAt: m.createdAt,
+		});
 	}
+	applyPerTypeCaps(byType);
+	return byType;
 }
 
 function detectQueryTypes(query: string): string[] | undefined {
@@ -366,6 +383,41 @@ async function listMemories(
 	}
 }
 
+/**
+ * Wraps store.listStructured() — same shape as listMemories() above, but
+ * scoped to RENDERED_STRUCTURAL_TYPES so non-rendered atomic types
+ * (learned-pattern, error-solution, preference) can't starve the structural
+ * [MEMORY] block sections. See issue #201.
+ */
+async function listStructuredMemories(
+	containerTag: string,
+	limit: number,
+): Promise<{
+	success: boolean;
+	memories: Array<{
+		id: string;
+		summary: string;
+		createdAt: string;
+		metadata?: Record<string, unknown>;
+	}>;
+}> {
+	try {
+		const rows = await store.listStructured(containerTag, RENDERED_STRUCTURAL_TYPES, { limit });
+		return {
+			success: true,
+			memories: rows.map((r) => ({
+				id: r.id,
+				summary: r.memory,
+				createdAt: r.created_at ?? new Date().toISOString(),
+				metadata: r.metadata,
+			})),
+		};
+	} catch (error) {
+		log("listStructuredMemories: error", { error: String(error) });
+		return { success: false, memories: [] };
+	}
+}
+
 // ── Format search results for tool output ───────────────────────────────────────
 
 function formatSearchResults(
@@ -581,21 +633,9 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 				return;
 			}
 
-			const freshList = await listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories);
+			const freshList = await listStructuredMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories);
 			if (freshList.success && freshList.memories.length > 0) {
-				const byType: Record<string, StructuredMemory[]> = {};
-				for (const m of freshList.memories) {
-					const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-					const key = memType || "other";
-					if (!byType[key]) byType[key] = [];
-					byType[key].push({
-						id: m.id,
-						memory: m.summary,
-						similarity: 1,
-						metadata: m.metadata as Record<string, unknown> | undefined,
-						createdAt: m.createdAt,
-					});
-				}
+				const byType = buildStructuredSections(freshList.memories);
 				cache.structuredSections = byType;
 				cache.lastRefreshAt = Date.now();
 				log("enrichment: session cache updated with enriched data", {
@@ -708,7 +748,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 					const [profileResult, userSearch, projectMemoriesList, initialProjectSearch] = await Promise.all([
 						getProfile(tags.user),
 						searchMemories(userMessage, tags.user, 0.1),
-						listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+						listStructuredMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
 						searchMemories(userMessage, tags.project, 0.15),
 					]);
 
@@ -728,7 +768,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 
 							// Re-fetch freshly-written memories so Turn 1 sees them
 							const [freshList, freshSearch] = await Promise.all([
-								listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+								listStructuredMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
 								searchMemories(userMessage, tags.project, 0.15),
 							]);
 
@@ -750,21 +790,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 					}
 
 					// ── Partition project memories by type ──────────────────────
-					const byType: Record<string, StructuredMemory[]> = {};
-					for (const m of allProjectMemories) {
-						const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-						const key = memType || "other";
-						if (!byType[key]) byType[key] = [];
-						byType[key].push({
-							id: m.id,
-							memory: m.summary,
-							similarity: 1,
-							metadata: m.metadata as Record<string, unknown> | undefined,
-							createdAt: m.createdAt,
-						});
-					}
-
-					applyPerTypeCaps(byType);
+					const byType = buildStructuredSections(allProjectMemories);
 
 					// ── Project-brief fallback seeding ──────────────────────────
 					if (allProjectMemories.length > 0 && !byType["project-brief"]) {
@@ -829,7 +855,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							const refreshStart = Date.now();
 
 							const [freshList, freshProfile, freshSearch] = await Promise.all([
-								listMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
+								listStructuredMemories(tags.project, PLUGIN_CONFIG.maxStructuredMemories),
 								getProfile(tags.user),
 								searchMemories(userMessage, tags.project, 0.15),
 							]);
@@ -837,20 +863,7 @@ export const MemoryPlugin: Plugin = async (ctx: PluginInput) => {
 							// Update structured sections
 							if (freshList.success) {
 								const allProjectMemories = freshList.memories || [];
-								const byType: Record<string, StructuredMemory[]> = {};
-								for (const m of allProjectMemories) {
-									const memType = (m.metadata as Record<string, unknown> | undefined)?.type as string | undefined;
-									const key = memType || "other";
-									if (!byType[key]) byType[key] = [];
-									byType[key].push({
-										id: m.id,
-										memory: m.summary,
-										similarity: 1,
-										metadata: m.metadata as Record<string, unknown> | undefined,
-										createdAt: m.createdAt,
-									});
-								}
-								applyPerTypeCaps(byType);
+								const byType = buildStructuredSections(allProjectMemories);
 								cache.structuredSections = byType;
 
 								log("chat.message: post-compaction structured sections refreshed", {

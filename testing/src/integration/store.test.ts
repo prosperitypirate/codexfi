@@ -14,7 +14,7 @@ import { tmpdir, homedir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
 import * as vs from "../../../plugin/src/store/index.js";
 import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
-import { searchByVector, list, deleteMemory, getProfile } from "../../../plugin/src/store.js";
+import { searchByVector, list, deleteMemory, getProfile, listStructured, listByType } from "../../../plugin/src/store.js";
 import { deterministicVector } from "../helpers/mock-embedder.js";
 
 let tempDir: string;
@@ -324,5 +324,253 @@ describe("getProfile", () => {
 		const results = await getProfile("test-project", 10);
 		const ids = results.map(r => r.id);
 		expect(ids).not.toContain("mem-5-superseded");
+	});
+});
+
+// ── listStructured (issue #201) ──────────────────────────────────────────────
+// Uses a dedicated user_id so these rows don't affect the exact-count
+// assertions in the `list` describe block above.
+
+describe("listStructured", () => {
+	const SF_USER = "structured-fetch-test";
+
+	beforeAll(() => {
+		const ts = (day: string) => `2026-01-${day}T00:00:00.000Z`;
+
+		db.store.add([
+			{
+				id: "sf-tech-oldest",
+				memory: "Oldest tech fact",
+				user_id: SF_USER,
+				vector: deterministicVector("Oldest tech fact"),
+				metadata_json: JSON.stringify({ type: "tech-context" }),
+				created_at: ts("01"),
+				updated_at: ts("01"),
+				hash: "sf1",
+				chunk: "",
+				superseded_by: "",
+				type: "tech-context",
+			},
+			{
+				id: "sf-arch",
+				memory: "An architecture fact",
+				user_id: SF_USER,
+				vector: deterministicVector("An architecture fact"),
+				metadata_json: JSON.stringify({ type: "architecture" }),
+				created_at: ts("02"),
+				updated_at: ts("02"),
+				hash: "sf2",
+				chunk: "",
+				superseded_by: "",
+				type: "architecture",
+			},
+			// Newer than both structural rows above, but NOT a rendered type —
+			// under the pre-#201 behavior these would have won the type-agnostic
+			// recency window and starved the structural rows. Must never appear
+			// in listStructured() results regardless of recency.
+			{
+				id: "sf-learned-pattern",
+				memory: "Should never appear in listStructured (learned-pattern)",
+				user_id: SF_USER,
+				vector: deterministicVector("Should never appear in listStructured (learned-pattern)"),
+				metadata_json: JSON.stringify({ type: "learned-pattern" }),
+				created_at: ts("03"),
+				updated_at: ts("03"),
+				hash: "sf3",
+				chunk: "",
+				superseded_by: "",
+				type: "learned-pattern",
+			},
+			{
+				id: "sf-preference",
+				memory: "Should never appear in listStructured (preference)",
+				user_id: SF_USER,
+				vector: deterministicVector("Should never appear in listStructured (preference)"),
+				metadata_json: JSON.stringify({ type: "preference" }),
+				created_at: ts("04"),
+				updated_at: ts("04"),
+				hash: "sf4",
+				chunk: "",
+				superseded_by: "",
+				type: "preference",
+			},
+			// Superseded tech-context — newer than the active ones, but must be
+			// excluded regardless of type or recency.
+			{
+				id: "sf-tech-superseded",
+				memory: "Superseded tech fact",
+				user_id: SF_USER,
+				vector: deterministicVector("Superseded tech fact"),
+				metadata_json: JSON.stringify({ type: "tech-context" }),
+				created_at: ts("05"),
+				updated_at: ts("05"),
+				hash: "sf5",
+				chunk: "",
+				superseded_by: "sf-tech-oldest",
+				type: "tech-context",
+			},
+			{
+				id: "sf-tech-newest",
+				memory: "Newest tech fact",
+				user_id: SF_USER,
+				vector: deterministicVector("Newest tech fact"),
+				metadata_json: JSON.stringify({ type: "tech-context" }),
+				created_at: ts("06"),
+				updated_at: ts("06"),
+				hash: "sf6",
+				chunk: "",
+				superseded_by: "",
+				type: "tech-context",
+			},
+		]);
+	});
+
+	test("returns only the requested rendered types, excluding atomic types even when newer", async () => {
+		const results = await listStructured(SF_USER, ["tech-context", "architecture"]);
+		const ids = results.map(r => r.id);
+
+		expect(ids).toContain("sf-tech-oldest");
+		expect(ids).toContain("sf-tech-newest");
+		expect(ids).toContain("sf-arch");
+		expect(ids).not.toContain("sf-learned-pattern");
+		expect(ids).not.toContain("sf-preference");
+	});
+
+	test("excludes superseded memories regardless of type or recency", async () => {
+		const results = await listStructured(SF_USER, ["tech-context", "architecture"]);
+		const ids = results.map(r => r.id);
+		expect(ids).not.toContain("sf-tech-superseded");
+	});
+
+	test("sorts newest-first by updated_at", async () => {
+		const results = await listStructured(SF_USER, ["tech-context", "architecture"]);
+		const ids = results.map(r => r.id);
+		expect(ids).toEqual(["sf-tech-newest", "sf-arch", "sf-tech-oldest"]);
+	});
+
+	test("respects limit — returns the newest N, not the oldest N", async () => {
+		const results = await listStructured(SF_USER, ["tech-context", "architecture"], { limit: 2 });
+		const ids = results.map(r => r.id);
+		expect(ids).toEqual(["sf-tech-newest", "sf-arch"]);
+	});
+
+	test("returns empty for a type not present", async () => {
+		const results = await listStructured(SF_USER, ["product-context"]);
+		expect(results).toEqual([]);
+	});
+});
+
+// ── listByType / getMemoriesByTypes sort-order fix (issue #201) ─────────────
+// Uses its own user_id so these rows don't affect other describe blocks.
+
+describe("listByType sort order", () => {
+	const SORT_USER = "sort-order-test";
+
+	beforeAll(() => {
+		const ts = (day: string) => `2026-02-${day}T00:00:00.000Z`;
+
+		db.store.add(
+			["01", "02", "03", "04", "05"].map((day, i) => ({
+				id: `sort-e${i + 1}`,
+				memory: `Error solution ${i + 1}`,
+				user_id: SORT_USER,
+				vector: deterministicVector(`Error solution ${i + 1}`),
+				metadata_json: JSON.stringify({ type: "error-solution" }),
+				created_at: ts(day),
+				updated_at: ts(day),
+				hash: `sort-hash-${i + 1}`,
+				chunk: "",
+				superseded_by: "",
+				type: "error-solution",
+			})),
+		);
+	});
+
+	test("with a limit: returns the newest N, not the oldest N", async () => {
+		// sort-e5 was created last (2026-02-05) — the pre-fix behavior sorted
+		// ascending then sliced, silently returning sort-e1/e2 (oldest) instead.
+		const results = await listByType(SORT_USER, ["error-solution"], { limit: 2 });
+		const ids = results.map(r => r.id);
+		expect(ids).toEqual(["sort-e5", "sort-e4"]);
+	});
+
+	test("without a limit: returns ALL, sorted oldest-first", async () => {
+		// Required for ageSessionSummaries(), which reads existing[0] as "the
+		// oldest" entry to condense. Must not change for the unlimited case.
+		const results = await listByType(SORT_USER, ["error-solution"]);
+		const ids = results.map(r => r.id);
+		expect(ids).toEqual(["sort-e1", "sort-e2", "sort-e3", "sort-e4", "sort-e5"]);
+	});
+});
+
+// ── store.update() `type` column (issue #201, Item 3) ────────────────────────
+// Lighter-weight test suggested during review in place of a full ingest()
+// mock: verifies the underlying primitive db.store.update() correctly syncs
+// the raw `type` column, not just metadata_json.type — the exact mechanism
+// the dedup-refresh fix in store.ts's ingest() now relies on.
+
+describe("store.update() type column sync", () => {
+	const TYPE_SYNC_USER = "type-column-sync-test";
+
+	test("updating with a type value changes the raw type column, not just metadata_json", async () => {
+		const now = new Date().toISOString();
+		db.store.add([{
+			id: "type-sync-1",
+			memory: "Initial fact",
+			user_id: TYPE_SYNC_USER,
+			vector: deterministicVector("Initial fact"),
+			metadata_json: JSON.stringify({ type: "architecture" }),
+			created_at: now,
+			updated_at: now,
+			hash: "type-sync-hash-1",
+			chunk: "",
+			superseded_by: "",
+			type: "architecture",
+		}]);
+
+		db.store.update({ id: "type-sync-1" }, {
+			metadata_json: JSON.stringify({ type: "tech-context" }),
+			type: "tech-context",
+			updated_at: new Date().toISOString(),
+		});
+
+		const rows = db.store.scan({ user_id: TYPE_SYNC_USER, superseded_by: "" });
+		const row = rows.find(r => r.id === "type-sync-1");
+
+		expect(row).toBeDefined();
+		expect(row!.type).toBe("tech-context");
+		expect(JSON.parse(row!.metadata_json).type).toBe("tech-context");
+	});
+
+	test("omitting type from update() leaves the raw column unchanged (documents the pre-fix drift risk)", async () => {
+		const now = new Date().toISOString();
+		db.store.add([{
+			id: "type-sync-2",
+			memory: "Another fact",
+			user_id: TYPE_SYNC_USER,
+			vector: deterministicVector("Another fact"),
+			metadata_json: JSON.stringify({ type: "architecture" }),
+			created_at: now,
+			updated_at: now,
+			hash: "type-sync-hash-2",
+			chunk: "",
+			superseded_by: "",
+			type: "architecture",
+		}]);
+
+		// Simulates the pre-fix bug: update() called WITHOUT a type field.
+		db.store.update({ id: "type-sync-2" }, {
+			metadata_json: JSON.stringify({ type: "tech-context" }),
+			updated_at: new Date().toISOString(),
+		});
+
+		const rows = db.store.scan({ user_id: TYPE_SYNC_USER, superseded_by: "" });
+		const row = rows.find(r => r.id === "type-sync-2");
+
+		expect(row).toBeDefined();
+		// The raw column is stale — this is exactly the drift store.ts's
+		// ingest() dedup path now avoids by always passing `type: factType`.
+		expect(row!.type).toBe("architecture");
+		expect(JSON.parse(row!.metadata_json).type).toBe("tech-context");
 	});
 });
