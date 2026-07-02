@@ -12,10 +12,13 @@
  * [MEMORY] block sections…").
  *
  * NOTE: whether a live model actually avoids these phrases given the guard is
- * NOT covered here (would require a real extraction API call — this repo's
- * test suite mocks fetch() rather than hitting live LLMs; see
- * testing/src/integration/extractor-summary.test.ts for the mocked wiring test
- * that verifies SUMMARY_SYSTEM, guard included, is what actually gets sent).
+ * NOT covered here (would require a real extraction API call). A mocked-fetch
+ * wiring test (verifying extractMemories() actually sends SUMMARY_SYSTEM to
+ * the LLM) was attempted but removed — it passed on Bun 1.3.10 locally but
+ * failed on CI's Bun 1.3.14 due to a mock.module/require.cache interaction
+ * difference between versions. This static-assertion-only approach matches
+ * the codebase's existing convention for prompt tests (see config.test.ts,
+ * ingest-result-schema.test.ts — neither mocks the LLM call chain either).
  */
 
 import { describe, test, expect } from "bun:test";
@@ -40,6 +43,8 @@ describe("SUMMARY_SYSTEM anti-recursion guard", () => {
 		// False-positive guard: a project that IS a memory system (e.g. codexfi itself)
 		// must still be able to describe work on its own code without the guard
 		// stripping legitimate content. See issue #201 "Confidence & limitations".
+		// \s*\n?\s* tolerates the line break + indentation in the prompt source:
+		// "...building or\n  fixing that memory system's code..."
 		expect(SUMMARY_SYSTEM).toMatch(/building or\s*\n?\s*fixing that memory system's code/i);
 	});
 
