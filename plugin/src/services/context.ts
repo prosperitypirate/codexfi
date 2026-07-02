@@ -78,7 +78,13 @@ export const PER_TYPE_CAPS: Record<string, number> = {
 	"product-context":      8,
 };
 
-/** Apply per-type soft caps in-place, slicing excess entries from each type. */
+/**
+ * Apply per-type soft caps in-place, slicing excess entries from each type.
+ *
+ * Assumes `byType[type]` is already sorted newest-first (the contract
+ * `store.listStructured()` provides) — slicing keeps the first N entries,
+ * i.e. the newest N, and drops the rest.
+ */
 export function applyPerTypeCaps(byType: Record<string, StructuredMemory[]>): void {
 	for (const [type, cap] of Object.entries(PER_TYPE_CAPS)) {
 		if (byType[type] && byType[type].length > cap) {

@@ -502,3 +502,75 @@ describe("listByType sort order", () => {
 		expect(ids).toEqual(["sort-e1", "sort-e2", "sort-e3", "sort-e4", "sort-e5"]);
 	});
 });
+
+// ── store.update() `type` column (issue #201, Item 3) ────────────────────────
+// Lighter-weight test suggested during review in place of a full ingest()
+// mock: verifies the underlying primitive db.store.update() correctly syncs
+// the raw `type` column, not just metadata_json.type — the exact mechanism
+// the dedup-refresh fix in store.ts's ingest() now relies on.
+
+describe("store.update() type column sync", () => {
+	const TYPE_SYNC_USER = "type-column-sync-test";
+
+	test("updating with a type value changes the raw type column, not just metadata_json", async () => {
+		const now = new Date().toISOString();
+		db.store.add([{
+			id: "type-sync-1",
+			memory: "Initial fact",
+			user_id: TYPE_SYNC_USER,
+			vector: deterministicVector("Initial fact"),
+			metadata_json: JSON.stringify({ type: "architecture" }),
+			created_at: now,
+			updated_at: now,
+			hash: "type-sync-hash-1",
+			chunk: "",
+			superseded_by: "",
+			type: "architecture",
+		}]);
+
+		db.store.update({ id: "type-sync-1" }, {
+			metadata_json: JSON.stringify({ type: "tech-context" }),
+			type: "tech-context",
+			updated_at: new Date().toISOString(),
+		});
+
+		const rows = db.store.scan({ user_id: TYPE_SYNC_USER, superseded_by: "" });
+		const row = rows.find(r => r.id === "type-sync-1");
+
+		expect(row).toBeDefined();
+		expect(row!.type).toBe("tech-context");
+		expect(JSON.parse(row!.metadata_json).type).toBe("tech-context");
+	});
+
+	test("omitting type from update() leaves the raw column unchanged (documents the pre-fix drift risk)", async () => {
+		const now = new Date().toISOString();
+		db.store.add([{
+			id: "type-sync-2",
+			memory: "Another fact",
+			user_id: TYPE_SYNC_USER,
+			vector: deterministicVector("Another fact"),
+			metadata_json: JSON.stringify({ type: "architecture" }),
+			created_at: now,
+			updated_at: now,
+			hash: "type-sync-hash-2",
+			chunk: "",
+			superseded_by: "",
+			type: "architecture",
+		}]);
+
+		// Simulates the pre-fix bug: update() called WITHOUT a type field.
+		db.store.update({ id: "type-sync-2" }, {
+			metadata_json: JSON.stringify({ type: "tech-context" }),
+			updated_at: new Date().toISOString(),
+		});
+
+		const rows = db.store.scan({ user_id: TYPE_SYNC_USER, superseded_by: "" });
+		const row = rows.find(r => r.id === "type-sync-2");
+
+		expect(row).toBeDefined();
+		// The raw column is stale — this is exactly the drift store.ts's
+		// ingest() dedup path now avoids by always passing `type: factType`.
+		expect(row!.type).toBe("architecture");
+		expect(JSON.parse(row!.metadata_json).type).toBe("tech-context");
+	});
+});
