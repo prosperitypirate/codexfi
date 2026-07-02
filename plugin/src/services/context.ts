@@ -48,6 +48,50 @@ const STRUCTURED_SECTIONS: Array<{ label: string; types: string[]; renderCap?: n
 
 const SESSION_SUMMARY_TYPES = ["session-summary", "conversation"];
 
+/**
+ * Every memory type that can ever be rendered by a structured section or
+ * Recent Sessions. Used to scope the structural-block fetch to ONLY these
+ * types, so high-volume atomic types (learned-pattern, error-solution,
+ * preference — which have no structural renderer at all) can no longer
+ * starve the recency window that feeds this block. See issue #201.
+ */
+export const RENDERED_STRUCTURAL_TYPES: string[] = [
+	...STRUCTURED_SECTIONS.flatMap((s) => s.types),
+	...SESSION_SUMMARY_TYPES,
+];
+
+// ── Per-type soft caps — prevent any single type from crowding out others.
+// Singletons (progress, active-context) are handled by aging rules and need
+// no cap. Session-summary is capped separately (MAX_SESSION_SUMMARIES, plus
+// the 3-newest slice below). Caps are soft: excess entries are simply sliced
+// off after grouping, assuming the input is already sorted newest-first.
+//
+// Lives here (not in index.ts) so benchmark/src/pipeline/block-quality.ts can
+// import it too — index.ts's exports are all scanned and invoked as plugin
+// hooks by OpenCode's loader, so non-hook utilities can't safely live there.
+export const PER_TYPE_CAPS: Record<string, number> = {
+	"project-brief":        8,
+	"project-config":       8,
+	"architecture":         12,
+	"architecture-pattern": 12,
+	"tech-context":         8,
+	"product-context":      8,
+};
+
+/** Apply per-type soft caps in-place, slicing excess entries from each type. */
+export function applyPerTypeCaps(byType: Record<string, StructuredMemory[]>): void {
+	for (const [type, cap] of Object.entries(PER_TYPE_CAPS)) {
+		if (byType[type] && byType[type].length > cap) {
+			byType[type] = byType[type].slice(0, cap);
+		}
+	}
+}
+
+/** Lowercase + collapse whitespace for cross-section duplicate detection. */
+function normalizeForDedup(s: string): string {
+	return s.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function formatContextForPrompt(
 	profile: ProfileResult | null,
 	userMemories: MemoriesResponseMinimal,
@@ -55,6 +99,32 @@ export function formatContextForPrompt(
 	byType?: Record<string, StructuredMemory[]>
 ): string {
 	const parts: string[] = ["[MEMORY]"];
+
+	// ── Semantic search hits — computed early for cross-section dedup ───────
+	// (rendered later, under "Relevant to Current Task")
+	const userResults = userMemories.results || [];
+	const semanticItems = semanticResults.results || [];
+
+	const allSemantic = [
+		...userResults.map((r) => ({ ...r, _source: "user" as const })),
+		...semanticItems.map((r) => ({ ...r, _source: "project" as const })),
+	].sort((a, b) => b.similarity - a.similarity);
+
+	// Apply displaySimilarityThreshold — filter out low-confidence results from display.
+	// Note: retrieval still runs at similarityThreshold (0.45) for full recall;
+	// this is a separate, higher display floor to reduce noise in the block.
+	const displayThreshold = PLUGIN_CONFIG.displaySimilarityThreshold;
+	const filteredSemantic = allSemantic.filter((m) => m.similarity >= displayThreshold);
+
+	// Cross-section dedup (issue #201): a structural/session bullet whose content
+	// already appears under "Relevant to Current Task" is skipped there — that
+	// section renders with richer context (score, date, source snippet), so
+	// showing the same fact twice is pure noise, not signal.
+	const semanticContentSet = new Set(
+		filteredSemantic
+			.map((m) => normalizeForDedup(m.memory || m.chunk || ""))
+			.filter(Boolean)
+	);
 
 	// ── Structured project sections ─────────────────────────────────────────
 	if (byType) {
@@ -65,10 +135,11 @@ export function formatContextForPrompt(
 			}
 			if (items.length === 0) continue;
 
-			parts.push(`\n## ${section.label}`);
+			const sectionLines: string[] = [];
 			items.forEach((mem) => {
 				const rawContent = mem.memory || mem.chunk || "";
 				if (!rawContent) return;
+				if (semanticContentSet.has(normalizeForDedup(rawContent))) return;
 				// Apply per-section render cap (used by Active Context to prevent oversized blobs)
 				const content = section.renderCap && rawContent.length > section.renderCap
 					? rawContent.slice(0, section.renderCap) + "…"
@@ -76,11 +147,15 @@ export function formatContextForPrompt(
 				// architecture-pattern memories render with a '> pattern:' prefix for visual distinction
 				const memType = (mem.metadata?.type as string | undefined) ?? "";
 				if (memType === "architecture-pattern") {
-					parts.push(`> **pattern:** ${content}`);
+					sectionLines.push(`> **pattern:** ${content}`);
 				} else {
-					parts.push(`- ${content}`);
+					sectionLines.push(`- ${content}`);
 				}
 			});
+
+			if (sectionLines.length === 0) continue;
+			parts.push(`\n## ${section.label}`);
+			parts.push(...sectionLines);
 		}
 
 		// Recent sessions — up to 3 most recent session-summaries, newest first.
@@ -102,6 +177,7 @@ export function formatContextForPrompt(
 			recentSessions.forEach((mem, idx) => {
 				const raw = mem.memory || mem.chunk || "";
 				if (!raw) return;
+				if (semanticContentSet.has(normalizeForDedup(raw))) return;
 				let content: string;
 				if (idx === 0) {
 					content = raw;                          // latest: full text
@@ -132,20 +208,6 @@ export function formatContextForPrompt(
 	}
 
 	// ── Semantic search hits — relevant to current task ─────────────────────
-	const userResults = userMemories.results || [];
-	const semanticItems = semanticResults.results || [];
-
-	const allSemantic = [
-		...userResults.map((r) => ({ ...r, _source: "user" as const })),
-		...semanticItems.map((r) => ({ ...r, _source: "project" as const })),
-	].sort((a, b) => b.similarity - a.similarity);
-
-	// Apply displaySimilarityThreshold — filter out low-confidence results from display.
-	// Note: retrieval still runs at similarityThreshold (0.45) for full recall;
-	// this is a separate, higher display floor to reduce noise in the block.
-	const displayThreshold = PLUGIN_CONFIG.displaySimilarityThreshold;
-	const filteredSemantic = allSemantic.filter((m) => m.similarity >= displayThreshold);
-
 	if (filteredSemantic.length > 0) {
 		parts.push("\n## Relevant to Current Task");
 		filteredSemantic.forEach((mem) => {

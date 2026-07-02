@@ -161,7 +161,16 @@ async function checkAndSupersede(
 
 /**
  * Return non-superseded memories matching any of `memoryTypes` for `userId`.
- * Sorted by created_at ascending.
+ *
+ * Sort order depends on whether a limit is given:
+ *   - No limit: oldest-first by created_at. Required by ageSessionSummaries(),
+ *     which reads existing[0] as "the oldest" entry to condense into a
+ *     learned-pattern — do not change this branch's order.
+ *   - With a limit: newest-first by created_at, so callers asking for "the
+ *     N most recent X" (search()'s hybrid-enumeration path, `codexfi list
+ *     --type X --limit N`) get the newest N rather than silently getting the
+ *     OLDEST N (a latent bug — sorting ascending then slicing to a limit
+ *     drops the newest rows once a type exceeds the limit). See issue #201.
  */
 async function getMemoriesByTypes(
 	userId: string,
@@ -180,12 +189,15 @@ async function getMemoriesByTypes(
 			return typeSet.has(meta.type as string);
 		});
 
-		typed.sort((a, b) =>
-			((a.created_at as string) || "").localeCompare((b.created_at as string) || "")
-		);
-
 		if (limit !== undefined) {
+			typed.sort((a, b) =>
+				((b.created_at as string) || "").localeCompare((a.created_at as string) || "")
+			);
 			typed = typed.slice(0, limit);
+		} else {
+			typed.sort((a, b) =>
+				((a.created_at as string) || "").localeCompare((b.created_at as string) || "")
+			);
 		}
 
 		return typed.map(r => asOpaqueRecord(r));
@@ -345,6 +357,10 @@ export async function ingest(
 						hash: factHash,
 						metadata_json: metadataStr,
 						chunk: factChunk,
+						// Keep the raw `type` column in sync with metadata_json.type on
+						// every refresh, not just at initial insert (was previously only
+						// set in the `store.add()` branch below). See issue #201.
+						type: factType,
 					});
 					return Promise.resolve();
 				},
@@ -579,6 +595,58 @@ export async function listByType(
 	options: { limit?: number } = {},
 ): Promise<Array<Record<string, unknown>>> {
 	return getMemoriesByTypes(userId, types, options.limit);
+}
+
+/**
+ * List non-superseded memories for `userId` restricted to `types`, sorted
+ * newest-first by updated_at — same contract as list(), just scoped to a
+ * type allowlist.
+ *
+ * Used to build the structured [MEMORY] block sections without high-volume
+ * atomic types (learned-pattern, error-solution, preference — none of which
+ * have a structural renderer) burning slots in the fetch window and starving
+ * the types that actually render. See issue #201.
+ *
+ * Deliberately a separate function from listByType()/getMemoriesByTypes()
+ * above: that function sorts oldest-first when unlimited (required by
+ * ageSessionSummaries()) and feeds the hybrid-enumeration retrieval in
+ * search() — different callers, different ordering needs. Mixing the two
+ * into one function was part of what made the bug non-obvious.
+ */
+export async function listStructured(
+	userId: string,
+	types: string[],
+	options: { limit?: number } = {},
+): Promise<Array<{
+	id: string;
+	memory: string;
+	user_id: string;
+	metadata: Record<string, unknown>;
+	created_at: string | null;
+	updated_at: string | null;
+}>> {
+	const safeUserId = validateId(userId, "user_id");
+	if (store.countRows() === 0) return [];
+
+	const typeSet = new Set(types);
+	const rows = store.scan({ user_id: safeUserId, superseded_by: "" })
+		.filter(r => typeSet.has(safeParseJson(r.metadata_json).type as string));
+
+	rows.sort((a, b) =>
+		((b.updated_at as string) || "").localeCompare((a.updated_at as string) || "")
+	);
+
+	const limit = options.limit;
+	const sliced = limit !== undefined ? rows.slice(0, limit) : rows;
+
+	return sliced.map(r => ({
+		id: r.id,
+		memory: r.memory,
+		user_id: r.user_id,
+		metadata: safeParseJson(r.metadata_json),
+		created_at: r.created_at || null,
+		updated_at: r.updated_at || null,
+	}));
 }
 
 // ── Public API: delete ──────────────────────────────────────────────────────────

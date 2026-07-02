@@ -13,6 +13,9 @@
 import { describe, test, expect } from "bun:test";
 import {
 	formatContextForPrompt,
+	RENDERED_STRUCTURAL_TYPES,
+	PER_TYPE_CAPS,
+	applyPerTypeCaps,
 	type StructuredMemory,
 	type ProfileResult,
 	type MemoriesResponseMinimal,
@@ -321,5 +324,164 @@ describe("Full [MEMORY] block structure", () => {
 	test("returns empty string when no sections have content", () => {
 		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, EMPTY_SEMANTIC, {});
 		expect(block).toBe("");
+	});
+});
+
+// ── RENDERED_STRUCTURAL_TYPES (issue #201) ────────────────────────────────────
+
+describe("RENDERED_STRUCTURAL_TYPES", () => {
+	test("includes every type rendered by a structured section", () => {
+		for (const t of [
+			"project-brief", "project-config", "architecture", "architecture-pattern",
+			"tech-context", "product-context", "progress", "active-context",
+		]) {
+			expect(RENDERED_STRUCTURAL_TYPES).toContain(t);
+		}
+	});
+
+	test("includes session-summary and conversation (Recent Sessions)", () => {
+		expect(RENDERED_STRUCTURAL_TYPES).toContain("session-summary");
+		expect(RENDERED_STRUCTURAL_TYPES).toContain("conversation");
+	});
+
+	test("excludes high-volume atomic types that have no structural renderer", () => {
+		// The core of issue #201: these types were previously fetched by the
+		// same type-agnostic 50-cap window as structural types, burning slots
+		// despite never being rendered by any section — starving the ones
+		// that do render. They must NEVER appear in this list.
+		for (const t of ["learned-pattern", "error-solution", "preference"]) {
+			expect(RENDERED_STRUCTURAL_TYPES).not.toContain(t);
+		}
+	});
+});
+
+// ── PER_TYPE_CAPS / applyPerTypeCaps ──────────────────────────────────────────
+
+describe("applyPerTypeCaps", () => {
+	test("slices excess entries down to each type's cap", () => {
+		const byType: Record<string, StructuredMemory[]> = {
+			"tech-context": Array.from({ length: 20 }, (_, i) =>
+				makeMemory(`tc${i}`, `Tech fact ${i}`, "tech-context")),
+		};
+
+		applyPerTypeCaps(byType);
+
+		expect(byType["tech-context"]!.length).toBe(PER_TYPE_CAPS["tech-context"]);
+	});
+
+	test("preserves order (keeps the first N — caller is expected to pre-sort newest-first)", () => {
+		const byType: Record<string, StructuredMemory[]> = {
+			"product-context": Array.from({ length: 12 }, (_, i) =>
+				makeMemory(`pc${i}`, `Product fact ${i}`, "product-context")),
+		};
+
+		applyPerTypeCaps(byType);
+
+		expect(byType["product-context"]!.length).toBe(PER_TYPE_CAPS["product-context"]);
+		expect(byType["product-context"]![0]!.id).toBe("pc0");
+	});
+
+	test("does not touch types under their cap", () => {
+		const byType: Record<string, StructuredMemory[]> = {
+			"architecture": [makeMemory("a1", "One architecture fact", "architecture")],
+		};
+
+		applyPerTypeCaps(byType);
+
+		expect(byType["architecture"]!.length).toBe(1);
+	});
+
+	test("singleton types (progress, active-context) have no cap and are untouched", () => {
+		expect(PER_TYPE_CAPS["progress"]).toBeUndefined();
+		expect(PER_TYPE_CAPS["active-context"]).toBeUndefined();
+
+		const byType: Record<string, StructuredMemory[]> = {
+			"progress": Array.from({ length: 5 }, (_, i) => makeMemory(`p${i}`, `Progress ${i}`, "progress")),
+		};
+		applyPerTypeCaps(byType);
+		expect(byType["progress"]!.length).toBe(5);
+	});
+});
+
+// ── Cross-section dedup (issue #201) ──────────────────────────────────────────
+
+describe("cross-section dedup", () => {
+	test("a structural bullet duplicated in Relevant to Current Task is suppressed there", () => {
+		const byType = {
+			"tech-context": [makeMemory("tc1", "Uses PostgreSQL 15 for the primary database", "tech-context")],
+		};
+		const semantic: MemoriesResponseMinimal = {
+			results: [makeSemanticResult("Uses PostgreSQL 15 for the primary database", 0.85)],
+		};
+
+		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);
+
+		// Shown once, under Relevant to Current Task (richer: score + snippet)...
+		expect(block).toContain("Uses PostgreSQL 15 for the primary database");
+		// ...but the ## Tech Context section is dropped entirely (its only item was deduped)
+		expect(block).not.toContain("## Tech Context");
+	});
+
+	test("non-duplicated structural bullets in the same section still render", () => {
+		const byType = {
+			"tech-context": [
+				makeMemory("tc1", "Uses PostgreSQL 15 for the primary database", "tech-context"),
+				makeMemory("tc2", "Uses Redis for caching", "tech-context"),
+			],
+		};
+		const semantic: MemoriesResponseMinimal = {
+			results: [makeSemanticResult("Uses PostgreSQL 15 for the primary database", 0.85)],
+		};
+
+		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);
+
+		expect(block).toContain("## Tech Context");
+		expect(block).toContain("- Uses Redis for caching");
+		// The duplicate is not repeated as a structural bullet
+		expect(block).not.toContain("- Uses PostgreSQL 15 for the primary database");
+	});
+
+	test("dedup match is case-insensitive and whitespace-tolerant", () => {
+		const byType = {
+			"architecture": [makeMemory("a1", "  Uses   event-driven   messaging  ", "architecture")],
+		};
+		const semantic: MemoriesResponseMinimal = {
+			results: [makeSemanticResult("uses event-driven messaging", 0.90)],
+		};
+
+		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);
+
+		expect(block).not.toContain("## Architecture");
+	});
+
+	test("a Recent Sessions entry duplicated in Relevant to Current Task is suppressed there", () => {
+		const byType = {
+			"session-summary": [makeMemory("s1", "Implemented the OAuth refresh-token flow", "session-summary", "2026-03-31T10:00:00Z")],
+		};
+		const semantic: MemoriesResponseMinimal = {
+			results: [makeSemanticResult("Implemented the OAuth refresh-token flow", 0.88)],
+		};
+
+		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);
+
+		expect(block).not.toContain("## Recent Sessions");
+		expect(block).toContain("## Relevant to Current Task");
+	});
+
+	test("below displaySimilarityThreshold, a semantic hit does NOT suppress the structural bullet", () => {
+		// Only hits >= displaySimilarityThreshold (0.60) are even shown under
+		// Relevant to Current Task, so only those should count for dedup —
+		// otherwise a low-confidence hit could silently delete a structural fact.
+		const byType = {
+			"tech-context": [makeMemory("tc1", "Uses PostgreSQL 15", "tech-context")],
+		};
+		const semantic: MemoriesResponseMinimal = {
+			results: [makeSemanticResult("Uses PostgreSQL 15", 0.40)],
+		};
+
+		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);
+
+		expect(block).toContain("## Tech Context");
+		expect(block).toContain("- Uses PostgreSQL 15");
 	});
 });

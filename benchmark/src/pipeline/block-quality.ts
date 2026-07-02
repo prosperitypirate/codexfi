@@ -23,6 +23,8 @@ import * as db from "../../../plugin/src/db.js";
 import * as store from "../../../plugin/src/store.js";
 import {
   formatContextForPrompt,
+  applyPerTypeCaps,
+  RENDERED_STRUCTURAL_TYPES,
   type StructuredMemory,
 } from "../../../plugin/src/services/context.js";
 
@@ -37,11 +39,13 @@ export async function runBlockAssembly(
   await db.refresh();
 
   // ── Fetch all structured memories once (shared across all questions) ────────
-  // Matches the plugin's Turn 1 listMemories call (index.ts:686-774).
-  // Using limit 50 to match the Phase 5 target (raised from 30).
-  const allRows = await store.list(cp.runTag, { limit: 50 });
+  // Matches the plugin's Turn 1 listStructuredMemories call (index.ts) — scoped
+  // to RENDERED_STRUCTURAL_TYPES so non-rendered atomic types (learned-pattern,
+  // error-solution, preference) can't starve this fetch. limit 100 matches
+  // plugin-config.ts's maxStructuredMemories default. See issue #201.
+  const allRows = await store.listStructured(cp.runTag, RENDERED_STRUCTURAL_TYPES, { limit: 100 });
 
-  // Group by metadata.type — identical to index.ts:731-743
+  // Group by metadata.type — identical to index.ts's buildStructuredSections()
   const byType: Record<string, StructuredMemory[]> = {};
   for (const row of allRows) {
     const memType = (row.metadata?.type as string | undefined) ?? "other";
@@ -54,6 +58,7 @@ export async function runBlockAssembly(
       createdAt: row.created_at ?? undefined,
     });
   }
+  applyPerTypeCaps(byType);
 
   log.info(`  Structured memories: ${allRows.length} total, ${Object.keys(byType).length} types`);
 
