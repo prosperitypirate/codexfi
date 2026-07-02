@@ -60,15 +60,19 @@ export const RENDERED_STRUCTURAL_TYPES: string[] = [
 	...SESSION_SUMMARY_TYPES,
 ];
 
-// ── Per-type soft caps — prevent any single type from crowding out others.
-// Singletons (progress, active-context) are handled by aging rules and need
-// no cap. Session-summary is capped separately (MAX_SESSION_SUMMARIES, plus
-// the 3-newest slice below). Caps are soft: excess entries are simply sliced
-// off after grouping, assuming the input is already sorted newest-first.
-//
-// Lives here (not in index.ts) so benchmark/src/pipeline/block-quality.ts can
-// import it too — index.ts's exports are all scanned and invoked as plugin
-// hooks by OpenCode's loader, so non-hook utilities can't safely live there.
+/**
+ * Per-type soft caps — prevent any single structural type from crowding out
+ * others once atomic types no longer starve the fetch window (see issue #201).
+ *
+ * Singletons (progress, active-context) are handled by aging rules and need
+ * no cap. Session-summary is capped separately (MAX_SESSION_SUMMARIES, plus
+ * the 3-newest slice at render time). Caps are soft: excess entries are simply
+ * sliced off after grouping, assuming the input is already sorted newest-first.
+ *
+ * Lives here (not in index.ts) so benchmark/src/pipeline/block-quality.ts can
+ * import it too — index.ts's exports are all scanned and invoked as plugin
+ * hooks by OpenCode's loader, so non-hook utilities can't safely live there.
+ */
 export const PER_TYPE_CAPS: Record<string, number> = {
 	"project-brief":        8,
 	"project-config":       8,
