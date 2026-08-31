@@ -16,14 +16,14 @@ const config = {
   async headers() {
     return [
       {
-        // Allow prosperitypirate.com to embed the homepage in an iframe
-        // for the project showcase on the portfolio site.
+        // Allow prosperitypirate.com and luminexor.com to embed the homepage
+        // in an iframe for the project showcase on the portfolio sites.
         // Uses modern CSP frame-ancestors (X-Frame-Options is deprecated).
         source: "/",
         headers: [
           {
             key: "Content-Security-Policy",
-            value: "frame-ancestors 'self' https://prosperitypirate.com https://www.prosperitypirate.com http://localhost:3000",
+            value: "frame-ancestors 'self' https://prosperitypirate.com https://www.prosperitypirate.com https://luminexor.com https://www.luminexor.com http://localhost:3000",
           },
         ],
       },
