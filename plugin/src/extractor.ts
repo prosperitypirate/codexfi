@@ -72,6 +72,12 @@ export function parseJsonArray(raw: string): Array<{ memory: string; type: strin
 
 		return [];
 	} catch {
+		// Models occasionally wrap the array in prose ("Here are the memories: [...]").
+		const start = cleaned.indexOf("[");
+		const end = cleaned.lastIndexOf("]");
+		if (start !== -1 && end > start && (start > 0 || end < cleaned.length - 1)) {
+			return parseJsonArray(cleaned.slice(start, end + 1));
+		}
 		console.warn("Failed to parse JSON array:", raw.slice(0, 200));
 		return [];
 	}

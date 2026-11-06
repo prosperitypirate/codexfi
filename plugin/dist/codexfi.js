@@ -1904,6 +1904,11 @@ function parseJsonArray(raw) {
     }
     return [];
   } catch {
+    const start = cleaned.indexOf("[");
+    const end = cleaned.lastIndexOf("]");
+    if (start !== -1 && end > start && (start > 0 || end < cleaned.length - 1)) {
+      return parseJsonArray(cleaned.slice(start, end + 1));
+    }
     console.warn("Failed to parse JSON array:", raw.slice(0, 200));
     return [];
   }
@@ -5938,11 +5943,19 @@ async function processSummary(job) {
   saveSession(job.sessionId, { ...latest, summarizedTurns: latest.turns });
   return results.length;
 }
+async function settle(job) {
+  const age = Date.now() - Date.parse(job.createdAt);
+  if (Number.isFinite(age) && age < TRANSCRIPT_SETTLE_MS) {
+    await new Promise((r) => setTimeout(r, TRANSCRIPT_SETTLE_MS - age));
+  }
+}
 async function processJob(job) {
   switch (job.kind) {
     case "turn":
+      await settle(job);
       return processTurn(job);
     case "summary":
+      await settle(job);
       await processTurn(job);
       return processSummary(job);
     case "warmup":
@@ -5992,7 +6005,7 @@ async function runWorker() {
   if (listJobs().length > 0 && !workerRunning())
     await runWorker();
 }
-var today = () => new Date().toISOString().slice(0, 10);
+var today = () => new Date().toISOString().slice(0, 10), TRANSCRIPT_SETTLE_MS = 1500;
 var init_worker = __esm(() => {
   init_config();
   init_store2();
@@ -21184,6 +21197,14 @@ function printCommandHelp(name) {
   blank();
 }
 async function runInternal(cmd, rest) {
+  if (cmd === "hook" || cmd === "worker" || cmd === "mcp") {
+    const toStderr = (...a) => process.stderr.write(`${a.map(String).join(" ")}
+`);
+    console.log = toStderr;
+    console.info = toStderr;
+    console.debug = toStderr;
+    console.warn = toStderr;
+  }
   switch (cmd) {
     case "hook": {
       const { runHook: runHook2 } = await Promise.resolve().then(() => (init_hooks(), exports_hooks));

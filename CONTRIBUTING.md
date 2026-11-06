@@ -19,10 +19,10 @@ This project follows the [Contributor Covenant Code of Conduct](CODE_OF_CONDUCT.
 
 ```
 codexfi/
-├── plugin/          # The OpenCode plugin (TypeScript) — published to npm as `codexfi`
+├── plugin/          # The Claude Code plugin (TypeScript) — installed from this repo's marketplace; CLI on npm as `codexfi`
 ├── website/         # codexfi.com — Next.js + Fumadocs documentation site
 ├── benchmark/       # Retrieval quality benchmarks
-├── testing/         # End-to-end and integration tests
+├── testing/         # Unit, integration and stress tests
 └── .github/
     ├── designs/     # Design documents for features and architecture
     └── workflows/   # CI/CD pipelines
@@ -37,37 +37,32 @@ The core deliverable is the `plugin/` package. The `website/` directory is the d
 - [Node.js](https://nodejs.org/) 22+
 - [Bun](https://bun.sh/) — used for `plugin/` builds and CLI tooling
 - [pnpm](https://pnpm.io/) — used for `website/` (`npm` and `yarn` are not supported)
-- [OpenCode](https://opencode.ai/) — required to run the plugin end-to-end
-- A [Voyage AI](https://www.voyageai.com/) API key and an extraction provider key — not required to build or typecheck, but needed any time the plugin actually runs:
-  - **Local dev sessions and E2E tests** (`testing/`): keys go in `~/.codexfi/codexfi.jsonc` for the plugin (Voyage embeddings + extraction provider), plus `.env` or your shell for OpenCode's own model calls — see `testing/README.md`
-  - **Benchmark** (`benchmark/`): keys go in `benchmark/.env.local` (copy from `benchmark/.env.example`)
+- [Claude Code](https://code.claude.com) ≥ 2.1 — to run the plugin end-to-end. No API keys are needed: background extraction runs through your Claude Code login and embeddings run on-device.
+  - **Benchmark** (`benchmark/`): optional `benchmark/.env.local` (copy from `benchmark/.env.example`) if you want to use the Anthropic API instead of the Claude Code CLI for answering/judging.
 
 ### Plugin
 
 ```bash
 cd plugin
-bun install
-bun run build       # compiles plugin + CLI
-bun run typecheck   # TypeScript strict mode check
+npm install         # npm lockfile — Claude Code installs plugin deps with it
+npm run typecheck   # TypeScript strict mode check
+npm run build       # → dist/codexfi.js (committed: the plugin installs from git)
 ```
 
-To test the plugin in a real OpenCode session using your **local build** (not the published npm version), point `~/.config/opencode/opencode.json` at the compiled output:
-
-```json
-{
-  "plugin": ["file:///absolute/path/to/codexfi/plugin/dist/index.js"]
-}
-```
-
-Then rebuild whenever you make changes:
+To run your **local build** in Claude Code for one session, without installing anything:
 
 ```bash
-bun run build
+claude --plugin-dir ./plugin
 ```
 
-OpenCode picks up the new build on the next session start. To switch back to the published version, replace the `file://` path with `"codexfi"`.
+Or register your checkout as a marketplace and install it (persists across sessions; edits apply on the next session start or `/reload-plugins`):
 
-> **Note:** `bunx codexfi install` is useful for setting up API keys in `codexfi.jsonc` interactively, but it also writes `"codexfi"` (the npm package name) into `opencode.json`, overwriting your `file://` entry. If you run it, restore the `file://` path in `opencode.json` afterward.
+```bash
+claude plugin marketplace add /absolute/path/to/codexfi
+claude plugin install codexfi@codexfi
+```
+
+Use `CODEXFI_DATA_DIR=/tmp/codexfi-dev` to keep a development store separate from your real `~/.codexfi`. Always rebuild and commit `plugin/dist/codexfi.js` with source changes — CI fails if the committed bundle is stale.
 
 ### Website
 

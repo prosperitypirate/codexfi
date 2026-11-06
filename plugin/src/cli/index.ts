@@ -145,6 +145,15 @@ function printCommandHelp(name: string): void {
  * stdout reserved for the protocol (hook JSON / MCP JSON-RPC).
  */
 async function runInternal(cmd: string, rest: string[]): Promise<boolean> {
+	if (cmd === "hook" || cmd === "worker" || cmd === "mcp") {
+		// stdout carries the protocol (hook JSON / MCP JSON-RPC). Any library or
+		// engine logging must go to stderr, or it would corrupt the reply.
+		const toStderr = (...a: unknown[]) => process.stderr.write(`${a.map(String).join(" ")}\n`);
+		console.log = toStderr;
+		console.info = toStderr;
+		console.debug = toStderr;
+		console.warn = toStderr;
+	}
 	switch (cmd) {
 		case "hook": {
 			const { runHook } = await import("../claude/hooks.js");

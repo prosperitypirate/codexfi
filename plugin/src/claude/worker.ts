@@ -101,12 +101,24 @@ async function processSummary(job: Job): Promise<number> {
 	return results.length;
 }
 
+/** Claude Code writes the transcript asynchronously; give the final lines a moment to land. */
+const TRANSCRIPT_SETTLE_MS = 1_500;
+
+async function settle(job: Job): Promise<void> {
+	const age = Date.now() - Date.parse(job.createdAt);
+	if (Number.isFinite(age) && age < TRANSCRIPT_SETTLE_MS) {
+		await new Promise((r) => setTimeout(r, TRANSCRIPT_SETTLE_MS - age));
+	}
+}
+
 async function processJob(job: Job): Promise<number> {
 	switch (job.kind) {
 		case "turn":
+			await settle(job);
 			return processTurn(job);
 		case "summary":
 			// Flush any unextracted tail first so the summary isn't the only record.
+			await settle(job);
 			await processTurn(job);
 			return processSummary(job);
 		case "warmup":
