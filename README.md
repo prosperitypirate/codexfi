@@ -81,7 +81,14 @@ If your project has a `memory-bank/` (projectbrief, productContext, systemPatter
 DevMemBench — 200 questions across 8 developer-memory categories, LLM-as-judge. See [benchmark/README.md](./benchmark/README.md) for the full methodology and every run.
 
 <!-- BENCHMARK-SUMMARY:START -->
-_Results for the 1.0 architecture are being finalised in the benchmark README._
+| | codexfi 0.7.x | **codexfi 1.0** |
+|---|---|---|
+| API keys required | Voyage + Anthropic | **none** |
+| DevMemBench v1 (200 Q) | 91.0% | **92.0%** |
+| Retrieval Hit@20 | 88.0% | 88.0% |
+| Search latency (p50) | 88 ms | **6 ms** |
+
+Same answer/judge model for both runs; the difference is within run-to-run noise, so 1.0 is at parity while needing nothing but Claude Code.
 <!-- BENCHMARK-SUMMARY:END -->
 
 ## Configuration (optional)
