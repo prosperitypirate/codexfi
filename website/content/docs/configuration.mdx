@@ -1,177 +1,105 @@
 ---
 title: Configuration
-description: Configure codexfi behavior with thresholds, limits, providers, and keyword patterns.
+description: Optional settings for codexfi — LLM and embedding backends, Memory Bank mode, privacy, and retrieval limits.
 ---
 
 # Configuration
 
-codexfi works out of the box with sensible defaults. All settings are optional and can be customized via a JSONC config file.
+codexfi needs **no configuration**. Out of the box, background extraction runs through your Claude Code login and embeddings run on your machine. Everything below is optional.
 
 ## Config file
 
-The config file lives at `~/.codexfi/codexfi.jsonc`. It is created automatically by the `codexfi install` command, or you can create it manually.
+Settings live in `~/.codexfi/codexfi.jsonc`. The file doesn't exist until you create it, and every field is optional:
 
 ```jsonc
-// Codexfi — plugin configuration
-// Location: ~/.codexfi/codexfi.jsonc
+// ~/.codexfi/codexfi.jsonc
 {
-  // ── API Keys ──────────────────────────────────────────────────────
-  "voyageApiKey": "pa-...",
-  "anthropicApiKey": "sk-ant-...",
-  "xaiApiKey": "",
-  "googleApiKey": "",
-
-  // ── Extraction Provider ───────────────────────────────────────────
-  // Which LLM to use for memory extraction: "anthropic" | "xai" | "google"
-  "extractionProvider": "anthropic",
-
-  // ── Plugin Settings ───────────────────────────────────────────────
-  "similarityThreshold": 0.45,
-  "displaySimilarityThreshold": 0.60,
-  "maxMemories": 20,
-  "maxProjectMemories": 20,
-  "maxStructuredMemories": 50,
-  "maxProfileItems": 8,
-  "compactionThreshold": 0.80,
-  "turnSummaryInterval": 5
+  "llmBackend": "auto",              // "auto" | "claude-cli" | "anthropic-api"
+  "llmModel": "haiku",               // any Claude Code model alias or id
+  "localModel": "jina-v2-base-code", // or "all-MiniLM-L6-v2" (lighter, faster)
+  "memoryBank": "auto",              // "auto" | "off"
+  "autoInit": true,                  // seed a new project from README/manifests/git log
+  "excludePaths": ["/Users/me/clients/secret-co"],  // codexfi stays silent here
+  "anthropicApiKey": ""              // only for llmBackend "anthropic-api"
 }
 ```
 
-## API keys
+`codexfi status` reports whether the file was found and which backends are active.
 
-| Key | Required | Purpose |
-|-----|----------|---------|
-| `voyageApiKey` | Yes | Voyage AI embeddings (`voyage-code-3`) |
-| `anthropicApiKey` | One of three | Extraction via Claude Haiku 4.5 (default) |
-| `xaiApiKey` | One of three | Extraction via Grok 4.3 |
-| `googleApiKey` | One of three | Extraction via Gemini 3 Flash |
+## LLM backend
 
-At minimum, you need `voyageApiKey` plus one extraction provider key.
+Background work — extraction, session summaries, contradiction checks — needs an LLM. By default that's **your own Claude Code**.
 
-**API keys must be set in `codexfi.jsonc`.** The plugin does not read `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, or `GOOGLE_API_KEY` environment variables. If a key is missing from the config file, the plugin will disable itself rather than silently fail.
+### `llmBackend`
 
-## When the plugin is disabled
+- **Default:** `"auto"`
 
-If `voyageApiKey` is missing or `codexfi.jsonc` does not exist, the plugin disables itself and injects a `[MEMORY - DISABLED]` notice into the system prompt. The AI will proactively tell you what is wrong before responding to anything else:
+| Value | Behavior |
+|-------|----------|
+| `auto` (default) | Use the `claude` CLI if one is found; otherwise use the Anthropic API if `anthropicApiKey` is set |
+| `claude-cli` | Always call `claude -p` — your Claude Code login (subscription or whatever Claude Code is set up with) |
+| `anthropic-api` | Always call the Anthropic Messages API with `anthropicApiKey` |
 
-```
-[MEMORY - DISABLED]
-The codexfi memory plugin is installed but not configured.
-Run `bunx codexfi install` to set up your API keys and enable memory.
-```
+The CLI call runs `claude -p --safe-mode` in a neutral temp directory with no tools, no plugins, no hooks, no `CLAUDE.md`, and no session persistence — about 600 tokens of overhead per call. codexfi never handles your credentials; it invokes your own, unmodified Claude Code binary. The `claude` binary is located via `CODEXFI_CLAUDE_BIN`, the binary Claude Code reports to hooks (this is how the VS Code extension's bundled binary is found), your `PATH`, then known install directories.
 
-To fix this, run `bunx codexfi install` or manually add your keys to `~/.codexfi/codexfi.jsonc`. Run `bunx codexfi status` to confirm the plugin is ready.
+### `llmModel`
 
-## Extraction provider
+- **Default:** `"haiku"`
 
-Set the extraction provider in `codexfi.jsonc`:
+The model for background work. CLI aliases such as `"haiku"` or `"sonnet"` resolve to the newest model of that tier your Claude Code offers; full model ids work too.
 
-```jsonc
-{
-  "extractionProvider": "anthropic"  // "anthropic" | "xai" | "google"
-}
-```
+### `anthropicApiKey`
 
-You can also set the provider during `codexfi install` (interactive prompt or `--provider` flag). The `EXTRACTION_PROVIDER` environment variable can be used as an override for CI/testing.
+Only used when `llmBackend` is `"anthropic-api"` (or `"auto"` without Claude Code on the machine). Falls back to the `ANTHROPIC_API_KEY` environment variable.
 
-**Resolution order:** env var > config file > default (`"anthropic"`).
+## Embeddings
 
-| Provider | Model | Speed | Notes |
-|----------|-------|-------|-------|
-| `anthropic` (default) | `claude-haiku-4-5` | ~14s/session | Most consistent extraction |
-| `xai` | `grok-4.3` | ~5s/session | Fastest, cheapest |
-| `google` | `gemini-3-flash-preview` | ~21s/session | Native JSON response mode |
+Embeddings are **local-only**: an on-device ONNX model via transformers.js. No key, and no network after the one-time model download (weights are cached in `~/.codexfi/models`). Memory text is never sent to a third-party embedding API. (Remote embedding providers were removed in 1.0; legacy `embeddingProvider` / `voyageApiKey` entries in an old config file are ignored.)
 
-The plugin falls back through all configured providers automatically. If the primary fails, it tries the next one in the fallback order: `anthropic` > `xai` > `google`.
+### `localModel`
 
-## Plugin settings
+- **Default:** `"jina-v2-base-code"`
 
-### `similarityThreshold`
+| Model | Dimensions | Size | Notes |
+|-------|-----------|------|-------|
+| `jina-v2-base-code` (default) | 768 | ~160 MB | Best local model for code-assistant memories |
+| `all-MiniLM-L6-v2` | 384 | ~23 MB | Lightweight option for slower machines |
 
-- **Default:** `0.45`
-- **Range:** `0.0` to `1.0`
+Every memory records which embedding model produced its vector, and only vectors from the current model are ever compared. If you switch models (or upgrade from 0.7.x), the background worker re-embeds older rows in batches; structured memories stay usable in the meantime.
 
-Minimum cosine similarity score for a memory to appear in search results. Lower values return more results (potentially less relevant); higher values are stricter.
+## Behavior
 
-### `displaySimilarityThreshold`
+### `memoryBank`
 
-- **Default:** `0.60`
-- **Range:** `0.0` to `1.0`
+- **Default:** `"auto"`
 
-Minimum cosine similarity score for a memory to appear in the **`## Relevant to Current Task`** section of the `[MEMORY]` block. This is a separate, higher display floor on top of `similarityThreshold` — retrieval still runs at `similarityThreshold` for full recall, but only results scoring above `displaySimilarityThreshold` are shown.
+When a `memory-bank/` directory is found in the project (or up to four parent directories), codexfi stops duplicating it: at session start it injects only session summaries newer than your last bank save plus your cross-project preferences. Per-prompt retrieval is unchanged. Set `"off"` to always inject the full project picture. See [Memory Bank](/docs/guides/claude-code-setup#memory-bank).
 
-Raise this value to reduce noise in context; lower it to surface more loosely-related memories.
-
-### `maxMemories`
-
-- **Default:** `20`
-
-Maximum number of memories retrieved per scope (user or project) during semantic search.
-
-### `maxProjectMemories`
-
-- **Default:** `20`
-
-Maximum number of project-scoped memories retrieved during structured fetches.
-
-### `maxStructuredMemories`
-
-- **Default:** `50`
-
-Maximum number of memories retrieved for structured sections (Project Brief, Architecture, Tech Context, etc.) in the `[MEMORY]` block.
-
-### `maxProfileItems`
-
-- **Default:** `8`
-
-Maximum number of user preference items shown in the "User Preferences" section of the `[MEMORY]` block.
-
-### `injectProfile`
+### `autoInit`
 
 - **Default:** `true`
 
-Whether to include the "User Preferences" section in the `[MEMORY]` block. Set to `false` to disable user-scoped preference injection.
+On a project's first session (no memories yet), seed memory in the background from the project's own files and recent git log.
 
-### `compactionThreshold`
+### `excludePaths`
 
-- **Default:** `0.80`
-- **Range:** `0.01` to `1.0`
+- **Default:** `[]`
 
-Ratio of context window usage that triggers compaction handling. When the conversation exceeds this threshold, codexfi injects memories into the compaction context and flags a full refresh for the next turn.
+Absolute directory prefixes where codexfi stays **completely silent** — no injection, no extraction, and the MCP tools refuse to read or write. Use it for client work or anything you don't want remembered.
 
-### `turnSummaryInterval`
-
-- **Default:** `5`
-
-Number of assistant turns between automatic session summary saves. Every N turns, a `session-summary` memory is generated in addition to the regular per-turn extraction.
-
-### `containerTagPrefix`
-
-- **Default:** `"opencode"`
-
-Prefix used for generating deterministic user and project tags from git email and directory hash.
-
-### `userContainerTag`
-
-- **Default:** auto-generated from git email
-
-Override the user-scope tag. Useful for testing or shared environments.
-
-### `projectContainerTag`
-
-- **Default:** auto-generated from directory hash
-
-Override the project-scope tag. Useful for linking multiple directories to the same project memory.
+```jsonc
+{
+  "excludePaths": ["/Users/me/clients", "/Users/me/scratch/secret"]
+}
+```
 
 ### `keywordPatterns`
 
-- **Default:** built-in patterns (see below)
+- **Default:** built-in patterns
 
-Additional regex patterns that trigger the "explicit save" nudge. When a user message matches any pattern, codexfi injects a message telling the LLM to use the memory tool.
+When a prompt matches one of these patterns, codexfi adds a short note pointing Claude at the `memory_add` tool. Built-in patterns include: `remember`, `memorize`, `save this`, `note this`, `keep in mind`, `don't forget`, `learn this`, `store this`, `record this`, `make a note`, `take note`, `jot down`, `commit to memory`, `never forget`, `always remember`.
 
-Built-in patterns include: `remember`, `memorize`, `save this`, `note this`, `keep in mind`, `don't forget`, `learn this`, `store this`, `record this`, `make a note`, `take note`, `jot down`, `commit to memory`, `never forget`, `always remember`.
-
-Custom patterns are appended to the built-in list:
+Custom patterns (regular expressions) are appended to the built-in list:
 
 ```jsonc
 {
@@ -179,16 +107,81 @@ Custom patterns are appended to the built-in list:
 }
 ```
 
+## Retrieval and rendering
+
+### `similarityThreshold`
+
+- **Default:** model-specific (`0.38` for `jina-v2-base-code`)
+
+Minimum similarity for a memory to be retrieved. Lower values return more results; higher values are stricter.
+
+### `displaySimilarityThreshold`
+
+- **Default:** model-specific (`0.50` for `jina-v2-base-code`)
+
+Minimum similarity for a memory to be *shown* in the **Relevant to Current Task** block. Retrieval still runs at `similarityThreshold`; this is a display filter on top.
+
+### `maxMemories`
+
+- **Default:** `20`
+
+Maximum user-scoped memories retrieved per prompt.
+
+### `maxProjectMemories`
+
+- **Default:** `20`
+
+Maximum project-scoped memories retrieved per prompt.
+
+### `maxStructuredMemories`
+
+- **Default:** `100`
+
+Maximum memories fetched for the structured session-start sections (Project Brief, Architecture, Tech Context, and so on). Per-section caps apply on top.
+
+### `maxProfileItems`
+
+- **Default:** `8`
+
+Maximum items in the **User Preferences** section.
+
+### `injectProfile`
+
+- **Default:** `true`
+
+Set to `false` to leave user preferences out of the session-start block.
+
+### `userContainerTag` / `projectContainerTag`
+
+- **Default:** auto-generated (user: from your git email; project: from the directory path)
+
+Override the user or project scope. Useful to link several directories to the same project memory.
+
+## Environment variables
+
+These override the config file — mostly for development and CI:
+
+| Variable | Overrides |
+|----------|-----------|
+| `CODEXFI_DATA_DIR` | Data directory (default `~/.codexfi`) |
+| `CODEXFI_LLM_BACKEND` | `llmBackend` |
+| `CODEXFI_LLM_MODEL` | `llmModel` |
+| `CODEXFI_LOCAL_MODEL` | `localModel` |
+| `CODEXFI_MODEL_DIR` | Where local model weights are cached |
+| `CODEXFI_CLAUDE_BIN` | Path to the `claude` binary |
+| `CODEXFI_DISABLE=1` | Turns every codexfi entrypoint into a no-op |
+
 ## Data storage
 
-All memory data is stored locally at `~/.codexfi/store/store.db` — a SQLite database with WAL mode. No external dependencies, no server process, no cloud sync.
+Everything is local, under `~/.codexfi/`:
 
 | Path | Contents |
 |------|----------|
-| `~/.codexfi/store/store.db` | SQLite database (all memories with vector embeddings) |
-| `~/.codexfi/store/store.db-wal` | Write-ahead log (auto-managed by SQLite) |
-| `~/.codexfi/store/store.db-shm` | Shared memory index (auto-managed by SQLite) |
-| `~/.codexfi.log` | Plugin log file |
-| `~/.codexfi/codexfi.jsonc` | Configuration file |
+| `~/.codexfi/codexfi.jsonc` | Configuration (optional) |
+| `~/.codexfi/store/store.db` | SQLite database (WAL mode) — all memories with their vectors |
+| `~/.codexfi/models/` | On-device embedding model weights |
+| `~/.codexfi/queue/` | Background job queue |
+| `~/.codexfi/sessions/` | Per-session state (transcript cursor, memories already shown) |
+| `~/.codexfi/logs/` | `hook.log` and `worker.log` |
 
-The WAL and SHM files are created automatically when the database is opened and cleaned up when the last connection closes. They enable concurrent reads from multiple agents without blocking.
+SQLite's WAL mode lets several Claude Code sessions read the store at once while a single background worker writes.

@@ -2,13 +2,12 @@
 
 <div align="center">
 
-[![Score: 94.5%](https://img.shields.io/badge/Score-94.5%25-22C55E?style=flat)](https://github.com/prosperitypirate/codexfi)
+[![codexfi 1.0: 92.0%](https://img.shields.io/badge/codexfi_1.0-92.0%25-22C55E?style=flat)](#codexfi-10--claude-code-native-no-api-keys)
 [![Questions: 200](https://img.shields.io/badge/Questions-200-3178C6?style=flat)](https://github.com/prosperitypirate/codexfi)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
 [![Claude Sonnet](https://img.shields.io/badge/Claude-Sonnet_4.6-D97706?style=flat)](https://anthropic.com)
-[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
-[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+[![Local embeddings](https://img.shields.io/badge/Embeddings-local_jina--v2--code-5B6BF5?style=flat)](#codexfi-10--claude-code-native-no-api-keys)
 
 </div>
 
@@ -20,9 +19,41 @@ Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around
 
 ---
 
+## codexfi 1.0 — Claude Code native, no API keys
+
+Same 25 sessions / 200 questions as every historical run below. Answering + judging: `claude-sonnet-4-6` via the Claude Code CLI (`BENCH_LLM_BACKEND=claude-cli`) for **both** configurations, retrieval mode, K=20.
+
+| Configuration | Extraction | Embeddings | Keys needed | **Score** | Hit@20 | MRR | Search p50 |
+|---|---|---|---|---|---|---|---|
+| 0.7.x stack (`v1-legacy-voyage-haikuapi`) | Haiku 4.5 · Anthropic API | Voyage `voyage-code-3` | Voyage + Anthropic | **91.0%** (182/200) | 88.0% | 0.712 | 88 ms |
+| **1.0 defaults** (`v1-new-jina-clihaiku`) | `haiku` via `claude -p` (resolved to Haiku 5.5) | local `jina-embeddings-v2-base-code` | **none** | **92.0%** (184/200) | 88.0% | 0.714 | **6 ms** |
+
+```
+                 0.7.x (keys)   1.0 (no keys)
+tech             100%           100%
+arch              96%            92%
+continuity        96%            92%
+pref              96%            92%
+error             92%            92%
+update            88%            92%
+synthesis         68%            76%
+abstain           92%           100%
+Overall          91.0%          92.0%
+```
+
+**Reading:** removing both API keys costs nothing measurable — the 1-point difference is inside this benchmark's run-to-run noise (±2–3 pp historically). Search is 15× faster (no network). Caveat: the CLI's `haiku` alias resolved to Haiku 5.5 in the 1.0 run vs Haiku 4.5 in the 0.7.x run, so this compares *stacks*, not embedders in isolation; the embedder-only comparison is the retrieval study in [design 012 §9.1](../.github/designs/012-claude-code-native.md) (−0.048 nDCG@10, equal Hit@20).
+
+Extraction cost for the 25 sessions: 110 Haiku calls via the Claude Code CLI (subscription; ≈590 tokens fixed overhead per call) vs 97 Anthropic API calls ($0.30) + 298 Voyage calls for the 0.7.x stack.
+
+<!-- MEMORY-BANK-RESULTS -->
+
+---
+
 ## Extraction Provider Comparison
 
-The benchmark can run with different extraction providers to compare memory quality and ingest speed. All runs use the same 25 sessions, 200 questions, and `claude-sonnet-4-6` judge.
+> **Historical (0.7.x).** These runs predate 1.0, which removed the xAI/Google extraction providers and Voyage AI embeddings — 1.0 extracts through Claude Code and embeds on-device only. Kept for the record; the provider settings below no longer exist.
+
+The 0.7.x benchmark could run with different extraction providers to compare memory quality and ingest speed. All runs use the same 25 sessions, 200 questions, and `claude-sonnet-4-6` judge.
 
 ### Per-Call Latency (extraction prompt, 3-call average)
 
@@ -51,14 +82,6 @@ google         3446ms    3681ms    3688ms   3605ms
 
 > **Decision: Haiku is the default extraction provider.** Across 3 runs, Haiku averaged 93.5% with only 3pp variance (92.0–95.0%) vs Grok's ~86.5% average with 16pp variance (78.5–94.5%). The cost increase (~$0.10/session) is negligible vs main model costs. The ~14s extraction latency is invisible to users — it runs in the background after each assistant turn. Retrieval uses Voyage AI embeddings, not the extraction provider, so there is zero impact on response time.
 
-To run with a specific provider:
-
-```bash
-# Edit .env to set EXTRACTION_PROVIDER=anthropic (or xai, google)
-# Then restart the backend and run the benchmark
-docker compose up -d
-bun run bench run -r haiku-run1
-```
 
 ---
 
@@ -799,8 +822,8 @@ error-solution 0% → 100% after source chunk injection into answer context.
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.2.19
-- `ANTHROPIC_API_KEY` — for extraction (Haiku 4.5) and judge/answering (Sonnet 4.6)
-- `VOYAGE_API_KEY` — for embeddings (voyage-code-3)
+- `ANTHROPIC_API_KEY` — for judge/answering (Sonnet 4.6) with `BENCH_LLM_BACKEND=api`; not needed with `BENCH_LLM_BACKEND=claude-cli`
+- No embedding key — embeddings run on-device (local ONNX model, downloaded once)
 
 > **No Docker required.** The benchmark uses the embedded vector store from `plugin/` directly.
 > The Docker backend is no longer needed.
@@ -816,7 +839,7 @@ cd benchmark && bun install && cd ..
 
 # 3. Configure environment
 cp benchmark/.env.example benchmark/.env.local
-# Edit benchmark/.env.local: set ANTHROPIC_API_KEY, VOYAGE_API_KEY, JUDGE_MODEL, ANSWERING_MODEL
+# Edit benchmark/.env.local: set ANTHROPIC_API_KEY, JUDGE_MODEL, ANSWERING_MODEL
 ```
 
 ### Running the benchmark
@@ -827,8 +850,8 @@ bun run benchmark/src/index.ts run
 ```
 
 > **Important:** Always run from the project root, not from `benchmark/`. The `.env.local` loader
-> in `benchmark/src/index.ts` resolves the file relative to `import.meta.url`, so CWD doesn't
-> matter. But root `.env` provides `VOYAGE_API_KEY` which Bun auto-loads from CWD.
+> in `benchmark/src/env-preload.ts` resolves the file relative to `import.meta.url`, so CWD doesn't
+> matter.
 
 Every run automatically:
 1. Opens the live dashboard at `http://localhost:4242`
@@ -854,7 +877,7 @@ bun run bench list                  # list all past runs with scores
 ### Pipeline
 
 ```
-ingest    → extract memories via LLM + embed via Voyage AI + store in embedded vector store (isolated by runTag)
+ingest    → extract memories via LLM + embed locally (on-device) + store in embedded vector store (isolated by runTag)
 search    → semantic vector search per question, saves top-20 results
 answer    → LLM generates answer from retrieved context only
 evaluate  → LLM-as-judge: correct (1) or incorrect (0) + retrieval relevance scoring
@@ -870,14 +893,66 @@ Set these in `benchmark/.env.local` (loaded automatically with override semantic
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Required (Claude judge + answerer + extraction) |
-| `VOYAGE_API_KEY` | — | Required (voyage-code-3 embeddings) |
+| `ANTHROPIC_API_KEY` | — | Required with `BENCH_LLM_BACKEND=api` (Claude judge + answerer) |
 | `JUDGE_MODEL` | `claude-sonnet-4-6` | Override judge model |
 | `ANSWERING_MODEL` | `claude-sonnet-4-6` | Override answering model |
-| `EXTRACTION_PROVIDER` | `anthropic` | Extraction LLM provider (`anthropic`, `xai`, `google`) |
-| `XAI_API_KEY` | — | Required if `EXTRACTION_PROVIDER=xai` |
 
 > **Startup verification:** Every benchmark run prints a table showing what was loaded from
 > `benchmark/.env.local`, which keys overrode root `.env`, and warns if the file is missing.
 
 Run output is saved to `data/runs/<run-id>/` (gitignored).
+
+---
+
+## LLM backends, concurrency, datasets & memory-bank mode
+
+### Flags & environment
+
+| Flag / env | Default | Description |
+|---|---|---|
+| `--dataset v1\|v2` | `v1` | `v1` = `src/dataset/`, `v2` = `src/dataset-v2/` (fails clearly if missing). Recorded in checkpoint + report; a run cannot be resumed with a different dataset. |
+| `--mode memory-bank` | — | Memory Bank vs codexfi experiment (below). |
+| `--conditions a,b,c` | all | memory-bank mode only: `no-memory,mb-only,codexfi-only,mb+codexfi,full-context`. |
+| `--skip-ingest --run-tag <tag>` | — | Reuse an already-ingested run tag in the store at `CODEXFI_DATA_DIR` (no ingest, no cleanup). |
+| `BENCH_LLM_BACKEND` | `api` | LLM for answer, judge, retrieval-relevance and bank building. `api` = ai-sdk with `ANTHROPIC_API_KEY` (historical behaviour). `claude-cli` = headless `claude -p` using the local Claude subscription. The engine's own extraction/embedding is **not** affected. |
+| `BENCH_CONCURRENCY` | `4` | Parallel LLM calls in the answer / evaluate phases (results keep question order; progress is checkpointed, so interrupted phases resume per question). |
+| `BENCH_NO_LIVE=1` | — | Don't start the live dashboard (it is never started in memory-bank mode). |
+| `JUDGE_MODEL` / `ANSWERING_MODEL` | `claude-sonnet-4-6` | Model ids. Both backends accept full ids. The answer phase now uses `ANSWERING_MODEL`; before, it used `JUDGE_MODEL`. |
+| `MB_MODEL` | `claude-sonnet-4-6` | Model that maintains the simulated Memory Bank. |
+| `BENCH_FULL_CONTEXT_MAX_CHARS` | `600000` | `full-context` is skipped (with a note in the report) above this size. |
+| `BENCH_CLI_CWD` | scratch `bench-cwd` | cwd for the `claude` child, kept outside the repo so the repo's `.claude` hooks never fire. |
+| `BENCH_CLI_TIMEOUT_MS` / `MB_TIMEOUT_MS` / `BENCH_CLI_MAX_RETRIES` | `300000` / `900000` / `5` | claude-cli per-call timeout (answer/judge, bank update) and retry count (exponential backoff). |
+
+**claude-cli details.** Each call runs `claude -p --model <id> --output-format json --system-prompt-file <tmp> --tools "" --no-session-persistence --setting-sources "" --strict-mcp-config --disable-slash-commands`. The prompt goes through stdin and the answer is read from `.result`; usage, cost and duration are recorded. The child env removes `ANTHROPIC_API_KEY` (otherwise the CLI would bill the API account) and sets `CODEXFI_DISABLE=1`, `MAX_THINKING_TOKENS=0` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. Differences from `api`: there is no temperature control, and there is no 400-token answer cap, because the CLI errors instead of truncating when a cap is hit. Absolute scores are therefore not strictly comparable across backends; compare runs on the same backend.
+
+> Always set `CODEXFI_DATA_DIR` to a scratch directory for bench runs so `~/.codexfi` is never touched.
+
+### `--mode memory-bank` — does codexfi add value on top of a Memory Bank?
+
+A **Memory Bank** is six markdown files per project (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `progress.md`). The developer asks the agent to update them at the end of each session ("save bank"), within token budgets: brief ≤3k, product ≤8k, patterns ≤15k, tech ≤10k, active ≤19k with rolling-window aging (last 1–2 sessions full, 2–3 weeks ~500 tok/session, older ~80 tok/session), progress ≤12k with a milestones table. The total target is ~67k tokens, with a hard cap of 70k. The maintainer prompt is in `src/memory-bank/prompt.ts`.
+
+Phases: `ingest` (codexfi, only if a codexfi condition is selected) → `mb-build` → `mb-contexts` → `mb-answer` → `mb-evaluate` → report.
+
+- **mb-build.** Sessions are processed in codexfi's ingest order. After each one, `MB_MODEL` gets the current bank for that session's project plus the transcript, and returns all six files as JSON. Sessions tagged `both` update every project's bank. A bank is checkpointed after every update, so the build can resume. If a bank goes over budget, it gets one condense pass. Final banks are written to `data/runs/<id>/memory-bank/<project>/*.md`, and per-update token sizes go to `memory-bank/sizes.json`.
+- **Conditions** (all use the block-quality system/user prompts):
+
+| Condition | Context |
+|---|---|
+| `no-memory` | none (floor) |
+| `mb-only` | **all** projects' banks concatenated. Questions are cross-project, so this mirrors a developer who has both banks loaded. |
+| `codexfi-only` | the codexfi `[MEMORY]` block, built exactly as in block-quality mode |
+| `mb+codexfi` | banks + codexfi block with `memoryBankAware: true` (structured sections omitted; keeps Recent Sessions + Relevant to Current Task) |
+| `full-context` | every ingested session transcript (oracle / upper bound), if ≤ `BENCH_FULL_CONTEXT_MAX_CHARS` |
+
+  Both codexfi variants come from `buildCodexfiBlock()` in `src/pipeline/codexfi-block.ts`, which block-quality mode also uses. Tune that function.
+- **Report** (`report.json` + `report.md` in the run dir, plus a terminal summary): accuracy per condition × category; average context size per condition (chars and est. tokens); answer and judge latency; the delta `mb+codexfi − mb-only` per category, with the questions that flipped each way; final bank sizes. `bench serve` does not render memory-bank reports.
+
+```bash
+# isolate the store; subscription-backed LLM calls
+export CODEXFI_DATA_DIR=/tmp/bench-store BENCH_LLM_BACKEND=claude-cli
+
+bun run bench run -r mb-v1 --mode memory-bank                                    # all conditions, v1
+bun run bench run -r mb-v2 --mode memory-bank --dataset v2 --conditions mb-only,mb+codexfi
+bun run bench run -r mb-smoke --mode memory-bank --limit 5 --conditions no-memory,mb-only,mb+codexfi
+bun run bench run -r ret-cli --limit 5                                            # retrieval mode via claude-cli
+```

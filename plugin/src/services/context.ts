@@ -3,7 +3,7 @@
  * Zero network calls, zero side effects — pure formatting.
  */
 
-import { SIMILARITY_THRESHOLD } from "../config.js";
+import { activeThresholds } from "../embedder.js";
 import { PLUGIN_CONFIG } from "../plugin-config.js";
 
 export interface StructuredMemory {
@@ -121,9 +121,9 @@ export function formatContextForPrompt(
 	].sort((a, b) => b.similarity - a.similarity);
 
 	// Apply displaySimilarityThreshold — filter out low-confidence results from display.
-	// Note: retrieval still runs at similarityThreshold (0.45) for full recall;
+	// Note: retrieval runs at the lower `similarity` threshold for recall;
 	// this is a separate, higher display floor to reduce noise in the block.
-	const displayThreshold = PLUGIN_CONFIG.displaySimilarityThreshold;
+	const { display: displayThreshold, snippet: snippetThreshold } = activeThresholds();
 	const filteredSemantic = allSemantic.filter((m) => m.similarity >= displayThreshold);
 
 	// Cross-section dedup (issue #201): a structural/session bullet whose content
@@ -227,7 +227,7 @@ export function formatContextForPrompt(
 			const dateTag = mem.date ? `, ${mem.date}` : "";
 			parts.push(`- [${pct}%${dateTag}] ${content}`);
 			const snippet = mem.chunk?.trim();
-			if (snippet && snippet !== content && mem.similarity >= SIMILARITY_THRESHOLD) {
+			if (snippet && snippet !== content && mem.similarity >= snippetThreshold) {
 				const isTranscript =
 					snippet.startsWith("[assistant]") || snippet.startsWith("[user]");
 				if (!isTranscript) {

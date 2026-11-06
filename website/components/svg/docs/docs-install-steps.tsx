@@ -1,10 +1,10 @@
 /**
- * Animated terminal window showing the three-step codexfi installation process.
+ * Animated Claude Code window showing the two-command codexfi plugin install.
  * @component
  */
 export function DocsInstallSteps() {
   return (
-    <svg viewBox="0 0 560 130" width="100%" className="mx-auto w-full max-w-2xl" role="img" aria-label="A terminal window showing the three-step codexfi installation process.">
+    <svg viewBox="0 0 560 130" width="100%" className="mx-auto w-full max-w-2xl" role="img" aria-label="A Claude Code window showing the two commands that install the codexfi plugin.">
       <title>Installation Steps</title>
       <defs>
         <style>{`
@@ -57,7 +57,7 @@ export function DocsInstallSteps() {
       <circle cx="50" cy="14" r="5" fill="#27c93f" />
       
       {/* Title */}
-      <text x="280" y="18" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">Terminal</text>
+      <text x="280" y="18" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">Claude Code</text>
       
       {/* Divider */}
       <line x1="0" y1="28" x2="560" y2="28" className="stroke-border" strokeWidth="1" />
@@ -65,19 +65,18 @@ export function DocsInstallSteps() {
       {/* Terminal Body */}
       {/* Line 1 */}
       <text x="20" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)">
-        <tspan fill="#4ade80">$</tspan>
-        <tspan fill="#c084fc"> curl -fsSL https://codexfi.com/install | bash</tspan>
+        <tspan fill="#4ade80">&gt;</tspan>
+        <tspan fill="#c084fc"> /plugin marketplace add prosperitypirate/codexfi</tspan>
       </text>
       <g className="cursor-wrapper-is">
-        <text x="366" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)" fill="#4ade80" className="cursor-blink-is"> ▊</text>
+        <text x="388" y="55" fontSize="12" fontFamily="var(--font-mono, monospace)" fill="#4ade80" className="cursor-blink-is"> ▊</text>
       </g>
 
       {/* Line 2 */}
       <g className="line2-is">
         <text x="20" y="82" fontSize="12" fontFamily="var(--font-mono, monospace)">
-          <tspan fill="#a855f7">  › </tspan>
-          <tspan fill="#888888">Enter Voyage AI key: </tspan>
-          <tspan className="fill-muted-foreground">••••••••••••</tspan>
+          <tspan fill="#4ade80">&gt;</tspan>
+          <tspan fill="#c084fc"> /plugin install codexfi@codexfi</tspan>
         </text>
       </g>
 
@@ -85,7 +84,7 @@ export function DocsInstallSteps() {
       <g className="line3-is">
         <text x="20" y="105" fontSize="12" fontFamily="var(--font-mono, monospace)">
           <tspan fill="#4ade80">  ✓ </tspan>
-          <tspan fill="#888888">Registered. Restart OpenCode to activate.</tspan>
+          <tspan fill="#888888">Installed. Start a new session — no API keys needed.</tspan>
         </text>
       </g>
     </svg>

@@ -1,21 +1,27 @@
 ---
 title: What is codexfi?
-description: Persistent memory for AI coding agents — fully automatic, self-hosted, zero configuration.
+description: Persistent, searchable memory for Claude Code — fully automatic, local, no API keys.
 ---
 
 # What is codexfi?
 
-codexfi is a plugin for [OpenCode](https://opencode.ai) that gives your AI coding agent **persistent memory across sessions**. Architecture decisions, tech stack context, progress tracking, error solutions, user preferences — everything is automatically extracted from conversations, stored locally, and retrieved automatically — injected into the system prompt before every LLM call, with semantically relevant memories refreshed on every turn.
+codexfi is a [Claude Code](https://code.claude.com) plugin that gives Claude **persistent, searchable memory across sessions**. Decisions, fixes, conventions, tech stack, progress, your personal preferences — everything is extracted from your sessions automatically, stored locally on your machine, and put back in front of Claude at the moment it matters.
 
-The agent simply *remembers*.
+Claude Code starts every session cold. Its built-in auto-memory keeps a short `MEMORY.md` of things Claude decides to save, and a hand-maintained Memory Bank captures the big picture — but the long tail (the exact error and its fix, the port you moved to, why you rejected library X) is gone by next week. codexfi closes that gap.
 
 <DocsMemoryCycle />
 
 ## How it works
 
-After every assistant turn, codexfi analyzes the conversation and extracts key facts as typed memories. Each memory is embedded with [Voyage AI](https://www.voyageai.com/) (`voyage-code-3`) and stored locally in a SQLite database on your machine — no external dependencies, multi-agent safe.
+codexfi hooks into Claude Code's lifecycle — no prompts, nothing to remember to run:
 
-Before every LLM call, a `[MEMORY]` block is injected into the system prompt containing:
+- **At session start**, Claude gets a compact `[MEMORY]` project picture: brief, architecture, tech context, progress, recent sessions, and your cross-project preferences.
+- **On every prompt**, the prompt is embedded on your machine and the memories relevant to *that* prompt are injected — each memory at most once per session, never repeated.
+- **After every turn**, a short-lived background worker reads the new part of the transcript and extracts typed facts (decisions, fixes, conventions, preferences, progress).
+- **Mid-task**, Claude can call the `memory_search`, `memory_add`, `memory_list`, and `memory_forget` [MCP tools](/docs/api-reference/memory-tool-api).
+- **Stale facts are superseded** when they change ("moved from port 8000 to 3000"), not left to contradict each other.
+
+The `[MEMORY]` block at session start contains:
 
 - **Project Brief** — what the project is and its goals
 - **Architecture** — system design and component relationships
@@ -23,13 +29,18 @@ Before every LLM call, a `[MEMORY]` block is injected into the system prompt con
 - **Product Context** — why the project exists, problems solved
 - **Progress & Status** — current state of work
 - **Active Context** — what is being worked on right now
-- **Recent Sessions** — summaries of the previous conversations
+- **Recent Sessions** — summaries of the previous sessions
 - **User Preferences** — cross-project personal preferences
-- **Relevant to Current Task** — the only section updated on every single turn
+
+Each prompt then adds a **Relevant to Current Task** block:
 
 <RelevantToTaskCallout />
 
-This block is rebuilt on every LLM call.
+## Zero setup
+
+- **No API keys.** Background extraction runs through **your own Claude Code login** (`claude -p`, Haiku). Embeddings run **on your machine** (an ONNX model, downloaded once).
+- **No daemon, no ports, no Docker.** Hooks return in ~0.1–0.3 s; a short-lived worker does the slow part and exits.
+- **Works in the terminal and the VS Code extension.** Both use the same `~/.claude` settings, and codexfi finds the extension's bundled `claude` binary automatically.
 
 ## Key features
 
@@ -37,25 +48,27 @@ This block is rebuilt on every LLM call.
 
 ## Quick start
 
-```bash
-curl -fsSL https://codexfi.com/install | bash
+In Claude Code:
+
+```
+/plugin marketplace add prosperitypirate/codexfi
+/plugin install codexfi@codexfi
 ```
 
-This installs Bun if needed, registers the plugin with OpenCode, prompts for API keys, and creates the `/memory-init` slash command. Restart OpenCode, and the agent starts remembering.
-
-See the [Installation guide](/docs/installation) for detailed setup instructions.
+Start a new session, and Claude starts remembering. See the [Installation guide](/docs/installation) for shell install, requirements, and verification.
 
 ## Requirements
 
-- [OpenCode](https://opencode.ai) — the AI coding agent
-- [Voyage AI API key](https://dash.voyageai.com/api-keys) — for embedding generation (required)
-- One extraction provider API key — [Anthropic](https://console.anthropic.com/) (default), [xAI](https://console.x.ai/), or [Google AI](https://aistudio.google.com/apikey) (required)
+- [Claude Code](https://code.claude.com) ≥ 2.1 — terminal CLI or VS Code extension
+- [Bun](https://bun.sh) or Node ≥ 22.5 on your `PATH`
+
+That's it — no API keys.
 
 ## Next steps
 
 <Cards>
-  <Card title="Installation" href="/docs/installation" description="Set up codexfi in under 2 minutes" />
-  <Card title="How it works" href="/docs/how-it-works/overview" description="Architecture and data flow" />
-  <Card title="Memory types" href="/docs/how-it-works/memory-types" description="The 13 typed memory categories" />
-  <Card title="Configuration" href="/docs/configuration" description="Customize thresholds, providers, and behavior" />
+  <Card title="Installation" href="/docs/installation" description="Set up codexfi in under a minute" />
+  <Card title="How it works" href="/docs/how-it-works/overview" description="Hooks, worker, and data flow" />
+  <Card title="Memory types" href="/docs/how-it-works/memory-types" description="The typed memory categories" />
+  <Card title="Configuration" href="/docs/configuration" description="Optional backends, privacy, and retrieval settings" />
 </Cards>

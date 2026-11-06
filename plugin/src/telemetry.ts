@@ -1,63 +1,79 @@
 /**
- * API usage telemetry — two complementary classes:
+ * Usage telemetry — two complementary classes:
  *
- *   CostLedger   — persistent cumulative cost tracker (survives restarts)
- *   ActivityLog  — in-memory ring buffer for activity feed
+ *   CostLedger   — persistent cumulative usage per backend (costs.json)
+ *   ActivityLog  — ring buffer of recent calls for the dashboard feed (activity.json)
+ *
+ * Backends are keyed by name ("claude-cli", "anthropic-api", "local").
+ * claude-cli costs are the notional figure Claude Code reports — subscription
+ * users are not billed per call; it is shown so usage stays visible.
  */
 
-import {
-	ACTIVITY_MAX,
-	ANTHROPIC_EXTRACTION_MODEL,
-	ANTHROPIC_PRICE_INPUT_PER_M,
-	ANTHROPIC_PRICE_OUTPUT_PER_M,
-	DATA_DIR,
-	EMBEDDING_MODEL,
-	EXTRACTION_MODEL,
-	GOOGLE_EXTRACTION_MODEL,
-	GOOGLE_PRICE_INPUT_PER_M,
-	GOOGLE_PRICE_OUTPUT_PER_M,
-	VOYAGE_PRICE_PER_M,
-	XAI_EXTRACTION_MODEL,
-	XAI_PRICE_CACHED_PER_M,
-	XAI_PRICE_INPUT_PER_M,
-	XAI_PRICE_OUTPUT_PER_M,
-} from "./config.js";
+import { ACTIVITY_MAX, DATA_DIR } from "./config.js";
 import { readJsonFile, writeTextFile } from "./fsx.js";
 
 // ── CostLedger ──────────────────────────────────────────────────────────────────
 
-interface CostBucket {
+export interface UsageBucket {
 	calls: number;
 	prompt_tokens: number;
-	cached_tokens?: number;
 	completion_tokens: number;
-	cost_usd: number;
-}
-
-interface VoyageBucket {
-	calls: number;
+	/** Embedding-only backends record total tokens here. */
 	tokens: number;
 	cost_usd: number;
+	model?: string;
 }
 
-interface LedgerData {
-	xai: CostBucket & { cached_tokens: number; model?: string };
-	google: CostBucket & { model?: string };
-	anthropic: CostBucket & { model?: string };
-	voyage: VoyageBucket & { model?: string };
+export interface LedgerData {
+	backends: Record<string, UsageBucket>;
 	total_cost_usd: number;
 	last_updated: string;
 }
 
 function freshLedger(): LedgerData {
-	return {
-		xai: { calls: 0, prompt_tokens: 0, cached_tokens: 0, completion_tokens: 0, cost_usd: 0 },
-		google: { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 },
-		anthropic: { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 },
-		voyage: { calls: 0, tokens: 0, cost_usd: 0 },
-		total_cost_usd: 0,
-		last_updated: "",
-	};
+	return { backends: {}, total_cost_usd: 0, last_updated: "" };
+}
+
+function emptyBucket(): UsageBucket {
+	return { calls: 0, prompt_tokens: 0, completion_tokens: 0, tokens: 0, cost_usd: 0 };
+}
+
+/**
+ * The only backends codexfi has. Anything else in an old costs.json /
+ * activity.json (buckets from removed pre-1.0 remote providers) is dropped on
+ * load so it is never displayed.
+ */
+const KNOWN_BACKENDS = new Set(["claude-cli", "anthropic-api", "local"]);
+
+function sumCost(backends: Record<string, UsageBucket>): number {
+	return +Object.values(backends).reduce((sum, b) => sum + (b.cost_usd ?? 0), 0).toFixed(8);
+}
+
+/**
+ * Accept older ledgers without crashing: the pre-1.0 flat shape (one top-level
+ * bucket per provider; only `anthropic` is kept) and `backends` maps. Unknown
+ * backend buckets are dropped and the total is recomputed from what remains.
+ */
+function normalizeLedger(raw: unknown): LedgerData {
+	if (!raw || typeof raw !== "object") return freshLedger();
+	const r = raw as Record<string, unknown>;
+
+	const out = freshLedger();
+	out.last_updated = String(r.last_updated ?? "");
+	if (r.backends && typeof r.backends === "object") {
+		for (const [key, b] of Object.entries(r.backends as Record<string, UsageBucket>)) {
+			if (KNOWN_BACKENDS.has(key)) out.backends[key] = b;
+		}
+		out.total_cost_usd = sumCost(out.backends);
+		return out;
+	}
+
+	const b = r.anthropic as Partial<UsageBucket> | undefined;
+	if (b && b.calls) {
+		out.backends["anthropic-api"] = { ...emptyBucket(), ...b, tokens: b.tokens ?? 0 };
+	}
+	out.total_cost_usd = sumCost(out.backends);
+	return out;
 }
 
 class CostLedger {
@@ -67,7 +83,7 @@ class CostLedger {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/costs.json`;
 		try {
-			this.data = (await readJsonFile<LedgerData>(this.path)) ?? freshLedger();
+			this.data = normalizeLedger(await readJsonFile<unknown>(this.path));
 		} catch {
 			this.data = freshLedger();
 		}
@@ -82,74 +98,37 @@ class CostLedger {
 		}
 	}
 
-	private updateTotal(): void {
-		this.data.total_cost_usd = +(
-			(this.data.xai?.cost_usd ?? 0) +
-			(this.data.google?.cost_usd ?? 0) +
-			(this.data.anthropic?.cost_usd ?? 0) +
-			(this.data.voyage?.cost_usd ?? 0)
-		).toFixed(8);
+	private bucket(name: string): UsageBucket {
+		return (this.data.backends[name] ??= emptyBucket());
+	}
+
+	private touch(): void {
+		this.data.total_cost_usd = sumCost(this.data.backends);
 		this.data.last_updated = new Date().toISOString();
 	}
 
-	async recordXai(promptTokens: number, cachedTokens: number, completionTokens: number): Promise<void> {
-		const cost =
-			(promptTokens - cachedTokens) * XAI_PRICE_INPUT_PER_M / 1_000_000 +
-			cachedTokens * XAI_PRICE_CACHED_PER_M / 1_000_000 +
-			completionTokens * XAI_PRICE_OUTPUT_PER_M / 1_000_000;
-		const x = this.data.xai;
-		x.calls++;
-		x.prompt_tokens += promptTokens;
-		x.cached_tokens += cachedTokens;
-		x.completion_tokens += completionTokens;
-		x.cost_usd = +(x.cost_usd + cost).toFixed(8);
-		x.model = XAI_EXTRACTION_MODEL;
-		this.updateTotal();
+	/** Record one LLM completion (claude-cli or anthropic-api). */
+	async recordLlm(backend: string, model: string, promptTokens: number, completionTokens: number, costUsd: number): Promise<void> {
+		await this.load(); // other processes write costs.json too — merge, don't clobber
+		const b = this.bucket(backend);
+		b.calls++;
+		b.prompt_tokens += promptTokens;
+		b.completion_tokens += completionTokens;
+		b.cost_usd = +(b.cost_usd + costUsd).toFixed(8);
+		b.model = model;
+		this.touch();
 		await this.save();
 	}
 
-	async recordGoogle(promptTokens: number, completionTokens: number): Promise<void> {
-		const cost =
-			promptTokens * GOOGLE_PRICE_INPUT_PER_M / 1_000_000 +
-			completionTokens * GOOGLE_PRICE_OUTPUT_PER_M / 1_000_000;
-		if (!this.data.google) {
-			this.data.google = { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 };
-		}
-		const g = this.data.google;
-		g.calls++;
-		g.prompt_tokens += promptTokens;
-		g.completion_tokens += completionTokens;
-		g.cost_usd = +(g.cost_usd + cost).toFixed(8);
-		g.model = GOOGLE_EXTRACTION_MODEL;
-		this.updateTotal();
-		await this.save();
-	}
-
-	async recordAnthropic(promptTokens: number, completionTokens: number): Promise<void> {
-		const cost =
-			promptTokens * ANTHROPIC_PRICE_INPUT_PER_M / 1_000_000 +
-			completionTokens * ANTHROPIC_PRICE_OUTPUT_PER_M / 1_000_000;
-		if (!this.data.anthropic) {
-			this.data.anthropic = { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 };
-		}
-		const a = this.data.anthropic;
-		a.calls++;
-		a.prompt_tokens += promptTokens;
-		a.completion_tokens += completionTokens;
-		a.cost_usd = +(a.cost_usd + cost).toFixed(8);
-		a.model = ANTHROPIC_EXTRACTION_MODEL;
-		this.updateTotal();
-		await this.save();
-	}
-
-	async recordVoyage(tokens: number): Promise<void> {
-		const cost = tokens * VOYAGE_PRICE_PER_M / 1_000_000;
-		const v = this.data.voyage;
-		v.calls++;
-		v.tokens += tokens;
-		v.cost_usd = +(v.cost_usd + cost).toFixed(8);
-		v.model = EMBEDDING_MODEL;
-		this.updateTotal();
+	/** Record one embedding call (embedding-only backends count total tokens). */
+	async recordEmbedding(backend: string, model: string, tokens: number, costUsd: number): Promise<void> {
+		await this.load();
+		const b = this.bucket(backend);
+		b.calls++;
+		b.tokens += tokens;
+		b.cost_usd = +(b.cost_usd + costUsd).toFixed(8);
+		b.model = model;
+		this.touch();
 		await this.save();
 	}
 
@@ -157,17 +136,14 @@ class CostLedger {
 		return JSON.parse(JSON.stringify(this.data));
 	}
 
-	/**
-	 * Re-read costs.json from disk — used by the dashboard server to pick up
-	 * writes from the plugin process (which runs in a separate Bun instance).
-	 */
+	/** Re-read costs.json — used by the dashboard to see writes from hook processes. */
 	async load(): Promise<void> {
 		if (!this.path) return;
 		try {
-			const loaded = await readJsonFile<LedgerData>(this.path);
-			if (loaded) this.data = loaded;
+			const loaded = await readJsonFile<unknown>(this.path);
+			if (loaded) this.data = normalizeLedger(loaded);
 		} catch {
-			// Non-fatal — keep existing data if file read fails
+			// keep existing data
 		}
 	}
 
@@ -180,16 +156,20 @@ class CostLedger {
 
 // ── ActivityLog ─────────────────────────────────────────────────────────────────
 
-interface ActivityEntry {
+export interface ActivityEntry {
 	ts: string;
 	api: string;
 	model: string;
 	operation: string;
 	prompt_tokens: number | null;
-	cached_tokens: number | null;
 	completion_tokens: number | null;
 	tokens: number | null;
 	cost_usd: number;
+}
+
+/** Drop entries from unknown (removed pre-1.0) backends so they are never displayed. */
+function dropLegacy(entries: ActivityEntry[]): ActivityEntry[] {
+	return entries.filter((e) => KNOWN_BACKENDS.has(e.api));
 }
 
 class ActivityLog {
@@ -199,7 +179,7 @@ class ActivityLog {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/activity.json`;
 		try {
-			this.entries = (await readJsonFile<ActivityEntry[]>(this.path)) ?? [];
+			this.entries = dropLegacy((await readJsonFile<ActivityEntry[]>(this.path)) ?? []);
 		} catch {
 			this.entries = [];
 		}
@@ -210,99 +190,46 @@ class ActivityLog {
 		try {
 			await writeTextFile(this.path, JSON.stringify(this.entries));
 		} catch {
-			// Non-fatal — activity log is ephemeral data
+			// activity log is ephemeral
 		}
 	}
 
-	/**
-	 * Re-read activity.json from disk — used by the dashboard to pick up
-	 * entries recorded by the plugin in a separate process.
-	 */
 	async load(): Promise<void> {
 		if (!this.path) return;
 		try {
 			const loaded = await readJsonFile<ActivityEntry[]>(this.path);
-			if (loaded) this.entries = loaded;
+			if (loaded) this.entries = dropLegacy(loaded);
 		} catch {
-			// Non-fatal — keep existing entries
+			// keep existing entries
 		}
 	}
 
 	private append(entry: ActivityEntry): void {
 		this.entries.push(entry);
-		if (this.entries.length > ACTIVITY_MAX) {
-			this.entries = this.entries.slice(-ACTIVITY_MAX);
-		}
-		// Fire-and-forget save — don't block the caller
-		this.save();
+		if (this.entries.length > ACTIVITY_MAX) this.entries = this.entries.slice(-ACTIVITY_MAX);
+		void this.save();
 	}
 
-	recordXai(
-		promptTokens: number,
-		cachedTokens: number,
-		completionTokens: number,
-		costUsd: number,
-		operation = "extraction",
-	): void {
+	recordLlm(backend: string, model: string, operation: string, promptTokens: number, completionTokens: number, costUsd: number): void {
 		this.append({
 			ts: new Date().toISOString(),
-			api: "xai",
-			model: EXTRACTION_MODEL,
+			api: backend,
+			model,
 			operation,
 			prompt_tokens: promptTokens,
-			cached_tokens: cachedTokens,
 			completion_tokens: completionTokens,
 			tokens: null,
 			cost_usd: +costUsd.toFixed(8),
 		});
 	}
 
-	recordGoogle(
-		promptTokens: number,
-		completionTokens: number,
-		costUsd: number,
-		operation = "extraction",
-	): void {
+	recordEmbedding(backend: string, model: string, tokens: number, costUsd: number, operation = "embed"): void {
 		this.append({
 			ts: new Date().toISOString(),
-			api: "google",
-			model: GOOGLE_EXTRACTION_MODEL,
+			api: backend,
+			model,
 			operation,
-			prompt_tokens: promptTokens,
-			cached_tokens: null,
-			completion_tokens: completionTokens,
-			tokens: null,
-			cost_usd: +costUsd.toFixed(8),
-		});
-	}
-
-	recordAnthropic(
-		promptTokens: number,
-		completionTokens: number,
-		costUsd: number,
-		operation = "extraction",
-	): void {
-		this.append({
-			ts: new Date().toISOString(),
-			api: "anthropic",
-			model: ANTHROPIC_EXTRACTION_MODEL,
-			operation,
-			prompt_tokens: promptTokens,
-			cached_tokens: null,
-			completion_tokens: completionTokens,
-			tokens: null,
-			cost_usd: +costUsd.toFixed(8),
-		});
-	}
-
-	recordVoyage(tokens: number, costUsd: number): void {
-		this.append({
-			ts: new Date().toISOString(),
-			api: "voyage",
-			model: EMBEDDING_MODEL,
-			operation: "embed",
 			prompt_tokens: null,
-			cached_tokens: null,
 			completion_tokens: null,
 			tokens,
 			cost_usd: +costUsd.toFixed(8),

@@ -2,6 +2,7 @@
  * Unit tests for retry.ts — exponential backoff, jitter, timeout.
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect } from "bun:test";
 import { withRetry, type RetryConfig } from "../../../plugin/src/retry.js";
 

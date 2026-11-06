@@ -1,7 +1,8 @@
-import type { UnifiedQuestion, AnswerPhaseResult, Checkpoint } from "../types.js";
+import type { UnifiedQuestion, AnswerPhaseResult, Checkpoint, SearchResult } from "../types.js";
 import { buildAnswerPrompt, buildBlockQualityAnswerPrompt } from "../prompts/index.js";
 import { answer as generateAnswer } from "../judges/llm.js";
-import { markPhaseComplete } from "../utils/checkpoint.js";
+import { markPhaseComplete, throttledSaver } from "../utils/checkpoint.js";
+import { mapPool } from "../utils/concurrency.js";
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
 import type { Config } from "../utils/config.js";
@@ -16,80 +17,69 @@ export async function runAnswer(
   log.phase("ANSWER");
   log.info(
     `Generating answers for ${questions.length} questions using ${config.answeringModel}` +
+    ` [${config.llmBackend}, concurrency ${config.concurrency}]` +
     (isBlockOnly ? " (block-quality mode)…" : "…")
   );
 
-  if (isBlockOnly) {
-    if (!cp.blockQualityResults) throw new Error("Block assembly phase must complete before answer phase in block-quality mode");
-    const blockMap = new Map(cp.blockQualityResults.map((r) => [r.questionId, r]));
-    const results: AnswerPhaseResult[] = [];
+  if (isBlockOnly && !cp.blockQualityResults) {
+    throw new Error("Block assembly phase must complete before answer phase in block-quality mode");
+  }
+  if (!isBlockOnly && !cp.searchResults) throw new Error("Search phase must complete before answer phase");
 
-    for (const q of questions) {
-      const blockResult = blockMap.get(q.questionId);
-      const block = blockResult?.block ?? "";
+  const blockMap  = new Map((cp.blockQualityResults ?? []).map((r) => [r.questionId, r]));
+  const searchMap = new Map((cp.searchResults ?? []).map((r) => [r.questionId, r]));
 
-      const system = buildBlockQualitySystemPrompt(block);
-      const prompt = buildBlockQualityAnswerPrompt(q.question, q.questionType);
-      const start = Date.now();
-      const ans = await generateAnswer(prompt, config, { system });
-      const durationMs = Date.now() - start;
+  // Resume support: answers already in the checkpoint (from an interrupted run) are kept.
+  const done = new Map((cp.answerResults ?? []).map((r) => [r.questionId, r]));
+  const pending = questions.filter((q) => !done.has(q.questionId));
+  if (done.size > 0) log.info(`  Resuming: ${questions.length - pending.length} answers already checkpointed`);
 
-      results.push({
-        questionId: q.questionId,
-        answer: ans,
-        durationMs,
-        searchResults: [],
-      });
-
-      log.dim(`  ${q.questionId}: ${ans.slice(0, 80)}${ans.length > 80 ? "…" : ""}`);
-      emit({ type: "answer_question", questionId: q.questionId, preview: ans.slice(0, 100), done: results.length, total: questions.length });
+  const saver = throttledSaver(cp);
+  await mapPool(pending, config.concurrency, async (q) => {
+    let prompt: string;
+    let system: string | undefined;
+    let searchResults: SearchResult[] = [];
+    if (isBlockOnly) {
+      system = buildContextSystemPrompt(blockMap.get(q.questionId)?.block ?? "");
+      prompt = buildBlockQualityAnswerPrompt(q.question, q.questionType);
+    } else {
+      searchResults = searchMap.get(q.questionId)?.results ?? [];
+      prompt = buildAnswerPrompt(q.question, searchResults, q.questionType);
     }
-
-    cp.answerResults = results;
-    markPhaseComplete(cp, "answer");
-    const avgMs = Math.round(results.reduce((s, r) => s + r.durationMs, 0) / results.length);
-    log.success(`Answers generated. Avg latency: ${avgMs}ms`);
-    return;
-  }
-
-  // ── Standard retrieval mode ──────────────────────────────────────────────────
-  if (!cp.searchResults) throw new Error("Search phase must complete before answer phase");
-
-  const searchMap = new Map(cp.searchResults.map((r) => [r.questionId, r]));
-  const results: AnswerPhaseResult[] = [];
-
-  for (const q of questions) {
-    const searchPhase = searchMap.get(q.questionId);
-    const searchResults = searchPhase?.results ?? [];
-
-    const prompt = buildAnswerPrompt(q.question, searchResults, q.questionType);
-    const start = Date.now();
-    const ans = await generateAnswer(prompt, config);
-    const durationMs = Date.now() - start;
-
-    results.push({
+    const ans = await generateAnswer(prompt, config, system ? { system } : undefined);
+    const result: AnswerPhaseResult = {
       questionId: q.questionId,
-      answer: ans,
-      durationMs,
+      answer: ans.text,
+      durationMs: ans.durationMs,
       searchResults,
-    });
+      usage: ans.usage,
+    };
+    return result;
+  }, (result) => {
+    done.set(result.questionId, result);
+    cp.answerResults = [...done.values()];
+    saver.save();
+    log.dim(`  ${result.questionId}: ${result.answer.slice(0, 80)}${result.answer.length > 80 ? "…" : ""}`);
+    emit({ type: "answer_question", questionId: result.questionId, preview: result.answer.slice(0, 100), done: done.size, total: questions.length });
+  });
 
-    log.dim(`  ${q.questionId}: ${ans.slice(0, 80)}${ans.length > 80 ? "…" : ""}`);
-    emit({ type: "answer_question", questionId: q.questionId, preview: ans.slice(0, 100), done: results.length, total: questions.length });
-  }
+  saver.flush();
 
+  // Restore question order
+  const results = questions.map((q) => done.get(q.questionId)).filter((r): r is AnswerPhaseResult => !!r);
   cp.answerResults = results;
   markPhaseComplete(cp, "answer");
 
-  const avgMs = Math.round(results.reduce((s, r) => s + r.durationMs, 0) / results.length);
+  const avgMs = Math.round(results.reduce((s, r) => s + r.durationMs, 0) / Math.max(1, results.length));
   log.success(`Answers generated. Avg latency: ${avgMs}ms`);
 }
 
 /**
- * Build the system prompt for block-quality mode.
- * The [MEMORY] block is injected as the system context; the model answers from it alone.
+ * Build the system prompt for context-as-system-prompt answering (block-quality
+ * mode and every memory-bank-mode condition). The context is injected as the
+ * system prompt; the model answers from it alone.
  */
-function buildBlockQualitySystemPrompt(block: string): string {
+export function buildContextSystemPrompt(block: string): string {
   const contextSection = block.trim()
     ? `Your project memory context:\n\n${block}`
     : "(No project memory context available for this question.)";

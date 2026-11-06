@@ -2,26 +2,17 @@
 
 # codexfi
 
-**Persistent memory for [OpenCode](https://opencode.ai) AI agents.**
+**Persistent, searchable memory for [Claude Code](https://code.claude.com).**
 
-> *The best memory system is the one that just works. No Docker. No Python. No frontend servers. Just `curl -fsSL https://codexfi.com/install | bash` and you're done.*
+> *Claude Code remembers what you told it. codexfi remembers everything you worked out together — every decision, fix and convention — and puts the relevant piece back in front of Claude at the moment it matters.*
 
 <br/>
 
-[![npm](https://img.shields.io/npm/v/codexfi?style=flat&color=CB3837)](https://www.npmjs.com/package/codexfi)
 [![License: MIT](https://img.shields.io/badge/License-MIT-F7DF1E?style=flat)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
-[![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
-[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
-[![Anthropic](https://img.shields.io/badge/Anthropic-Haiku-D97706?style=flat)](https://anthropic.com)
-[![xAI](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
-[![Google](https://img.shields.io/badge/Google-Gemini-4285F4?style=flat&logo=google&logoColor=white)](https://ai.google.dev/)
-[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin-FF6B35?style=flat)](https://opencode.ai)
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-hero-dark.svg">
-  <img src=".github/assets/readme-hero-light.svg" alt="codexfi memory loop — conversation to memory and back" width="100%">
-</picture>
+[![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin-D97706?style=flat)](https://code.claude.com)
+[![No API keys](https://img.shields.io/badge/API_keys-none_required-22C55E?style=flat)](#how-it-works)
+[![Local embeddings](https://img.shields.io/badge/Embeddings-on--device-3178C6?style=flat)](#how-it-works)
+[![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 
 </div>
 
@@ -29,129 +20,115 @@
 
 ## What is this?
 
-OpenCode starts every session from scratch. No memory of past decisions, established patterns, or project context. Every session, you repeat yourself.
+Claude Code starts every session cold. Its built-in auto-memory keeps a short `MEMORY.md` of things Claude decides to save, and a hand-maintained Memory Bank captures the big picture — but the long tail (the exact error and its fix, the port you moved to, why you rejected library X, the test flag the user insists on) is gone by next week.
 
-**codexfi fixes this.** After every assistant turn, key facts are automatically extracted and stored locally. On every new session, relevant memories are silently injected into context. The agent just *remembers*.
+**codexfi closes that gap automatically:**
 
----
+- **After every turn**, a background worker extracts typed facts (decisions, fixes, conventions, preferences, progress) from the transcript.
+- **At session start**, Claude gets a compact project picture (brief, architecture, tech, progress, recent sessions, your cross-project preferences).
+- **On every prompt**, the memories relevant to *that* prompt are retrieved semantically and injected — once per session, never repeated.
+- **Mid-task**, Claude can call `memory_search` / `memory_add` / `memory_list` / `memory_forget` (MCP tools).
+- **Stale facts are superseded** when they change ("moved from port 8000 to 3000"), not left to contradict each other.
+
+## Zero setup
+
+- **No API keys.** Background extraction runs through **your own Claude Code login** (`claude -p`, Haiku, ~600 tokens of overhead per call). Embeddings run **on your machine** (ONNX, downloaded once).
+- **No daemon, no ports, no Python.** Hooks return in ~0.1–0.3 s; a short-lived worker does the slow part and exits.
+- **Works in the terminal and the VS Code extension** (same `~/.claude` settings; codexfi finds the extension's bundled `claude` binary automatically).
 
 ## Install
 
-```bash
-curl -fsSL https://codexfi.com/install | bash
+In Claude Code:
+
+```
+/plugin marketplace add prosperitypirate/codexfi
+/plugin install codexfi@codexfi
 ```
 
-The installer prompts for API keys, registers the plugin, and you're done.
-
-To verify everything is configured correctly before your first session:
+or from a shell:
 
 ```bash
-bunx codexfi status
+claude plugin marketplace add prosperitypirate/codexfi
+claude plugin install codexfi@codexfi
 ```
 
-Once a session runs, proof it's working: start a second session and ask the agent about something from the first — it will know.
+Start a new session. Requirements: Claude Code ≥ 2.1, and [Bun](https://bun.sh) or Node ≥ 22.5 on your PATH.
 
-### Prerequisites
+Check health any time:
 
-- [Bun](https://bun.sh) runtime
-- [OpenCode](https://opencode.ai) AI coding agent
-- One extraction API key: [Anthropic](https://console.anthropic.com) (recommended), [xAI](https://console.x.ai), or [Google](https://aistudio.google.com/apikey)
-- [Voyage AI](https://www.voyageai.com) API key (free tier available)
-
----
+```bash
+npx codexfi status        # or: bunx codexfi status
+```
 
 ## How it works
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-how-it-works-dark.svg">
-  <img src=".github/assets/readme-how-it-works-light.svg" alt="5-step pipeline: You code → Extract → Store → Inject → Remember" width="100%">
-</picture>
+```
+SessionStart      → [MEMORY] project picture (≤9.5k chars, skipped on resume)
+UserPromptSubmit  → embed prompt locally → top memories for THIS prompt (not yet shown)
+Stop / PreCompact / SessionEnd → enqueue → detached worker:
+                    transcript (exactly-once byte cursor) → claude -p --safe-mode (haiku)
+                    → typed facts → local embedding → dedup → supersede stale → SQLite
+```
 
+Everything lives in `~/.codexfi/` (SQLite store, job queue, logs, model weights). The only outbound call is the extraction request, made by your own Claude Code.
 
-1. **You code normally.** No commands, no `/save`, nothing to learn.
-2. **After every turn**, the plugin extracts typed facts from the conversation and stores them locally in a pure TypeScript vector store.
-3. **On every LLM call**, a `[MEMORY]` block is rebuilt into the system prompt with project context, preferences, and semantically relevant memories.
-4. **When you switch topics** mid-session, semantic search refreshes to surface different memories.
-5. **Across sessions**, the agent picks up where it left off — project decisions, error fixes, your preferences, everything.
+## Works with your Memory Bank
 
-All data stays on your machine at `~/.codexfi/`. Nothing is sent anywhere except the embedding and extraction APIs.
+If your project has a `memory-bank/` (projectbrief, productContext, systemPatterns, techContext, activeContext, progress), codexfi detects it and **stops duplicating it**: at session start it only adds sessions since your last `save bank` plus your cross-project preferences, and per prompt it retrieves the specific details a curated, token-budgeted bank can't keep. Set `"memoryBank": "off"` to disable this behaviour. The benchmark's `memory-bank` mode measures exactly this combination — see [benchmark results](./benchmark/README.md).
 
----
+## Benchmark
 
-## Features
+DevMemBench — 200 questions across 8 developer-memory categories, LLM-as-judge. See [benchmark/README.md](./benchmark/README.md) for the full methodology and every run.
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-features-dark.svg">
-  <img src=".github/assets/readme-features-light.svg" alt="codexfi Features: Local Storage, Automatic, Typed Memory, Multi-Provider, Compaction-Proof, Privacy Filter" width="100%">
-</picture>
+<!-- BENCHMARK-SUMMARY:START -->
+| | codexfi 0.7.x | **codexfi 1.0** |
+|---|---|---|
+| API keys required | Voyage + Anthropic | **none** |
+| DevMemBench v1 (200 Q) | 91.0% | **92.0%** |
+| Retrieval Hit@20 | 88.0% | 88.0% |
+| Search latency (p50) | 88 ms | **6 ms** |
 
+Same answer/judge model for both runs; the difference is within run-to-run noise, so 1.0 is at parity while needing nothing but Claude Code.
+<!-- BENCHMARK-SUMMARY:END -->
 
-- **Fully automatic** — saves after every turn, injects on every call
-- **100% local storage** — pure TypeScript vector store, embedded in-process
-- **Multi-provider extraction** — Anthropic Haiku (default), xAI Grok, or Google Gemini
-- **Code-optimised embeddings** — Voyage `voyage-code-3`
-- **Typed memory system** — `architecture`, `error-solution`, `preference`, `progress`, and more
-- **Smart deduplication** — cosine similarity prevents duplicates
-- **Contradiction handling** — new facts automatically supersede stale ones
-- **Compaction-proof** — memory lives in the system prompt, never lost to context truncation
-- **Privacy filter** — wrap content in `<private>...</private>` to exclude from extraction
-- **Web dashboard** — `codexfi dashboard` for live activity, costs, and memory browser
-- **CLI** — `codexfi list`, `search`, `stats`, `export`, `forget`, `status`
+## Configuration (optional)
 
----
-
-## Configuration
-
-Config at `~/.codexfi/codexfi.jsonc`:
+`~/.codexfi/codexfi.jsonc` — every field is optional:
 
 ```jsonc
 {
-  "extractionProvider": "anthropic",  // "anthropic", "xai", or "google"
-  "voyageApiKey": "pa-...",
-  "anthropicApiKey": "sk-ant-...",
-  "similarityThreshold": 0.45,       // retrieval cutoff (0-1)
-  "maxMemories": 10                  // per scope per session
+  "llmBackend": "auto",            // "auto" | "claude-cli" | "anthropic-api"
+  "llmModel": "haiku",             // any Claude Code model alias or id
+  "localModel": "jina-v2-base-code", // or "all-MiniLM-L6-v2" (lighter, faster)
+  "memoryBank": "auto",            // "auto" | "off"
+  "autoInit": true,                // seed a new project from README/manifests/git log
+  "excludePaths": ["/Users/me/clients/secret-co"],  // codexfi stays silent here
+  "anthropicApiKey": ""            // only for llmBackend "anthropic-api"
 }
 ```
 
----
-
-## Agent instructions (optional)
-
-The plugin works without this, but adding instructions to `~/.config/opencode/AGENTS.md` improves agent behavior — it understands the `[MEMORY]` block, uses the `memory` tool correctly, and never announces memory operations.
-
-See [`plugin/README.md`](./plugin/README.md) for the recommended AGENTS.md snippet.
-
----
-
 ## Privacy
 
-All data stays on your machine. Outbound API calls go only to Voyage AI (embeddings) and your chosen extraction provider (one per turn). Wrap sensitive content in `<private>...</private>` to exclude it entirely.
+- Data never leaves your machine except the extraction call your own Claude Code makes.
+- Wrap anything in `<private>…</private>` to keep it out of memory.
+- `excludePaths` turns codexfi off completely for chosen directories (hooks and tools).
+- Subagent traffic is ignored; codexfi never writes into your repository.
 
----
+## CLI
+
+`codexfi status | list | search | stats | export | forget | dashboard` — see [plugin/src/cli/README.md](./plugin/src/cli/README.md).
+
+## Upgrading from 0.7.x (OpenCode)
+
+codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run the worker re-embeds old 0.7.x vectors with the local model in the background (structured memories are usable immediately). The `opencode_*` container tags are preserved, so nothing is orphaned.
 
 ## More
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset=".github/assets/readme-benchmark-dark.svg">
-  <img src=".github/assets/readme-benchmark-light.svg" alt="Benchmark: 94.5% Overall" width="100%">
-</picture>
-
-
-- **[Plugin internals](./plugin/README.md)** — architecture, data flow, extraction providers, development setup
-- **[Benchmark](./benchmark/README.md)** — 94.5% on DevMemBench (200 questions, 8 categories)
-- **[E2E tests](./testing/README.md)** — 13 autonomous test scenarios
-
----
+- **[Design: Claude Code native (1.0)](./.github/designs/012-claude-code-native.md)** — architecture, decisions, trade-offs, evidence
+- **[Plugin internals](./plugin/README.md)**
+- **[Benchmark](./benchmark/README.md)**
+- **[Tests](./testing/README.md)**
 
 ## License
 
 [MIT](./LICENSE)
-
----
-
-<div align="center">
-
-Built with [OpenCode](https://opencode.ai) · [Voyage AI](https://www.voyageai.com) · [Bun](https://bun.sh)
-
-</div>

@@ -1,10 +1,10 @@
 /**
- * Animated diagram showing the full hook flow from user message through memory retrieval, LLM call, and auto-save storage.
+ * Animated diagram showing the Claude Code hook flow: prompt → UserPromptSubmit → local search → [MEMORY] → Claude, then Stop → job queue → background worker → store.
  * @component
  */
 export function DocsSessionFlow() {
   return (
-    <svg viewBox="0 0 680 320" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="The full hook flow from user message through memory retrieval, LLM call, and auto-save storage.">
+    <svg viewBox="0 0 680 320" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="The Claude Code hook flow: a prompt triggers local memory search and injection; after the turn, the Stop hook queues background extraction into the store.">
       <title>Session Flow Diagram</title>
       <defs>
         <filter id="glow-sf">
@@ -48,7 +48,7 @@ export function DocsSessionFlow() {
 
       {/* Dividing line */}
       <line x1="20" y1="175" x2="660" y2="175" stroke="currentColor" strokeWidth="1" strokeDasharray="4 4" className="stroke-border" />
-      <text x="340" y="172" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">after assistant turn</text>
+      <text x="340" y="172" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">after each turn (Stop hook)</text>
 
       {/* Cycle arrow (from Right to Left) */}
       <path className="return-arc-sf" d="M 615,106 Q 615,240 500,240 L 135,240" fill="none" stroke="#a855f7" strokeWidth="2" strokeOpacity="0.4" markerEnd="url(#arrow-return-sf)" />
@@ -60,7 +60,7 @@ export function DocsSessionFlow() {
       <line x1="530" y1="90" x2="555" y2="90" className="flow-line-sf" markerEnd="url(#arrow-flow-sf)" />
 
       {/* Turn 1 / 2+ branch label */}
-      <text x="235" y="120" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">Turn 1: full fetch / Turn 2+: refresh</text>
+      <text x="235" y="120" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">only memories not yet shown this session</text>
 
       {/* Bottom Lane Arrows */}
       <line x1="130" y1="240" x2="155" y2="240" className="flow-line-b-sf" markerEnd="url(#arrow-flow-bottom-sf)" />
@@ -68,17 +68,17 @@ export function DocsSessionFlow() {
       <line x1="390" y1="240" x2="415" y2="240" className="flow-line-b-sf" markerEnd="url(#arrow-flow-bottom-sf)" />
 
       {/* Extraction sub-steps */}
-      <text x="340" y="272" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">extract · embed · dedup · age</text>
+      <text x="340" y="272" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">extract (haiku) · embed locally · dedup · supersede</text>
 
       {/* Top Lane Nodes */}
       <rect x="20" y="74" width="110" height="32" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
-      <text x="75" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">User Message</text>
+      <text x="75" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">User Prompt</text>
 
       <rect x="160" y="74" width="110" height="32" rx="8" className="fill-card stroke-[#c084fc]" strokeWidth="2" />
-      <text x="215" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">chat.message</text>
+      <text x="215" y="94" fontSize="9.5" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">UserPromptSubmit</text>
 
       <rect x="300" y="74" width="120" height="32" rx="8" className="fill-card stroke-[#a855f7]" strokeWidth="2" />
-      <text x="360" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">system.transform</text>
+      <text x="360" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">local search</text>
 
       <g filter="url(#glow-sf)" className="pulse-sf">
         <rect x="450" y="74" width="80" height="32" rx="8" className="fill-card stroke-[#4ade80]" strokeWidth="2" />
@@ -87,17 +87,17 @@ export function DocsSessionFlow() {
       <text x="490" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" fill="#4ade80" textAnchor="middle" alignmentBaseline="middle">[MEMORY]</text>
 
       <rect x="560" y="74" width="110" height="32" rx="8" className="fill-card stroke-border" strokeWidth="2" />
-      <text x="615" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">LLM Response</text>
+      <text x="615" y="94" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">Claude</text>
 
       {/* Bottom Lane Nodes */}
       <rect x="20" y="224" width="110" height="32" rx="8" className="fill-muted stroke-border" strokeWidth="1" />
-      <text x="75" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">Assistant turn</text>
+      <text x="75" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">Stop hook</text>
 
       <rect x="160" y="224" width="100" height="32" rx="8" className="fill-card stroke-[#c084fc]" strokeWidth="2" />
-      <text x="210" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">event hook</text>
+      <text x="210" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">job queue</text>
 
       <rect x="290" y="224" width="100" height="32" rx="8" className="fill-card stroke-[#c084fc]" strokeWidth="2" />
-      <text x="340" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">auto-save</text>
+      <text x="340" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">worker</text>
 
       <rect x="420" y="224" width="100" height="32" rx="8" className="fill-card stroke-[#a855f7]" strokeWidth="2" />
       <text x="470" y="244" fontSize="11" fontFamily="var(--font-mono, monospace)" className="fill-foreground" textAnchor="middle" alignmentBaseline="middle">store.db</text>

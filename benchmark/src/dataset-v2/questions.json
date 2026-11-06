@@ -1,0 +1,3565 @@
+[
+  {
+    "questionId": "Q001",
+    "questionType": "tech-stack",
+    "question": "What Node.js, TypeScript, Fastify and zod versions is ledgerline running on right now?",
+    "groundTruth": "Node.js 24 LTS (upgraded from 22.14 LTS), TypeScript 5.7, Fastify 5.2 and zod 3.24. Drizzle ORM is the only ORM.",
+    "haystackSessionIds": [
+      "S15",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F198",
+      "F088"
+    ]
+  },
+  {
+    "questionId": "Q002",
+    "questionType": "tech-stack",
+    "question": "Which ORM and exact version did I originally scaffold ledgerline with, and what does it use today?",
+    "groundTruth": "It was scaffolded with Prisma ORM 6.4. It migrated to Drizzle ORM, Prisma was removed entirely, and Drizzle is now the only ORM.",
+    "haystackSessionIds": [
+      "S02",
+      "S13",
+      "S15",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F008",
+      "F076",
+      "F088",
+      "F198"
+    ]
+  },
+  {
+    "questionId": "Q003",
+    "questionType": "tech-stack",
+    "question": "What does ledgerline use for background jobs at this point, and what did it replace?",
+    "groundTruth": "pg-boss 10, running on the existing Postgres database. This includes queue workers and cron-style schedules such as invoice finalization and rollups. It replaced BullMQ 5 backed by Upstash Redis, and BullMQ and the Upstash Redis instance were removed entirely.",
+    "haystackSessionIds": [
+      "S03",
+      "S22",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F018",
+      "F133",
+      "F146"
+    ]
+  },
+  {
+    "questionId": "Q004",
+    "questionType": "tech-stack",
+    "question": "Which Stripe API version is ledgerline's stripe-node client pinned to?",
+    "groundTruth": "2025-09-30.clover. It was bumped from 2025-03-31.basil.",
+    "haystackSessionIds": [
+      "S06",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F032",
+      "F200"
+    ]
+  },
+  {
+    "questionId": "Q005",
+    "questionType": "tech-stack",
+    "question": "What's the current name of the environment variable ledgerline reads the Stripe secret key from, and how is it set?",
+    "groundTruth": "STRIPE_SECRET_KEY, set with fly secrets set. The earlier names were STRIPE_SECRET and then STRIPE_API_KEY.",
+    "haystackSessionIds": [
+      "S06",
+      "S17",
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F033",
+      "F104",
+      "F176"
+    ]
+  },
+  {
+    "questionId": "Q006",
+    "questionType": "tech-stack",
+    "question": "What do ledgerline's integration tests run against for the database, and which package and image does it use?",
+    "groundTruth": "Testcontainers with a real postgres:16 image via @testcontainers/postgresql. This replaced pg-mem.",
+    "haystackSessionIds": [
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F079"
+    ]
+  },
+  {
+    "questionId": "Q007",
+    "questionType": "tech-stack",
+    "question": "Testcontainers in ledgerline can't find a container runtime on my Mac again. What DOCKER_HOST value did we use to fix it?",
+    "groundTruth": "DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock, which is OrbStack's socket. Without it, Testcontainers looked for the Docker Desktop socket.",
+    "haystackSessionIds": [
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F124",
+      "F125"
+    ]
+  },
+  {
+    "questionId": "Q008",
+    "questionType": "tech-stack",
+    "question": "Which library does ledgerline use to render invoice PDFs now, and how is the document rendered?",
+    "groundTruth": "@react-pdf/renderer 4. An InvoiceDocument React component is rendered to a buffer with renderToBuffer. This replaced Puppeteer 24 with the Handlebars template templates/invoice.hbs.",
+    "haystackSessionIds": [
+      "S15",
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F089",
+      "F159",
+      "F160"
+    ]
+  },
+  {
+    "questionId": "Q009",
+    "questionType": "tech-stack",
+    "question": "What font did we register in ledgerline's PDF invoices so non-Latin customer names render properly?",
+    "groundTruth": "Noto Sans, registered with Font.register and used as the invoice document font. The built-in Helvetica has no glyphs for those scripts.",
+    "haystackSessionIds": [
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F163",
+      "F164"
+    ]
+  },
+  {
+    "questionId": "Q010",
+    "questionType": "tech-stack",
+    "question": "Which email provider and templating library does ledgerline use for invoice emails, and what env var holds the key?",
+    "groundTruth": "Resend with React Email templates, and the invoice PDF is still attached. The key is in RESEND_API_KEY, set via fly secrets set. Resend replaced Postmark.",
+    "haystackSessionIds": [
+      "S17",
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F103",
+      "F219",
+      "F220"
+    ]
+  },
+  {
+    "questionId": "Q011",
+    "questionType": "tech-stack",
+    "question": "Which headers does ledgerline's Resend webhook endpoint use to verify incoming requests?",
+    "groundTruth": "svix-id, svix-timestamp and svix-signature.",
+    "haystackSessionIds": [
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F224"
+    ]
+  },
+  {
+    "questionId": "Q012",
+    "questionType": "tech-stack",
+    "question": "As of the latest session, how is usage ingestion rate-limited in ledgerline: what mechanism, what limits, what key, and where is the counter stored?",
+    "groundTruth": "Ingestion is rate-limited by a custom in-memory token bucket (takeToken in src/ingestion/rate-limit.ts), which replaced @fastify/rate-limit for this route. It allows 300 requests per second sustained with a burst of 600 (raised from 100/s), keyed on the API key prefix. Counters live in an in-process Map on each Fly machine (the original Upstash Redis setup was dropped), so the limit applies per instance. The developer accepted this as fine for now.",
+    "haystackSessionIds": [
+      "S10",
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F057",
+      "F208",
+      "F209"
+    ]
+  },
+  {
+    "questionId": "Q013",
+    "questionType": "tech-stack",
+    "question": "What's the k6 script for ledgerline's ingestion load test called, and which executor does it use?",
+    "groundTruth": "loadtest/ingest.js, which drives POST /v1/usage-events using a ramping-arrival-rate executor.",
+    "haystackSessionIds": [
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F210"
+    ]
+  },
+  {
+    "questionId": "Q014",
+    "questionType": "tech-stack",
+    "question": "As of the end of the 2026-05-04 session, which Postgres provider, major version and region hosts ledgerline's staging database, and which hosts production?",
+    "groundTruth": "Staging (ledgerline-staging on Fly.io) uses Neon Postgres 17 in eu-central-1 (Frankfurt), restored from a Render Postgres 16 dump made with pg_dump -Fc and pg_restore --no-owner --no-acl. Production is still on Render Postgres 16 in Frankfurt; the production data migration, DNS cutover and Render shutdown were planned for the next session and are not shown as done.",
+    "haystackSessionIds": [
+      "S02",
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F010",
+      "F175"
+    ]
+  },
+  {
+    "questionId": "Q015",
+    "questionType": "tech-stack",
+    "question": "When restoring ledgerline's dump into Neon, which pg_restore flags fixed the missing render_user role error?",
+    "groundTruth": "--no-owner --no-acl. With these flags, all objects are owned by the Neon connecting role.",
+    "haystackSessionIds": [
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F177",
+      "F178"
+    ]
+  },
+  {
+    "questionId": "Q016",
+    "questionType": "tech-stack",
+    "question": "In ledgerline's fly.toml, what primary region and process groups are defined?",
+    "groundTruth": "primary_region = \"fra\", with a [processes] section defining app and worker entries. Production is fully cut over to Fly.io and the Render services were deleted.",
+    "haystackSessionIds": [
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F174",
+      "F194"
+    ]
+  },
+  {
+    "questionId": "Q017",
+    "questionType": "tech-stack",
+    "question": "How does ledgerline represent money and unit rates in the database and in code?",
+    "groundTruth": "Amounts are bigint minor units. Unit rates are stored as numeric(20,8) and handled with decimal.js. This replaced integer cents in plain JS numbers.",
+    "haystackSessionIds": [
+      "S03",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F017",
+      "F078"
+    ]
+  },
+  {
+    "questionId": "Q018",
+    "questionType": "tech-stack",
+    "question": "Back when tsconfig path aliases broke the tsx dev runner in ledgerline, what import setup did we switch to?",
+    "groundTruth": "Relative imports plus a single '#src/*' subpath import defined in package.json \"imports\". The tsconfig paths aliases were dropped.",
+    "haystackSessionIds": [
+      "S02"
+    ],
+    "evidenceFactIds": [
+      "F012",
+      "F013"
+    ]
+  },
+  {
+    "questionId": "Q019",
+    "questionType": "tech-stack",
+    "question": "Which Drizzle option makes ledgerline's columns snake_case?",
+    "groundTruth": "Drizzle's casing: 'snake_case' option. Under Prisma the columns were camelCase.",
+    "haystackSessionIds": [
+      "S02",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F009",
+      "F077"
+    ]
+  },
+  {
+    "questionId": "Q020",
+    "questionType": "tech-stack",
+    "question": "Is ledgerline still using neverthrow for domain errors?",
+    "groundTruth": "No. neverthrow was removed (pnpm remove neverthrow) and the Result-returning functions were unwrapped. Domain errors are again thrown typed error classes evolved from the AppError hierarchy, mapped to HTTP codes in the Fastify error handler.",
+    "haystackSessionIds": [
+      "S22",
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F135",
+      "F221",
+      "F222"
+    ]
+  },
+  {
+    "questionId": "Q021",
+    "questionType": "tech-stack",
+    "question": "What's the current stack of fieldnote's sync server: Python version, framework, DB layer, migrations and dependency manager?",
+    "groundTruth": "Python 3.13 with FastAPI, async SQLAlchemy 2.0 using asyncpg, and Alembic for migrations. Dependencies are managed with uv (uv sync from uv.lock). This replaced Python 3.12 with Poetry 2.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F026",
+      "F139",
+      "F140"
+    ]
+  },
+  {
+    "questionId": "Q022",
+    "questionType": "tech-stack",
+    "question": "Which linter and formatter does fieldnote's Python sync server use now?",
+    "groundTruth": "ruff, using ruff check for linting and ruff format for formatting. It replaced black, flake8 and isort.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F027",
+      "F141"
+    ]
+  },
+  {
+    "questionId": "Q023",
+    "questionType": "tech-stack",
+    "question": "Which asyncpg version did we bump to on the fieldnote server to get it installing on Python 3.13?",
+    "groundTruth": "asyncpg 0.30.0, which publishes Python 3.13 (cp313) wheels. The previously pinned version failed with 'Failed to build asyncpg'.",
+    "haystackSessionIds": [
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F144",
+      "F145"
+    ]
+  },
+  {
+    "questionId": "Q024",
+    "questionType": "tech-stack",
+    "question": "What package manager is the fieldnote client on now, and what setting keeps Metro happy with it?",
+    "groundTruth": "pnpm 10 with node-linker=hoisted in .npmrc. EAS Build installs with pnpm (detected from pnpm-lock.yaml) and package-lock.json was deleted. It had temporarily used npm.",
+    "haystackSessionIds": [
+      "S16",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F097",
+      "F246",
+      "F247",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q025",
+    "questionType": "tech-stack",
+    "question": "After upgrading fieldnote to Expo SDK 55, what config change got background sync scheduling again?",
+    "groundTruth": "Adding \"expo-background-task\" to the plugins array in app.json and rebuilding the dev client.",
+    "haystackSessionIds": [
+      "S27"
+    ],
+    "evidenceFactIds": [
+      "F169",
+      "F170"
+    ]
+  },
+  {
+    "questionId": "Q026",
+    "questionType": "tech-stack",
+    "question": "What does fieldnote use for navigation now, and what did it use originally?",
+    "groundTruth": "It now uses file-based routing with Expo Router 6. It originally used React Navigation 7 with a native stack navigator.",
+    "haystackSessionIds": [
+      "S04",
+      "S14"
+    ],
+    "evidenceFactIds": [
+      "F021",
+      "F082"
+    ]
+  },
+  {
+    "questionId": "Q027",
+    "questionType": "tech-stack",
+    "question": "What is fieldnote's on-device persistence layer, and how is drizzle.config.ts configured?",
+    "groundTruth": "expo-sqlite with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations. drizzle.config.ts uses dialect: 'sqlite' and driver: 'expo'.",
+    "haystackSessionIds": [
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F094",
+      "F095"
+    ]
+  },
+  {
+    "questionId": "Q028",
+    "questionType": "tech-stack",
+    "question": "Which WatermelonDB version did I trial in fieldnote, how was the adapter configured, and what happened to it?",
+    "groundTruth": "WatermelonDB 0.28, with SQLiteAdapter set to jsi: true. The JSI adapter build failed in the Expo dev client, and the trial was abandoned because New Architecture support was too shaky on Expo SDK 54. fieldnote reverted to expo-sqlite with Drizzle.",
+    "haystackSessionIds": [
+      "S09",
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F051",
+      "F053",
+      "F054",
+      "F094"
+    ]
+  },
+  {
+    "questionId": "Q029",
+    "questionType": "tech-stack",
+    "question": "What library holds UI state in the fieldnote app?",
+    "groundTruth": "zustand 5 stores.",
+    "haystackSessionIds": [
+      "S04"
+    ],
+    "evidenceFactIds": [
+      "F022"
+    ]
+  },
+  {
+    "questionId": "Q030",
+    "questionType": "tech-stack",
+    "question": "Which Expo libraries does fieldnote use for capturing and resizing photos, and what are the current compression settings?",
+    "groundTruth": "expo-camera for capture and expo-image-manipulator for resizing. Photos are currently resized to a 2048px long edge as JPEG at quality 0.75. Earlier settings were 2048/0.8, then 1600/0.7.",
+    "haystackSessionIds": [
+      "S11",
+      "S27",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F064",
+      "F171",
+      "F226"
+    ]
+  },
+  {
+    "questionId": "Q031",
+    "questionType": "architecture",
+    "question": "How does ledgerline enforce tenant isolation right now, and why did we stop using Postgres row-level security?",
+    "groundTruth": "Isolation is application-level, through a mandatory tenantScope() Drizzle helper that adds tenant_id conditions. RLS was reverted because the app.tenant_id session setting leaked across requests on Neon's pooled (-pooler) connections, which caused intermittent cross-request tenant leakage. A migration disabled RLS and dropped the policies, and the SET LOCAL app.tenant_id transaction wrapper was removed.",
+    "haystackSessionIds": [
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F195",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q032",
+    "questionType": "architecture",
+    "question": "Where does ledgerline record which inbound Stripe webhook events it has already processed, and for how long?",
+    "groundTruth": "In a processed_stripe_events Postgres table with a unique event_id. Rows are kept for 30 days. This replaced the earlier Redis set with a 24-hour TTL.",
+    "haystackSessionIds": [
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F134"
+    ]
+  },
+  {
+    "questionId": "Q033",
+    "questionType": "architecture",
+    "question": "What's the current retry policy for ledgerline's outbound tenant webhooks, and which queue delivers them?",
+    "groundTruth": "Up to 10 attempts with exponential backoff capped at 6 hours. Delivery runs on the pg-boss queue deliver-webhook, sent with retryBackoff: true.",
+    "haystackSessionIds": [
+      "S19",
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F117",
+      "F137"
+    ]
+  },
+  {
+    "questionId": "Q034",
+    "questionType": "architecture",
+    "question": "Why did Stripe signature verification fail on ledgerline's first webhook attempt, and how is the raw body handled now?",
+    "groundTruth": "Fastify's JSON parser consumed and re-serialized the body, so the signature no longer matched. The fix is a content-type parser scoped to the webhook route that keeps the body as a raw buffer. That buffer is passed to stripe.webhooks.constructEvent together with the stripe-signature header.",
+    "haystackSessionIds": [
+      "S08"
+    ],
+    "evidenceFactIds": [
+      "F044",
+      "F048",
+      "F049"
+    ]
+  },
+  {
+    "questionId": "Q035",
+    "questionType": "architecture",
+    "question": "What rate limit applies to ledgerline's usage ingestion endpoint, what is it keyed on, and is it shared across instances?",
+    "groundTruth": "300 requests per second per tenant with a burst of 600, keyed on the API key. It is not shared across instances: it uses an in-memory store on each Fly machine, so the limit applies per instance. This was accepted as fine for now.",
+    "haystackSessionIds": [
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F208",
+      "F209"
+    ]
+  },
+  {
+    "questionId": "Q036",
+    "questionType": "architecture",
+    "question": "What format do ledgerline invoice numbers use now, and what backs the sequence?",
+    "groundTruth": "{tenantPrefix}-{YYYY}-{5-digit seq}, backed by a per-tenant sequence that resets every year. It changed after the accountant objected to the old global-sequence format.",
+    "haystackSessionIds": [
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F148"
+    ]
+  },
+  {
+    "questionId": "Q037",
+    "questionType": "architecture",
+    "question": "How does ledgerline represent money amounts and fractional unit rates?",
+    "groundTruth": "Amounts are bigint minor units. Unit rates are stored as numeric(20,8) and handled with decimal.js.",
+    "haystackSessionIds": [
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F078"
+    ]
+  },
+  {
+    "questionId": "Q038",
+    "questionType": "architecture",
+    "question": "How are tenant API keys stored in ledgerline, and how is an incoming key looked up?",
+    "groundTruth": "Keys are stored as SHA-256 hashes, with a plaintext key prefix kept alongside each hash. An incoming key is found through an indexed lookup on the prefix, and then its hash is compared.",
+    "haystackSessionIds": [
+      "S10"
+    ],
+    "evidenceFactIds": [
+      "F061",
+      "F062"
+    ]
+  },
+  {
+    "questionId": "Q039",
+    "questionType": "architecture",
+    "question": "What's the hourly usage rollup job in ledgerline called, how is it scheduled, and why is it safe to rerun?",
+    "groundTruth": "It is a pg-boss schedule named rollup-usage-hourly with the cron '0 * * * *'. It populates usage_rollups_hourly. Reruns are safe because it writes with INSERT ... ON CONFLICT DO UPDATE upserts, so rerunning an hour overwrites instead of double-counting.",
+    "haystackSessionIds": [
+      "S19",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F114",
+      "F116",
+      "F147"
+    ]
+  },
+  {
+    "questionId": "Q040",
+    "questionType": "architecture",
+    "question": "Which Stripe API version is ledgerline's stripe-node client pinned to?",
+    "groundTruth": "2025-09-30.clover. It was bumped from 2025-03-31.basil.",
+    "haystackSessionIds": [
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F200"
+    ]
+  },
+  {
+    "questionId": "Q041",
+    "questionType": "architecture",
+    "question": "What env var holds the Stripe secret key for ledgerline, and how is it set in deployment?",
+    "groundTruth": "STRIPE_SECRET_KEY, set with fly secrets set. Earlier names were STRIPE_SECRET and then STRIPE_API_KEY.",
+    "haystackSessionIds": [
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F176"
+    ]
+  },
+  {
+    "questionId": "Q042",
+    "questionType": "architecture",
+    "question": "How do invoice payment terms work in ledgerline now, including the default and how a tenant changes them?",
+    "groundTruth": "Payment terms are a per-tenant setting stored in a payment_terms_days column. The default is Net 30, back from Net 14. Tenants change them through PATCH /v1/tenant/settings.",
+    "haystackSessionIds": [
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F240",
+      "F241"
+    ]
+  },
+  {
+    "questionId": "Q043",
+    "questionType": "architecture",
+    "question": "What happens in ledgerline when a subscription changes plans mid-cycle?",
+    "groundTruth": "Nothing is prorated. A requested plan change is not applied immediately. It is stored on the subscription as pending_plan_id with pending_plan_effective_at set to current_period_end, and the finalization job applies it when the billing period rolls over. The customer keeps the old plan's rate until then, for upgrades and downgrades alike. The daily proration calculator was removed. Migration 0021_defer_proration moved existing proration line items on open invoices into the plan_change_schedule table, which holds those migrated legacy items, and recomputed invoice totals.",
+    "haystackSessionIds": [
+      "S38",
+      "S40"
+    ],
+    "evidenceFactIds": [
+      "F242",
+      "F243",
+      "F251"
+    ]
+  },
+  {
+    "questionId": "Q044",
+    "questionType": "architecture",
+    "question": "Which bucket holds finalized ledgerline invoice PDFs, and what object key pattern do they use?",
+    "groundTruth": "The R2 bucket ledgerline-invoices, under keys of the form tenants/{tenantId}/invoices/{number}.pdf.",
+    "haystackSessionIds": [
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F161"
+    ]
+  },
+  {
+    "questionId": "Q045",
+    "questionType": "architecture",
+    "question": "How does ledgerline render invoice PDFs now, and how do we handle non-Latin customer names?",
+    "groundTruth": "It uses @react-pdf/renderer 4, which replaced Puppeteer because Chromium kept hitting memory limits. An InvoiceDocument React component is rendered to a buffer with renderToBuffer. Noto Sans is registered with Font.register and used as the document font, because built-in Helvetica has no glyphs for non-Latin scripts and rendered them as empty boxes.",
+    "haystackSessionIds": [
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F159",
+      "F160",
+      "F163",
+      "F164"
+    ]
+  },
+  {
+    "questionId": "Q046",
+    "questionType": "architecture",
+    "question": "Which provider sends ledgerline's invoice emails, what env var holds its key, and how are the templates built?",
+    "groundTruth": "Resend, which replaced Postmark. The key is in RESEND_API_KEY, set with fly secrets set. Templates are React Email, kept alongside the @react-pdf/renderer invoice components, and the PDF is still attached.",
+    "haystackSessionIds": [
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F219",
+      "F220"
+    ]
+  },
+  {
+    "questionId": "Q047",
+    "questionType": "architecture",
+    "question": "How does ledgerline handle bounced invoice emails, and how is that incoming webhook verified?",
+    "groundTruth": "A Resend webhook endpoint handles email.bounced events by marking the customer's email as undeliverable in an email_undeliverable column. Requests are verified with the svix-id, svix-timestamp and svix-signature headers.",
+    "haystackSessionIds": [
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F223",
+      "F224"
+    ]
+  },
+  {
+    "questionId": "Q048",
+    "questionType": "architecture",
+    "question": "What region and process layout does ledgerline's fly.toml define?",
+    "groundTruth": "primary_region = \"fra\", plus a [processes] section with app and worker entries. Production DNS was cut over to this Fly app, and the Render services were deleted.",
+    "haystackSessionIds": [
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F174",
+      "F194"
+    ]
+  },
+  {
+    "questionId": "Q049",
+    "questionType": "architecture",
+    "question": "What Postgres version and region is ledgerline's database on now, and how was the data moved there?",
+    "groundTruth": "Neon Postgres 17 in eu-central-1, migrated from Render Postgres 16 with pg_dump -Fc and pg_restore. The restore had to be rerun with --no-owner --no-acl because of the Render role render_user.",
+    "haystackSessionIds": [
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F175",
+      "F177",
+      "F178"
+    ]
+  },
+  {
+    "questionId": "Q050",
+    "questionType": "architecture",
+    "question": "Which tables made up ledgerline's original core billing domain model?",
+    "groundTruth": "tenants, customers, meters, price_plans and usage_events.",
+    "haystackSessionIds": [
+      "S03"
+    ],
+    "evidenceFactIds": [
+      "F015"
+    ]
+  },
+  {
+    "questionId": "Q051",
+    "questionType": "architecture",
+    "question": "How are domain errors modeled in ledgerline today, after the neverthrow experiment?",
+    "groundTruth": "As thrown typed error classes that evolve the original AppError hierarchy (NotFoundError, ConflictError, ValidationError) and are mapped to HTTP status codes in the Fastify error handler. neverthrow proved too verbose at service boundaries: the remaining Result-returning functions were unwrapped and the package was removed with pnpm remove neverthrow.",
+    "haystackSessionIds": [
+      "S08",
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F047",
+      "F221",
+      "F222"
+    ]
+  },
+  {
+    "questionId": "Q052",
+    "questionType": "architecture",
+    "question": "What runs ledgerline's background jobs now, and why did we move off the previous setup?",
+    "groundTruth": "pg-boss 10 on the existing Postgres database. It runs the workers plus pg-boss schedules for invoice finalization and rollups. The move from BullMQ 5 was made to drop the Upstash Redis dependency, and BullMQ and Redis were removed entirely.",
+    "haystackSessionIds": [
+      "S22",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F133",
+      "F146"
+    ]
+  },
+  {
+    "questionId": "Q053",
+    "questionType": "architecture",
+    "question": "When I create a customer in ledgerline, what happens on the Stripe side?",
+    "groundTruth": "The customer is mirrored to a Stripe Customer, and the returned Stripe ID is stored on the ledgerline customer row.",
+    "haystackSessionIds": [
+      "S06"
+    ],
+    "evidenceFactIds": [
+      "F034"
+    ]
+  },
+  {
+    "questionId": "Q054",
+    "questionType": "architecture",
+    "question": "How does fieldnote resolve conflicting offline edits now, and what's special about the notes field?",
+    "groundTruth": "All fields except notes use field-level last-write-wins with hybrid logical clocks. For notes, a conflict is detected only when both the client and the server changed notes after the shared base_hlc. That conflict creates a record in a sync_conflicts table, and an inspector resolves it in a manual merge UI that shows both versions side by side.",
+    "haystackSessionIds": [
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F201",
+      "F202"
+    ]
+  },
+  {
+    "questionId": "Q055",
+    "questionType": "architecture",
+    "question": "On fieldnote's sync server, where are field versions recorded, and how does the merge break ties between two field changes?",
+    "groundTruth": "Each field change carries an HLC timestamp and a node ID, and both are recorded in a field_versions table. The merge keeps the version with the higher HLC timestamp and breaks ties by comparing node IDs.",
+    "haystackSessionIds": [
+      "S18"
+    ],
+    "evidenceFactIds": [
+      "F109",
+      "F110"
+    ]
+  },
+  {
+    "questionId": "Q056",
+    "questionType": "architecture",
+    "question": "Where does the fieldnote client persist its HLC state, and what's the rule for the logical counter?",
+    "groundTruth": "In an hlc_state SQLite table. The clock is recorded on every field edit. The logical counter resets to 0 whenever the new wall-clock component is greater than the last stored one, and it is incremented only when the wall times are equal. This rule fixed the 2-hours-ahead skew bug.",
+    "haystackSessionIds": [
+      "S21"
+    ],
+    "evidenceFactIds": [
+      "F128",
+      "F129",
+      "F130"
+    ]
+  },
+  {
+    "questionId": "Q057",
+    "questionType": "architecture",
+    "question": "How long does fieldnote keep deletion tombstones, and why was that value chosen?",
+    "groundTruth": "90 days, raised from 30. A device that came back after 6 weeks offline resurrected deleted findings, because the server had already purged the tombstones.",
+    "haystackSessionIds": [
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F204",
+      "F205"
+    ]
+  },
+  {
+    "questionId": "Q058",
+    "questionType": "architecture",
+    "question": "What are fieldnote's current sync endpoints, and how is the legacy one flagged?",
+    "groundTruth": "POST /v2/sync/push and GET /v2/sync/pull carry the HLC payloads. The old POST /sync is kept for one release and returns a 'Deprecation: true' response header.",
+    "haystackSessionIds": [
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F142",
+      "F143"
+    ]
+  },
+  {
+    "questionId": "Q059",
+    "questionType": "architecture",
+    "question": "How often does fieldnote sync in the background, and what config was needed to keep it scheduled after the SDK 55 upgrade?",
+    "groundTruth": "Every 30 minutes through expo-background-task, plus an immediate sync whenever the app returns to the foreground, via an AppState listener. After SDK 55, \"expo-background-task\" had to be added to the plugins array in app.json and the dev client rebuilt.",
+    "haystackSessionIds": [
+      "S27",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F203",
+      "F170"
+    ]
+  },
+  {
+    "questionId": "Q060",
+    "questionType": "architecture",
+    "question": "How long do fieldnote access tokens last, and how do offline inspectors stay signed in?",
+    "groundTruth": "Access tokens are RS256-signed and expire after 30 minutes. RS256 refresh tokens are valid for 30 days, and the client uses them for silent refresh via POST /auth/refresh.",
+    "haystackSessionIds": [
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F227",
+      "F228"
+    ]
+  },
+  {
+    "questionId": "Q061",
+    "questionType": "session-continuity",
+    "question": "Way back during the MacBook setup I went off on a tangent about my slow zsh startup. Did we ever close that out?",
+    "groundTruth": "Yes. In the 2026-03-02 session it was left unresolved and you said you'd 'deal with it later'. It was fixed in the 2026-05-06 session by removing oh-my-zsh and using starship instead.",
+    "haystackSessionIds": [
+      "S01",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F007",
+      "F186"
+    ]
+  },
+  {
+    "questionId": "Q062",
+    "questionType": "session-continuity",
+    "question": "When we first scaffolded ledgerline, the import path aliases gave us trouble. What broke, and what did we settle on?",
+    "groundTruth": "TypeScript path aliases from tsconfig paths broke the tsx dev runner, which couldn't resolve the aliased imports at runtime. We dropped the tsconfig aliases and used relative imports plus a single '#src/*' subpath import defined in package.json 'imports'.",
+    "haystackSessionIds": [
+      "S02"
+    ],
+    "evidenceFactIds": [
+      "F012",
+      "F013"
+    ]
+  },
+  {
+    "questionId": "Q063",
+    "questionType": "session-continuity",
+    "question": "Where did we leave ledgerline at the end of the March 5 session (2026-03-05) on the domain model and job queue?",
+    "groundTruth": "At the end of the 2026-03-05 session the core domain tables (tenants, customers, meters, price_plans, usage_events) were designed and migrated, and a first 'rate-usage' BullMQ job on Upstash Redis was stubbed but not implemented (it only logs a warning). A customer repository with app-level tenant isolation was also committed. The BullMQ/Redis setup was later replaced by pg-boss (the 2026-04-20 session/the 2026-04-22 session), and BullMQ, ioredis and the Upstash instance were removed.",
+    "haystackSessionIds": [
+      "S03",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F019",
+      "F015",
+      "F146"
+    ]
+  },
+  {
+    "questionId": "Q064",
+    "questionType": "session-continuity",
+    "question": "What did we get working in the first fieldnote Expo session on March 9, and what did we do with that generated helper file?",
+    "groundTruth": "By the end of the 2026-03-09 session there was an inspections list screen reading inspections from SQLite. The generated src/utils.ts was rejected and split into date.ts and ids.ts.",
+    "haystackSessionIds": [
+      "S04"
+    ],
+    "evidenceFactIds": [
+      "F025",
+      "F024"
+    ]
+  },
+  {
+    "questionId": "Q065",
+    "questionType": "session-continuity",
+    "question": "When we set up the fieldnote FastAPI server skeleton, Alembic fought us for a while. How did we finally get migrations running?",
+    "groundTruth": "The async env.py failed twice because the async engine was called from synchronous Alembic context code. It was fixed by opening an async connection and calling connection.run_sync(do_run_migrations).",
+    "haystackSessionIds": [
+      "S05"
+    ],
+    "evidenceFactIds": [
+      "F030",
+      "F031"
+    ]
+  },
+  {
+    "questionId": "Q066",
+    "questionType": "session-continuity",
+    "question": "At the end of the Stripe customer sync session for ledgerline there was a test we left hanging. What was it, and did it ever get resolved?",
+    "groundTruth": "One Prisma-generated query wasn't supported by pg-mem, so that single test case was skipped while the rest ran on pg-mem. It was resolved in the 2026-03-30 session by moving the tests to Testcontainers with a real postgres:16 image via @testcontainers/postgresql, which made the skipped test pass.",
+    "haystackSessionIds": [
+      "S06",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F036",
+      "F037",
+      "F079"
+    ]
+  },
+  {
+    "questionId": "Q067",
+    "questionType": "session-continuity",
+    "question": "In the March 14 (2026-03-14) fieldnote session where we designed offline edits, we chose a conflict strategy and a sync trigger. What were they, and what are they now?",
+    "groundTruth": "In the 2026-03-14 session conflicts used record-level last-write-wins decided by the server receive timestamp, which was accepted as lossy for the prototype. Sync was manual only, via pull-to-refresh on the inspections list, and background or connectivity-triggered sync was rejected. Both have since changed. Conflicts now use field-level HLC last-write-wins for every field except notes. For notes, a conflict record is created in sync_conflicts when both client and server changed notes after the shared base_hlc, and the inspector resolves it in a manual merge UI. Sync now also runs in the background every 30 minutes (previously 15), plus an immediate sync when the app returns to the foreground.",
+    "haystackSessionIds": [
+      "S07",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F038",
+      "F039",
+      "F040",
+      "F042",
+      "F043",
+      "F201",
+      "F202",
+      "F203"
+    ]
+  },
+  {
+    "questionId": "Q068",
+    "questionType": "session-continuity",
+    "question": "Remind me what went wrong the first time we tried Stripe webhook ingestion in ledgerline, and how we fixed it.",
+    "groundTruth": "Signature verification failed because Fastify's JSON parser consumed and re-serialized the raw body. The fix was a content-type parser scoped to the webhook route that keeps the body as a raw buffer. The handler verifies with stripe.webhooks.constructEvent using the stripe-signature header.",
+    "haystackSessionIds": [
+      "S08"
+    ],
+    "evidenceFactIds": [
+      "F048",
+      "F049",
+      "F044"
+    ]
+  },
+  {
+    "questionId": "Q069",
+    "questionType": "session-continuity",
+    "question": "Last time we touched the WatermelonDB experiment in fieldnote, where did we leave off?",
+    "groundTruth": "the 2026-03-19 session ended mid-task. The JSI adapter (jsi: true) build failed in the Expo dev client. The agreed next step was to check WatermelonDB's New Architecture compatibility and port the photos table before deciding. In the 2026-04-06 session the trial was abandoned because New Architecture support was too shaky on Expo SDK 54. fieldnote went back to expo-sqlite, now with Drizzle's expo-sqlite driver.",
+    "haystackSessionIds": [
+      "S09",
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F053",
+      "F054",
+      "F055",
+      "F094"
+    ]
+  },
+  {
+    "questionId": "Q070",
+    "questionType": "session-continuity",
+    "question": "What did we get done on March 20 for ledgerline, and do those numbers still hold?",
+    "groundTruth": "We built POST /v1/usage-events with idempotency keys and per-tenant rate limiting keyed on the API key. We also added sequence-backed invoice numbering and stored API keys as SHA-256 hashes with a plaintext prefix for indexed lookup. Two of the original values have changed: the rate limit was 100 req/s and is now 300 req/s with a burst of 600; invoice numbers were INV-{tenantSlug}-{6-digit global seq} and are now {tenantPrefix}-{YYYY}-{5-digit seq}, using a per-tenant sequence that resets yearly.",
+    "haystackSessionIds": [
+      "S10",
+      "S24",
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F056",
+      "F057",
+      "F058",
+      "F061",
+      "F062",
+      "F063",
+      "F208",
+      "F148"
+    ]
+  },
+  {
+    "questionId": "Q071",
+    "questionType": "session-continuity",
+    "question": "In the fieldnote photo upload session, what was the timeout problem, how did we fix it, and what state was the Watermelon trial in at that point?",
+    "groundTruth": "On a throttled network, full-size PUTs to S3 ran past the request timeout ('Network request timed out'), and the failed photo wasn't retried. The fix was resumable retry logic tracked per photo in the uploads table, using attempt_count and status columns. The WatermelonDB trial from the 2026-03-19 session had not been touched and was still undecided at the end of the 2026-03-24 session.",
+    "haystackSessionIds": [
+      "S11"
+    ],
+    "evidenceFactIds": [
+      "F067",
+      "F068",
+      "F069"
+    ]
+  },
+  {
+    "questionId": "Q072",
+    "questionType": "session-continuity",
+    "question": "When we set up the shared lint config, fieldnote hit a snag. What was it, and is that workaround still in place?",
+    "groundTruth": "eslint-plugin-react-native had an unmet peer dependency on older ESLint and didn't support ESLint 9 flat config. We wrapped it in the FlatCompat shim from @eslint/eslintrc, in the fieldnote config only. That config was deleted in the 2026-05-06 session. fieldnote's biome.json now extends @ines-dev/biome-config.",
+    "haystackSessionIds": [
+      "S12",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F074",
+      "F075",
+      "F184"
+    ]
+  },
+  {
+    "questionId": "Q073",
+    "questionType": "session-continuity",
+    "question": "When we stopped partway through the Prisma-to-Drizzle port on March 30, what was still on Prisma and what was the next step?",
+    "groundTruth": "Customers, meters and usage were on Drizzle, while invoices and webhooks were still on Prisma. The agreed next step was to port the invoices module. This was done in the 2026-04-02 session, when invoices and webhooks were ported and Prisma was removed entirely.",
+    "haystackSessionIds": [
+      "S13",
+      "S15"
+    ],
+    "evidenceFactIds": [
+      "F081",
+      "F088"
+    ]
+  },
+  {
+    "questionId": "Q074",
+    "questionType": "session-continuity",
+    "question": "After the Expo Router and push notifications session for fieldnote, what loose end did we leave on the push side, and when did we tie it off?",
+    "groundTruth": "Pushes were sent fire-and-forget with expo-server-sdk-python, and receipts were never checked. This was fixed in the 2026-05-18 session. Ticket IDs are now stored in a push_tickets table, and an APScheduler job fetches receipts every 15 minutes.",
+    "haystackSessionIds": [
+      "S14",
+      "S34"
+    ],
+    "evidenceFactIds": [
+      "F085",
+      "F087",
+      "F214",
+      "F215"
+    ]
+  },
+  {
+    "questionId": "Q075",
+    "questionType": "session-continuity",
+    "question": "What state was ledgerline in after the April 2 session, and what did I change about how tests are written?",
+    "groundTruth": "ledgerline was fully on Drizzle with Prisma removed. PDF invoices were rendered on demand with Puppeteer and Handlebars, and PDF storage wasn't implemented yet. The new invoice tests were rewritten as flat Vitest test() calls named in given/when/then style, with no nested describe blocks.",
+    "haystackSessionIds": [
+      "S15"
+    ],
+    "evidenceFactIds": [
+      "F093",
+      "F089",
+      "F091"
+    ]
+  },
+  {
+    "questionId": "Q076",
+    "questionType": "session-continuity",
+    "question": "What did we get done for fieldnote on April 6 (2026-04-06), and which of those things have since changed?",
+    "groundTruth": "On April 6 we closed the WatermelonDB trial (its New Architecture support was too shaky on Expo SDK 54) and went back to expo-sqlite, this time with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations, with migrations run on launch. We switched the client from pnpm to npm because Metro couldn't resolve dependencies that pnpm hoisted outside the app's node_modules layout. We added background sync through expo-background-task at the 15-minute minimum interval, with pull-to-refresh kept as a manual fallback, and wired in Sentry crash reporting with @sentry/react-native. We also wrote the first flat given/when/then vitest test, for markDirty, and made four commits. Two of these have since changed: the client is back on pnpm 10 with node-linker=hoisted in .npmrc (2026-05-27), and background sync now runs every 30 minutes plus an immediate sync when the app returns to the foreground (2026-05-13). Drizzle with expo-sqlite and Sentry are unchanged.",
+    "haystackSessionIds": [
+      "S16",
+      "S32",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F094",
+      "F096",
+      "F097",
+      "F098",
+      "F099",
+      "F100",
+      "F246",
+      "F203"
+    ]
+  },
+  {
+    "questionId": "Q077",
+    "questionType": "session-continuity",
+    "question": "When we first turned on row-level security in ledgerline, why didn't it isolate tenants, and is RLS still what we use?",
+    "groundTruth": "The app connects as the table owner, and table owners bypass RLS. The fix was adding ALTER TABLE ... FORCE ROW LEVEL SECURITY. RLS is no longer used. In the 2026-05-11 session it was reverted after app.tenant_id leaked across requests on Neon's pooled connections. Tenant isolation is now application-level through a mandatory tenantScope() Drizzle helper.",
+    "haystackSessionIds": [
+      "S17",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F105",
+      "F106",
+      "F195",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q078",
+    "questionType": "session-continuity",
+    "question": "The April 9 fieldnote session on HLC conflict resolution ended mid-task. What was done, and what was next?",
+    "groundTruth": "The server-side field-level LWW merge with HLCs was done. Field changes carry an HLC timestamp and node ID in a field_versions table, and the higher HLC wins, with ties broken by node ID. The agreed next step was client-side HLC generation and merge, which was completed in the 2026-04-17 session.",
+    "haystackSessionIds": [
+      "S18",
+      "S21"
+    ],
+    "evidenceFactIds": [
+      "F109",
+      "F110",
+      "F113",
+      "F127"
+    ]
+  },
+  {
+    "questionId": "Q079",
+    "questionType": "session-continuity",
+    "question": "Where did we end up on webhook retries and rollups in the April 13 ledgerline session (2026-04-13)?",
+    "groundTruth": "As of the end of the 2026-04-13 session (April 13): outbound tenant webhooks changed from 5 attempts to 10 attempts with exponential backoff (30s base) capped at 6 hours, implemented as a custom backoff strategy in src/webhooks/backoff.ts. Invoice previews read from a new usage_rollups_hourly table (closed hours) plus raw events for the current open hour, cutting preview time from 1840 ms to 38 ms. The table is populated by an idempotent rollup-usage-hourly BullMQ repeatable job (cron '5 * * * *') using INSERT ... ON CONFLICT DO UPDATE, run per tenant with app.tenant_id set. Also in the 2026-04-13 session the commit convention changed to require a scope, e.g. feat(billing):. Left undone: backfill of existing history and an alert if the rollup job falls behind.",
+    "haystackSessionIds": [
+      "S19",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F114",
+      "F115",
+      "F116",
+      "F117",
+      "F118",
+      "F119",
+      "F147"
+    ]
+  },
+  {
+    "questionId": "Q080",
+    "questionType": "session-continuity",
+    "question": "After I switched container runtimes, ledgerline's integration tests broke. What was the fix again?",
+    "groundTruth": "After moving from Docker Desktop to OrbStack in the 2026-04-15 session, Testcontainers failed with 'Could not find a working container runtime strategy' because it looked for the Docker Desktop socket. The fix was setting DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock.",
+    "haystackSessionIds": [
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F122",
+      "F124",
+      "F125"
+    ]
+  },
+  {
+    "questionId": "Q081",
+    "questionType": "session-continuity",
+    "question": "In the April 17 fieldnote session, a clock-skew test failed. What was the bug, and how did we hand out builds that day?",
+    "groundTruth": "With the device clock 2 hours ahead, the test failed with 'expected counter 0, received 3' because the client HLC didn't reset its logical counter when physical time advanced. The fix resets the counter to 0 when the new wall time is greater than the stored one and increments it only when the wall times are equal. Builds went to two pilot inspectors via EAS internal distribution. Testers have since moved to TestFlight and Google Play internal testing.",
+    "haystackSessionIds": [
+      "S21",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F129",
+      "F130",
+      "F131",
+      "F132",
+      "F229"
+    ]
+  },
+  {
+    "questionId": "Q082",
+    "questionType": "session-continuity",
+    "question": "When we stopped the first pg-boss session for ledgerline, what was left on BullMQ and what did we agree to do next?",
+    "groundTruth": "The queue workers, including deliver-webhook with retryBackoff: true, were on pg-boss. The cron-style invoice finalization and rollup jobs were still on BullMQ, and the next step was to port them. That happened in the 2026-04-22 session, after which BullMQ and Upstash Redis were removed entirely.",
+    "haystackSessionIds": [
+      "S22",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F137",
+      "F138",
+      "F146"
+    ]
+  },
+  {
+    "questionId": "Q083",
+    "questionType": "session-continuity",
+    "question": "What did we get done on the fieldnote sync server on April 22?",
+    "groundTruth": "We moved from Poetry to uv and from Python 3.12 to 3.13, pinned in .mise.toml and installed with uv sync. We replaced black, flake8 and isort with ruff (ruff check and ruff format). We split sync into POST /v2/sync/push and GET /v2/sync/pull, keeping the legacy POST /sync for one release with a 'Deprecation: true' header. uv failed with 'Failed to build asyncpg' because there were no cp313 wheels, which we fixed by bumping asyncpg to 0.30.0.",
+    "haystackSessionIds": [
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F139",
+      "F140",
+      "F141",
+      "F142",
+      "F143",
+      "F144",
+      "F145"
+    ]
+  },
+  {
+    "questionId": "Q084",
+    "questionType": "session-continuity",
+    "question": "We had two sessions on April 22. What did the ledgerline one accomplish, and which of those billing decisions have since been reversed?",
+    "groundTruth": "In the 2026-04-22 session we finished pg-boss with invoice finalization and rollups as schedules, then removed BullMQ and Upstash Redis. Invoice numbers became {tenantPrefix}-{YYYY}-{5-digit seq} with a yearly-resetting per-tenant sequence. Default terms became Net 14, and daily mid-cycle proration was added. Two were reversed: terms are now a per-tenant payment_terms_days setting defaulting back to Net 30, and proration was dropped, with plan changes deferred to the next cycle via plan_change_schedule.",
+    "haystackSessionIds": [
+      "S24",
+      "S38",
+      "S40"
+    ],
+    "evidenceFactIds": [
+      "F146",
+      "F148",
+      "F149",
+      "F150",
+      "F152",
+      "F240",
+      "F242",
+      "F251"
+    ]
+  },
+  {
+    "questionId": "Q085",
+    "questionType": "session-continuity",
+    "question": "Last time we worked on moving fieldnote photos to R2, where did we leave off?",
+    "groundTruth": "the 2026-04-24 session ended with new uploads going to the R2 bucket fieldnote-photos while existing photos were still in S3. The agreed next step was a backfill/copy script, which was completed in the 2026-04-30 session.",
+    "haystackSessionIds": [
+      "S25",
+      "S27"
+    ],
+    "evidenceFactIds": [
+      "F153",
+      "F158",
+      "F166"
+    ]
+  },
+  {
+    "questionId": "Q086",
+    "questionType": "session-continuity",
+    "question": "When we moved ledgerline's PDFs to react-pdf, some customer names came out as empty boxes. What caused it and what did we do?",
+    "groundTruth": "The built-in Helvetica font has no glyphs for non-Latin scripts. We registered Noto Sans with Font.register and used it as the InvoiceDocument font.",
+    "haystackSessionIds": [
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F163",
+      "F164"
+    ]
+  },
+  {
+    "questionId": "Q087",
+    "questionType": "session-continuity",
+    "question": "What did we wrap up for fieldnote on April 30, and was there any gotcha after the SDK upgrade?",
+    "groundTruth": "The S3-to-R2 backfill finished. scripts/backfill_photos_to_r2.py is idempotent: it skips existing objects, verifies checksums and rewrites storage keys. The old S3 bucket got a 30-day Expiration lifecycle rule. The client moved to Expo SDK 55, and photos went to 1600px at quality 0.7, which is now back to 2048px at 0.75. The gotcha was that background sync stopped being scheduled until 'expo-background-task' was added to the plugins array in app.json and the dev client was rebuilt.",
+    "haystackSessionIds": [
+      "S27",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F166",
+      "F167",
+      "F168",
+      "F169",
+      "F170",
+      "F171",
+      "F172",
+      "F226"
+    ]
+  },
+  {
+    "questionId": "Q088",
+    "questionType": "session-continuity",
+    "question": "Where did we leave ledgerline at the end of the first Fly.io/Neon session, and what went wrong with the restore?",
+    "groundTruth": "Staging ran on Fly.io (fra, app and worker process groups) against Neon Postgres 17. The next step was the production DNS cutover and shutting down Render, which was done in the 2026-05-11 session. The restore failed with 'role \"render_user\" does not exist' and was fixed by rerunning pg_restore with --no-owner --no-acl.",
+    "haystackSessionIds": [
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F175",
+      "F177",
+      "F178",
+      "F179",
+      "F194"
+    ]
+  },
+  {
+    "questionId": "Q089",
+    "questionType": "session-continuity",
+    "question": "In the shared logging session, which fields did we standardize on, and what's the redaction list now?",
+    "groundTruth": "The fields are ts, level, msg, svc and trace_id, implemented as @ines-dev/log on pino 9 for ledgerline and as a structlog config for fieldnote. Redaction started with only authorization and cookie. It now also covers x-api-key, stripe-signature, X-Amz-Credential and X-Amz-Signature.",
+    "haystackSessionIds": [
+      "S29",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F180",
+      "F181",
+      "F182",
+      "F235"
+    ]
+  },
+  {
+    "questionId": "Q090",
+    "questionType": "session-continuity",
+    "question": "When we deployed the fieldnote sync server to Fly, the container crashed on startup. What was the error and the fix?",
+    "groundTruth": "It crashed with 'libpq.so.5: cannot open shared object file' because a psycopg dependency needed system libpq on the ghcr.io/astral-sh/uv-based image. The fix removed psycopg and went asyncpg-only, including Alembic's connection URL.",
+    "haystackSessionIds": [
+      "S30"
+    ],
+    "evidenceFactIds": [
+      "F191",
+      "F192"
+    ]
+  },
+  {
+    "questionId": "Q091",
+    "questionType": "preference",
+    "question": "What commit message convention should you follow when writing commits for me these days?",
+    "groundTruth": "Conventional Commits with a mandatory scope, for example feat(billing): or fix(webhooks):. The scope requirement was added in the 2026-04-13 session. The original rule of lowercase with no emojis was never withdrawn.",
+    "haystackSessionIds": [
+      "S01",
+      "S19"
+    ],
+    "evidenceFactIds": [
+      "F005",
+      "F118"
+    ]
+  },
+  {
+    "questionId": "Q092",
+    "questionType": "preference",
+    "question": "How do I want your answers laid out when you propose a code change?",
+    "groundTruth": "Show the code diff first, then at most 5 bullets of explanation. This replaced the earlier rule of concise bullet points without headers.",
+    "haystackSessionIds": [
+      "S01",
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F006",
+      "F136"
+    ]
+  },
+  {
+    "questionId": "Q093",
+    "questionType": "preference",
+    "question": "Before you write any code, how should you present the plan to me right now?",
+    "groundTruth": "As a numbered checklist. She switched back to this in the 2026-05-26 session after a period of using step | files | risk tables.",
+    "haystackSessionIds": [
+      "S03",
+      "S24",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F014",
+      "F151",
+      "F239"
+    ]
+  },
+  {
+    "questionId": "Q094",
+    "questionType": "preference",
+    "question": "For a while I had you format plans differently and then I dropped it. What was that format, and why did I abandon it?",
+    "groundTruth": "It was a short table with the columns step | files | risk. She abandoned it because tables render badly in her terminal, and went back to numbered checklists.",
+    "haystackSessionIds": [
+      "S24",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F151",
+      "F239"
+    ]
+  },
+  {
+    "questionId": "Q095",
+    "questionType": "preference",
+    "question": "How should Vitest tests be structured and named in my code?",
+    "groundTruth": "Use flat test() calls named in a given/when/then style, with no nested describe blocks. This replaced the earlier preference for nested describe/it blocks.",
+    "haystackSessionIds": [
+      "S02",
+      "S15"
+    ],
+    "evidenceFactIds": [
+      "F011",
+      "F091"
+    ]
+  },
+  {
+    "questionId": "Q096",
+    "questionType": "preference",
+    "question": "When declaring object shapes in TypeScript, which construct do I prefer?",
+    "groundTruth": "TypeScript 'type' aliases rather than 'interface' declarations, everywhere.",
+    "haystackSessionIds": [
+      "S06"
+    ],
+    "evidenceFactIds": [
+      "F035"
+    ]
+  },
+  {
+    "questionId": "Q097",
+    "questionType": "preference",
+    "question": "What's my rule on default vs named exports?",
+    "groundTruth": "Named exports only. No default exports.",
+    "haystackSessionIds": [
+      "S10"
+    ],
+    "evidenceFactIds": [
+      "F059"
+    ]
+  },
+  {
+    "questionId": "Q098",
+    "questionType": "preference",
+    "question": "If you generate a catch-all helpers file, what will I do with it? What happened the first time in fieldnote?",
+    "groundTruth": "She rejects files named utils.ts and wants them split by concern. In fieldnote, a generated src/utils.ts was split into date.ts and ids.ts. Ledgerline's lib/utils.ts was also split into separate files by concern.",
+    "haystackSessionIds": [
+      "S04",
+      "S10"
+    ],
+    "evidenceFactIds": [
+      "F024",
+      "F060"
+    ]
+  },
+  {
+    "questionId": "Q099",
+    "questionType": "preference",
+    "question": "If you give me editor-specific setup steps, which editor should they be for?",
+    "groundTruth": "Zed. She switched from VS Code to Zed in the 2026-04-15 session and asked that all editor-specific instructions target Zed.",
+    "haystackSessionIds": [
+      "S01",
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F001",
+      "F122",
+      "F123"
+    ]
+  },
+  {
+    "questionId": "Q100",
+    "questionType": "preference",
+    "question": "What local container runtime am I using now, and what do I need to set so ledgerline's Testcontainers tests can find it?",
+    "groundTruth": "OrbStack, which replaced Docker Desktop. Set DOCKER_HOST to OrbStack's socket: unix://$HOME/.orbstack/run/docker.sock. Without it, Testcontainers fails with 'Could not find a working container runtime strategy'.",
+    "haystackSessionIds": [
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F122",
+      "F124",
+      "F125"
+    ]
+  },
+  {
+    "questionId": "Q101",
+    "questionType": "preference",
+    "question": "Which tool do I use to manage Node and Python versions across my repos?",
+    "groundTruth": "mise, with a per-repo .mise.toml pinning each project's Node and Python versions. It replaced nvm and pyenv.",
+    "haystackSessionIds": [
+      "S01",
+      "S12"
+    ],
+    "evidenceFactIds": [
+      "F002",
+      "F073"
+    ]
+  },
+  {
+    "questionId": "Q102",
+    "questionType": "preference",
+    "question": "How did I set up pnpm on my MacBook, and which major version is it?",
+    "groundTruth": "pnpm 10, enabled globally through corepack rather than installed separately.",
+    "haystackSessionIds": [
+      "S01"
+    ],
+    "evidenceFactIds": [
+      "F004"
+    ]
+  },
+  {
+    "questionId": "Q103",
+    "questionType": "preference",
+    "question": "I had a slow zsh startup back on day one of the new MacBook. Did I ever fix it, and how?",
+    "groundTruth": "It was deferred in the 2026-03-02 session ('deal with it later') and finally fixed in the 2026-05-06 session by removing oh-my-zsh in favor of starship.",
+    "haystackSessionIds": [
+      "S01",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F007",
+      "F186"
+    ]
+  },
+  {
+    "questionId": "Q104",
+    "questionType": "preference",
+    "question": "Where do my Claude instruction files live now: one global file or something else?",
+    "groundTruth": "She split her global CLAUDE.md into separate per-repo CLAUDE.md files for ledgerline and fieldnote.",
+    "haystackSessionIds": [
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F126"
+    ]
+  },
+  {
+    "questionId": "Q105",
+    "questionType": "preference",
+    "question": "What linter/formatter setup do my JS/TS projects use now, and where does the shared config come from?",
+    "groundTruth": "Biome 2, which replaced ESLint 9 and Prettier 3. The shared config is the @ines-dev/biome-config package, which replaced the retired @ines-dev/eslint-config. Both ledgerline's and fieldnote's biome.json extend it, and fieldnote's FlatCompat ESLint shim was deleted.",
+    "haystackSessionIds": [
+      "S12",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F070",
+      "F183",
+      "F184"
+    ]
+  },
+  {
+    "questionId": "Q106",
+    "questionType": "preference",
+    "question": "Which commands should I run to lint and format the fieldnote sync server's Python code?",
+    "groundTruth": "ruff check for linting and ruff format for formatting. Ruff replaced black, flake8 and isort.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F027",
+      "F141"
+    ]
+  },
+  {
+    "questionId": "Q107",
+    "questionType": "preference",
+    "question": "How do I install dependencies for the fieldnote sync server, and where is its Python version pinned?",
+    "groundTruth": "With uv sync from uv.lock (uv replaced Poetry 2). The Python version is pinned with python = \"3.13\" in .mise.toml.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F026",
+      "F139",
+      "F140"
+    ]
+  },
+  {
+    "questionId": "Q108",
+    "questionType": "preference",
+    "question": "Where are my shared @ines-dev packages published, and how do the projects find them?",
+    "groundTruth": "They are published to GitHub Packages. Each project's .npmrc points the @ines-dev scope at npm.pkg.github.com.",
+    "haystackSessionIds": [
+      "S12"
+    ],
+    "evidenceFactIds": [
+      "F072"
+    ]
+  },
+  {
+    "questionId": "Q109",
+    "questionType": "preference",
+    "question": "Which version of my shared CI workflow should both repos reference, and what does it run on?",
+    "groundTruth": "ines-dev/ci-templates at tag v2, a reusable workflow_call workflow that runs lint, typecheck and tests on Node 24 with pnpm store caching. Both ledgerline and fieldnote now call v2, which replaced v1 on Node 22.",
+    "haystackSessionIds": [
+      "S20",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F120",
+      "F121",
+      "F199"
+    ]
+  },
+  {
+    "questionId": "Q110",
+    "questionType": "preference",
+    "question": "What fields are in the JSON log schema I standardized across both projects?",
+    "groundTruth": "ts, level, msg, svc and trace_id.",
+    "haystackSessionIds": [
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F180"
+    ]
+  },
+  {
+    "questionId": "Q111",
+    "questionType": "preference",
+    "question": "How is that shared log format implemented on the Node side versus the Python side?",
+    "groundTruth": "On Node (ledgerline) it is the @ines-dev/log package built on pino 9. On fieldnote's Python sync server it is a structlog processor config.",
+    "haystackSessionIds": [
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F181"
+    ]
+  },
+  {
+    "questionId": "Q112",
+    "questionType": "preference",
+    "question": "Which keys does my shared logger redact right now?",
+    "groundTruth": "authorization, cookie, x-api-key and stripe-signature, plus the presigned query params X-Amz-Credential and X-Amz-Signature. It originally redacted only authorization and cookie.",
+    "haystackSessionIds": [
+      "S29",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F182",
+      "F235"
+    ]
+  },
+  {
+    "questionId": "Q113",
+    "questionType": "preference",
+    "question": "After the R2 incident, what's my policy for R2 credentials across the two apps?",
+    "groundTruth": "No shared account-wide token. Each bucket has its own bucket-scoped R2 token, one for fieldnote-photos and one for ledgerline-invoices, with a 90-day rotation reminder. Each token is stored as R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY Fly secrets on its own Fly app.",
+    "haystackSessionIds": [
+      "S25",
+      "S26",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F155",
+      "F162",
+      "F234",
+      "F236"
+    ]
+  },
+  {
+    "questionId": "Q114",
+    "questionType": "preference",
+    "question": "Where do I keep incident postmortems in my repos, and what's the file for the R2 one?",
+    "groundTruth": "Under docs/incidents/ in both repos. The R2 one is docs/incidents/2026-05-23-r2-token-rotation.md.",
+    "haystackSessionIds": [
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F237"
+    ]
+  },
+  {
+    "questionId": "Q115",
+    "questionType": "preference",
+    "question": "In ledgerline, should domain functions return Result types or throw?",
+    "groundTruth": "Throw. ledgerline uses thrown typed error classes that evolve the original AppError hierarchy and are mapped to HTTP codes in the Fastify error handler. She abandoned neverthrow as too verbose at service boundaries, and it was removed with pnpm remove neverthrow.",
+    "haystackSessionIds": [
+      "S22",
+      "S35"
+    ],
+    "evidenceFactIds": [
+      "F135",
+      "F221",
+      "F222"
+    ]
+  },
+  {
+    "questionId": "Q116",
+    "questionType": "preference",
+    "question": "How should imports be written in ledgerline: tsconfig path aliases or something else?",
+    "groundTruth": "Use relative imports plus a single '#src/*' subpath import defined in package.json imports. tsconfig paths aliases were dropped because the tsx dev runner couldn't resolve them at runtime.",
+    "haystackSessionIds": [
+      "S02"
+    ],
+    "evidenceFactIds": [
+      "F012",
+      "F013"
+    ]
+  },
+  {
+    "questionId": "Q117",
+    "questionType": "preference",
+    "question": "Which package manager does the fieldnote client use right now, and is there any special config for it?",
+    "groundTruth": "pnpm 10, the third package manager after pnpm and then npm. .npmrc sets node-linker=hoisted so Metro can resolve dependencies. EAS Build detects pnpm from pnpm-lock.yaml, and package-lock.json was deleted.",
+    "haystackSessionIds": [
+      "S16",
+      "S27",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F097",
+      "F169",
+      "F246",
+      "F247",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q118",
+    "questionType": "preference",
+    "question": "When we designed fieldnote's very first conflict strategy, what was my stance on its downside?",
+    "groundTruth": "The strategy was record-level last-write-wins on the server receive timestamp. She acknowledged it would lose data but said that was fine for the prototype. It was later replaced by field-level HLC LWW, and now a manual merge for notes.",
+    "haystackSessionIds": [
+      "S07",
+      "S18",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F039",
+      "F042",
+      "F108",
+      "F201"
+    ]
+  },
+  {
+    "questionId": "Q119",
+    "questionType": "preference",
+    "question": "What compromise did I accept about how ledgerline's ingestion rate limit is enforced across machines?",
+    "groundTruth": "The limiter uses an in-memory store on each Fly machine, so the limit applies per instance rather than globally. She accepted this as fine for now. The limit is 300 req/s per tenant with a burst of 600, keyed on the API key.",
+    "haystackSessionIds": [
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F208",
+      "F209"
+    ]
+  },
+  {
+    "questionId": "Q120",
+    "questionType": "preference",
+    "question": "What's in the small shared design package I made for both apps?",
+    "groundTruth": "@ines-dev/tokens, which holds shared color and spacing design tokens.",
+    "haystackSessionIds": [
+      "S12"
+    ],
+    "evidenceFactIds": [
+      "F071"
+    ]
+  },
+  {
+    "questionId": "Q121",
+    "questionType": "error-solution",
+    "question": "Early on in ledgerline, the tsx dev runner couldn't resolve our aliased imports at runtime. What caused it and how did we fix it?",
+    "groundTruth": "The tsconfig `paths` aliases broke the tsx dev runner, which could not resolve the aliased imports at runtime. We dropped the tsconfig aliases. We now use relative imports plus a single '#src/*' subpath import defined in the `imports` field of package.json.",
+    "haystackSessionIds": [
+      "S02"
+    ],
+    "evidenceFactIds": [
+      "F012",
+      "F013"
+    ]
+  },
+  {
+    "questionId": "Q122",
+    "questionType": "error-solution",
+    "question": "When I set up Alembic for the fieldnote sync server, migrations kept erroring in env.py. What was wrong and what was the fix?",
+    "groundTruth": "The async engine was being called from Alembic's synchronous context code, and it failed twice. The fix was to open an async connection in env.py and call connection.run_sync(do_run_migrations).",
+    "haystackSessionIds": [
+      "S05"
+    ],
+    "evidenceFactIds": [
+      "F030",
+      "F031"
+    ]
+  },
+  {
+    "questionId": "Q123",
+    "questionType": "error-solution",
+    "question": "In ledgerline we had a test that pg-mem couldn't handle. What was the problem, and how did it end up resolved?",
+    "groundTruth": "pg-mem didn't support one Prisma-generated query, so that single test case was skipped and the rest of the suite ran on pg-mem. It was resolved in the 2026-03-30 session by moving the tests from pg-mem to Testcontainers with a real postgres:16 image via @testcontainers/postgresql. The previously skipped test then passed.",
+    "haystackSessionIds": [
+      "S06",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F036",
+      "F037",
+      "F079"
+    ]
+  },
+  {
+    "questionId": "Q124",
+    "questionType": "error-solution",
+    "question": "Our first Stripe webhook endpoint in ledgerline kept failing signature verification. Why, and what did we change?",
+    "groundTruth": "Fastify's JSON parser consumed and re-serialized the request body, so stripe.webhooks.constructEvent (using the stripe-signature header) no longer saw the original bytes. We fixed it by registering a content-type parser scoped only to the webhook route that keeps the body as a raw buffer.",
+    "haystackSessionIds": [
+      "S08"
+    ],
+    "evidenceFactIds": [
+      "F044",
+      "F048",
+      "F049"
+    ]
+  },
+  {
+    "questionId": "Q125",
+    "questionType": "error-solution",
+    "question": "The WatermelonDB JSI adapter build failed in the fieldnote Expo dev client. How did that saga end?",
+    "groundTruth": "The SQLiteAdapter was configured with jsi: true, and the JSI build failed in the Expo dev client, which left the trial unresolved. In the 2026-04-06 session we abandoned WatermelonDB because its New Architecture support was too shaky on Expo SDK 54. We went back to expo-sqlite, this time with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations. drizzle.config.ts uses dialect: 'sqlite' and driver: 'expo'.",
+    "haystackSessionIds": [
+      "S09",
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F053",
+      "F054",
+      "F094",
+      "F095"
+    ]
+  },
+  {
+    "questionId": "Q126",
+    "questionType": "error-solution",
+    "question": "On a throttled network, fieldnote photo uploads were failing with 'Network request timed out'. What was going on and how did we fix it?",
+    "groundTruth": "Each full-size PUT ran longer than the request timeout, and a failed photo was never retried, so it was lost. At the time the PUT went straight to the S3 bucket. We added resumable retry logic tracked per photo in the local uploads table, using an attempt_count column and a status column. A failed upload is now retried instead of lost. Uploads are capped at 3 concurrent.",
+    "haystackSessionIds": [
+      "S11"
+    ],
+    "evidenceFactIds": [
+      "F065",
+      "F067",
+      "F068"
+    ]
+  },
+  {
+    "questionId": "Q127",
+    "questionType": "error-solution",
+    "question": "Installing the shared lint config in fieldnote hit a peer-dependency conflict. What caused it, how did we work around it, and is that workaround still in place?",
+    "groundTruth": "eslint-plugin-react-native declares an unmet peer on older ESLint versions and doesn't support ESLint 9 flat config. We wrapped it in the FlatCompat shim from @eslint/eslintrc, used only in fieldnote's config. That workaround is gone now. In the 2026-05-06 session the FlatCompat ESLint config was deleted when we moved to Biome 2, and fieldnote's biome.json extends @ines-dev/biome-config.",
+    "haystackSessionIds": [
+      "S12",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F074",
+      "F075",
+      "F183",
+      "F184"
+    ]
+  },
+  {
+    "questionId": "Q128",
+    "questionType": "error-solution",
+    "question": "After moving fieldnote to Expo Router, the app got stuck redirecting on first launch. What caused the loop and how did we fix it?",
+    "groundTruth": "The root layout redirected unauthenticated users to the login route, but that login route sat inside the same guarded layout, so it kept redirecting. We moved the auth screens into an (auth) group with its own app/(auth)/_layout.tsx, outside the guarded routes.",
+    "haystackSessionIds": [
+      "S14"
+    ],
+    "evidenceFactIds": [
+      "F082",
+      "F083",
+      "F084"
+    ]
+  },
+  {
+    "questionId": "Q129",
+    "questionType": "error-solution",
+    "question": "Back in the 2026-04-06 session, Metro in the fieldnote client kept throwing 'Unable to resolve module'. What was the cause and what did we do at the time?",
+    "groundTruth": "Under pnpm, Metro couldn't resolve dependencies that pnpm placed outside the app's node_modules layout. At the time we fixed it by switching the fieldnote client's package manager from pnpm 10 to npm. Expo SDK 54 stayed as it was. This was later reverted in the 2026-05-27 session: the client is back on pnpm with node-linker=hoisted.",
+    "haystackSessionIds": [
+      "S16",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F096",
+      "F097",
+      "F246"
+    ]
+  },
+  {
+    "questionId": "Q130",
+    "questionType": "error-solution",
+    "question": "Now that fieldnote is on pnpm again, what keeps Metro from hitting module resolution errors, and how does EAS Build know to use pnpm?",
+    "groundTruth": "The fieldnote client sets node-linker=hoisted in .npmrc so Metro can resolve dependencies under pnpm 10. EAS Build detects pnpm from pnpm-lock.yaml, and package-lock.json was deleted. A final check confirmed that Metro bundling and expo-background-task sync work on both iOS and Android.",
+    "haystackSessionIds": [
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F246",
+      "F247",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q131",
+    "questionType": "error-solution",
+    "question": "Our first row-level security migration in ledgerline didn't actually isolate tenants. Why, what was the fix, and does that still apply today?",
+    "groundTruth": "The migration used ENABLE ROW LEVEL SECURITY, but the app connects as the table owner, and table owners bypass RLS policies. We fixed it by adding ALTER TABLE ... FORCE ROW LEVEL SECURITY. That no longer applies. In the 2026-05-11 session, RLS was disabled and its policies dropped after the Neon pooling leakage. Tenant isolation is now application-level via the mandatory tenantScope() Drizzle helper.",
+    "haystackSessionIds": [
+      "S17",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F105",
+      "F106",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q132",
+    "questionType": "error-solution",
+    "question": "ledgerline's Testcontainers tests started failing with 'Could not find a working container runtime strategy'. What caused that and what's the fix?",
+    "groundTruth": "This started after the switch from Docker Desktop to OrbStack. Testcontainers was looking for the Docker Desktop socket. The fix is to set DOCKER_HOST to OrbStack's socket: unix://$HOME/.orbstack/run/docker.sock.",
+    "haystackSessionIds": [
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F122",
+      "F124",
+      "F125"
+    ]
+  },
+  {
+    "questionId": "Q133",
+    "questionType": "error-solution",
+    "question": "A fieldnote clock-skew test failed with 'expected counter 0, received 3'. What was the bug and how did we fix the HLC?",
+    "groundTruth": "In the test the device clock was set 2 hours ahead. The client HLC didn't reset its logical counter when physical time advanced. We fixed it so the logical counter resets to 0 whenever the new wall-clock component is greater than the last stored one, and increments only when the wall times are equal.",
+    "haystackSessionIds": [
+      "S21"
+    ],
+    "evidenceFactIds": [
+      "F129",
+      "F130"
+    ]
+  },
+  {
+    "questionId": "Q134",
+    "questionType": "error-solution",
+    "question": "uv failed with 'Failed to build asyncpg' on the fieldnote sync server. What caused it and what did we bump?",
+    "groundTruth": "This happened after the upgrade to Python 3.13. The pinned asyncpg version shipped no cp313 wheels. We bumped asyncpg to 0.30.0, which publishes Python 3.13 wheels.",
+    "haystackSessionIds": [
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F139",
+      "F144",
+      "F145"
+    ]
+  },
+  {
+    "questionId": "Q135",
+    "questionType": "error-solution",
+    "question": "Some customer names showed up as empty boxes on ledgerline's react-pdf invoices. Why, and how did we fix it?",
+    "groundTruth": "The names were in non-Latin scripts, and react-pdf's built-in Helvetica font has no glyphs for those scripts. We registered Noto Sans with Font.register and use it as the invoice document font.",
+    "haystackSessionIds": [
+      "S26"
+    ],
+    "evidenceFactIds": [
+      "F163",
+      "F164"
+    ]
+  },
+  {
+    "questionId": "Q136",
+    "questionType": "error-solution",
+    "question": "After the Expo SDK 55 upgrade, fieldnote's background sync silently stopped being scheduled. What did we have to do?",
+    "groundTruth": "We added \"expo-background-task\" to the plugins array in app.json and rebuilt the dev client. After that, background sync was scheduled again.",
+    "haystackSessionIds": [
+      "S27"
+    ],
+    "evidenceFactIds": [
+      "F169",
+      "F170"
+    ]
+  },
+  {
+    "questionId": "Q137",
+    "questionType": "error-solution",
+    "question": "Restoring the ledgerline dump into Neon failed with 'role \"render_user\" does not exist'. What was the cause and how did we get the restore through?",
+    "groundTruth": "The pg_dump -Fc dump carried ownership and grants for the Render database role render_user, which doesn't exist on Neon. We reran pg_restore with --no-owner --no-acl, so all objects are owned by the Neon connecting role.",
+    "haystackSessionIds": [
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F175",
+      "F177",
+      "F178"
+    ]
+  },
+  {
+    "questionId": "Q138",
+    "questionType": "error-solution",
+    "question": "The fieldnote sync server container crashed at startup with 'libpq.so.5: cannot open shared object file'. What caused it and how did we fix it?",
+    "groundTruth": "The Dockerfile is built on uv's official image ghcr.io/astral-sh/uv, and a psycopg dependency needed the system libpq, which the image lacks. We removed psycopg and switched to asyncpg-only dependencies, including Alembic's connection URL, so the image needs no libpq.",
+    "haystackSessionIds": [
+      "S30"
+    ],
+    "evidenceFactIds": [
+      "F191",
+      "F192"
+    ]
+  },
+  {
+    "questionId": "Q139",
+    "questionType": "error-solution",
+    "question": "We saw intermittent cross-request tenant leakage in a ledgerline test after moving to Neon. What was behind it and what did we do?",
+    "groundTruth": "On Neon's pooled connections through the -pooler endpoint, the RLS session setting app.tenant_id leaked across requests. We added a migration that disables row-level security and drops the RLS policies. We also removed the SET LOCAL app.tenant_id transaction wrapper and reverted to application-level isolation through the mandatory tenantScope() Drizzle helper, which applies tenant_id conditions.",
+    "haystackSessionIds": [
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F195",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q140",
+    "questionType": "error-solution",
+    "question": "A fieldnote device came back online after a long time and deleted findings reappeared. What happened and what did we change?",
+    "groundTruth": "The device had been offline for 6 weeks, and the server had already purged the deletion tombstones after their 30-day retention, so the deleted findings were resurrected. We raised tombstone retention from 30 to 90 days.",
+    "haystackSessionIds": [
+      "S18",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F111",
+      "F204",
+      "F205"
+    ]
+  },
+  {
+    "questionId": "Q141",
+    "questionType": "error-solution",
+    "question": "During the ledgerline k6 load test, our biggest tenant kept getting '429 Too Many Requests'. Why, and what's the ingestion limit now?",
+    "groundTruth": "The tenant was hitting the per-tenant ingestion limit of 100 requests per second. We raised it to 300 requests per second with a burst of 600, still keyed on the API key. The test used loadtest/ingest.js against POST /v1/usage-events with a ramping-arrival-rate executor.",
+    "haystackSessionIds": [
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F207",
+      "F208",
+      "F210"
+    ]
+  },
+  {
+    "questionId": "Q142",
+    "questionType": "error-solution",
+    "question": "Is ledgerline's ingestion rate limit enforced globally across instances? I'm wondering if that's why limits look off.",
+    "groundTruth": "No. The rate limiter uses an in-memory store on each Fly machine, not Postgres, so the limit (300/s, burst 600) applies per instance. The developer accepted this as fine for now.",
+    "haystackSessionIds": [
+      "S33"
+    ],
+    "evidenceFactIds": [
+      "F208",
+      "F209",
+      "F212"
+    ]
+  },
+  {
+    "questionId": "Q143",
+    "questionType": "error-solution",
+    "question": "Some fieldnote inspectors stopped getting assignment push notifications. What was the root cause and how did we fix it?",
+    "groundTruth": "Their Expo push tokens were stale. The pushes were fire-and-forget, so the DeviceNotRegistered receipts were never surfaced. We now store each push ticket ID in a push_tickets table. An APScheduler interval job fetches Expo push receipts every 15 minutes. When a receipt returns DeviceNotRegistered, that token is automatically deleted from device_tokens.",
+    "haystackSessionIds": [
+      "S34"
+    ],
+    "evidenceFactIds": [
+      "F213",
+      "F214",
+      "F215",
+      "F216"
+    ]
+  },
+  {
+    "questionId": "Q144",
+    "questionType": "error-solution",
+    "question": "Where do I look to see recent push delivery failures on the fieldnote sync server?",
+    "groundTruth": "Use the admin endpoint GET /admin/push-failures, which lists recent push delivery failures.",
+    "haystackSessionIds": [
+      "S34"
+    ],
+    "evidenceFactIds": [
+      "F217"
+    ]
+  },
+  {
+    "questionId": "Q145",
+    "questionType": "error-solution",
+    "question": "What sensitive data showed up in fieldnote's logs that Saturday morning, and what did we change in response?",
+    "groundTruth": "The logs contained full presigned R2 URLs, including X-Amz-Credential and X-Amz-Signature. We rotated the shared account-wide R2 API token. The shared logger's redaction list grew from authorization and cookie to also cover x-api-key, stripe-signature, X-Amz-Credential and X-Amz-Signature. We then replaced the shared token with two bucket-scoped tokens and set a 90-day rotation reminder.",
+    "haystackSessionIds": [
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F232",
+      "F235",
+      "F234"
+    ]
+  },
+  {
+    "questionId": "Q146",
+    "questionType": "error-solution",
+    "question": "ledgerline's invoice finalization jobs failed overnight with 'InvalidAccessKeyId'. What caused that and how was it fixed?",
+    "groundTruth": "The shared account-wide R2 token had been rotated after the fieldnote log leak. ledgerline still used that old shared credential, so storing PDFs failed and pg-boss retries piled up. The fix replaced the shared token with two bucket-scoped R2 tokens, one for fieldnote-photos and one for ledgerline-invoices. Each is set as R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY Fly secrets on its own Fly app. the 2026-05-29 session confirmed that finalized PDFs land in ledgerline-invoices.",
+    "haystackSessionIds": [
+      "S26",
+      "S37",
+      "S40"
+    ],
+    "evidenceFactIds": [
+      "F162",
+      "F233",
+      "F234",
+      "F236",
+      "F254"
+    ]
+  },
+  {
+    "questionId": "Q147",
+    "questionType": "error-solution",
+    "question": "Where did we write up the R2 token rotation incident?",
+    "groundTruth": "A short postmortem was committed in both repos at docs/incidents/2026-05-23-r2-token-rotation.md.",
+    "haystackSessionIds": [
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F237"
+    ]
+  },
+  {
+    "questionId": "Q148",
+    "questionType": "error-solution",
+    "question": "After going back to pnpm, a fieldnote script failed with an ENOENT error. What was the message, and how did we fix it?",
+    "groundTruth": "The error was \"ENOENT: no such file or directory, open 'package-lock.json'\". The script still read the old npm lockfile, which had been deleted. We changed it to read pnpm-lock.yaml instead.",
+    "haystackSessionIds": [
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F247",
+      "F248",
+      "F249"
+    ]
+  },
+  {
+    "questionId": "Q149",
+    "questionType": "error-solution",
+    "question": "Long free-text notes in fieldnote kept getting clobbered by concurrent edits even with field-level LWW. How did we deal with that?",
+    "groundTruth": "Concurrent edits to notes now create a conflict record in a sync_conflicts table. An inspector resolves it in a manual merge UI that shows both versions side by side. A conflict is detected only when both the client and the server changed notes after the shared base_hlc. All other fields still use field-level HLC last-write-wins.",
+    "haystackSessionIds": [
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F201",
+      "F202"
+    ]
+  },
+  {
+    "questionId": "Q150",
+    "questionType": "error-solution",
+    "question": "Inspectors reported losing each other's edits in fieldnote. What was the original conflict strategy that caused it, and what's the current approach?",
+    "groundTruth": "The original strategy was record-level last-write-wins on the server receive timestamp. We replaced it with field-level LWW using hybrid logical clocks. Each field change carries an HLC timestamp and a node ID, recorded in field_versions. The higher HLC wins, and ties are broken by node ID. The client keeps its HLC in an hlc_state SQLite table. The notes field is the exception: concurrent edits there go to sync_conflicts for manual merge.",
+    "haystackSessionIds": [
+      "S07",
+      "S18",
+      "S21",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F039",
+      "F108",
+      "F109",
+      "F110",
+      "F127",
+      "F128",
+      "F201"
+    ]
+  },
+  {
+    "questionId": "Q151",
+    "questionType": "knowledge-update",
+    "question": "Which code editor and local container runtime am I using on my MacBook these days?",
+    "groundTruth": "Zed as the code editor and OrbStack as the container runtime. These replaced VS Code and Docker Desktop in the 2026-04-15 session.",
+    "haystackSessionIds": [
+      "S01",
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F001",
+      "F122"
+    ]
+  },
+  {
+    "questionId": "Q152",
+    "questionType": "knowledge-update",
+    "question": "What tool do I use to manage the Node and Python versions for my projects?",
+    "groundTruth": "mise, with a per-repo .mise.toml that pins Node and Python. It replaced nvm and pyenv.",
+    "haystackSessionIds": [
+      "S01",
+      "S12"
+    ],
+    "evidenceFactIds": [
+      "F002",
+      "F073"
+    ]
+  },
+  {
+    "questionId": "Q153",
+    "questionType": "knowledge-update",
+    "question": "What's my commit message convention?",
+    "groundTruth": "Conventional Commits must include a scope, e.g. feat(billing): or fix(webhooks):. The original rule was lowercase Conventional Commits with no scope and no emojis.",
+    "haystackSessionIds": [
+      "S01",
+      "S19"
+    ],
+    "evidenceFactIds": [
+      "F005",
+      "F118"
+    ]
+  },
+  {
+    "questionId": "Q154",
+    "questionType": "knowledge-update",
+    "question": "How do I want your answers formatted?",
+    "groundTruth": "Show the code diff first, followed by at most 5 bullets of explanation. This replaced the earlier request for concise bullet points without headers.",
+    "haystackSessionIds": [
+      "S01",
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F006",
+      "F136"
+    ]
+  },
+  {
+    "questionId": "Q155",
+    "questionType": "knowledge-update",
+    "question": "How should plans be presented to me before you start coding?",
+    "groundTruth": "As a numbered checklist. It started as a numbered checklist, briefly became a step | files | risk table, then went back to a checklist because tables render badly in the terminal.",
+    "haystackSessionIds": [
+      "S03",
+      "S24",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F014",
+      "F151",
+      "F239"
+    ]
+  },
+  {
+    "questionId": "Q156",
+    "questionType": "knowledge-update",
+    "question": "How should Vitest tests be structured in my code?",
+    "groundTruth": "Flat test() calls named in a given/when/then style, with no nested describe blocks. Nested describe/it blocks were the earlier preference.",
+    "haystackSessionIds": [
+      "S02",
+      "S15"
+    ],
+    "evidenceFactIds": [
+      "F011",
+      "F091"
+    ]
+  },
+  {
+    "questionId": "Q157",
+    "questionType": "knowledge-update",
+    "question": "Which Node.js version does ledgerline run on?",
+    "groundTruth": "Node.js 24 LTS, upgraded from 22.14 LTS in the 2026-05-11 session. It still uses TypeScript 5.7, Fastify 5.2, zod 3.24 and Drizzle ORM.",
+    "haystackSessionIds": [
+      "S02",
+      "S13",
+      "S15",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F008",
+      "F076",
+      "F088",
+      "F198"
+    ]
+  },
+  {
+    "questionId": "Q158",
+    "questionType": "knowledge-update",
+    "question": "Which ORM is ledgerline using?",
+    "groundTruth": "Drizzle ORM is the only ORM. Prisma 6.4 was the original ORM and was removed entirely after the migration finished in the 2026-04-02 session.",
+    "haystackSessionIds": [
+      "S02",
+      "S13",
+      "S15",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F008",
+      "F076",
+      "F088",
+      "F198"
+    ]
+  },
+  {
+    "questionId": "Q159",
+    "questionType": "knowledge-update",
+    "question": "Where is ledgerline hosted?",
+    "groundTruth": "On Fly.io in the fra region, with app and worker process groups. Production DNS was cut over in the 2026-05-11 session, and the Render web service, worker and database were deleted.",
+    "haystackSessionIds": [
+      "S02",
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F010",
+      "F173",
+      "F194"
+    ]
+  },
+  {
+    "questionId": "Q160",
+    "questionType": "knowledge-update",
+    "question": "What Postgres does ledgerline use in production?",
+    "groundTruth": "Neon Postgres 17 in eu-central-1. It was previously Render Postgres 16 in Frankfurt.",
+    "haystackSessionIds": [
+      "S02",
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F010",
+      "F173",
+      "F194",
+      "F175"
+    ]
+  },
+  {
+    "questionId": "Q161",
+    "questionType": "knowledge-update",
+    "question": "How does ledgerline enforce tenant isolation?",
+    "groundTruth": "Application-level scoping through a mandatory tenantScope() Drizzle helper that filters on tenant_id. The history: repository tenantId filters, then forced Postgres RLS, then a revert after RLS settings leaked across Neon pooled connections.",
+    "haystackSessionIds": [
+      "S03",
+      "S17",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F016",
+      "F101",
+      "F196"
+    ]
+  },
+  {
+    "questionId": "Q162",
+    "questionType": "knowledge-update",
+    "question": "Is ledgerline still setting app.tenant_id per request for its database policies?",
+    "groundTruth": "No. The SET LOCAL app.tenant_id transaction wrapper was removed, and a migration disabled RLS and dropped the policies. Tenant filtering is applied only by tenantScope() conditions.",
+    "haystackSessionIds": [
+      "S17",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F102",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q163",
+    "questionType": "knowledge-update",
+    "question": "How does ledgerline represent money amounts?",
+    "groundTruth": "As bigint minor units. Unit rates are stored as numeric(20,8) and handled with decimal.js. Integer cents in plain JS numbers was the earlier approach.",
+    "haystackSessionIds": [
+      "S03",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F017",
+      "F078"
+    ]
+  },
+  {
+    "questionId": "Q164",
+    "questionType": "knowledge-update",
+    "question": "What does ledgerline use for background jobs?",
+    "groundTruth": "pg-boss 10 on the existing Postgres database, with invoice finalization and rollups as pg-boss schedules. BullMQ 5 and Upstash Redis were removed entirely.",
+    "haystackSessionIds": [
+      "S03",
+      "S22",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F018",
+      "F133",
+      "F146"
+    ]
+  },
+  {
+    "questionId": "Q165",
+    "questionType": "knowledge-update",
+    "question": "How is ledgerline's hourly usage rollup job scheduled?",
+    "groundTruth": "As a pg-boss schedule named rollup-usage-hourly with the cron expression '0 * * * *'. It was previously a BullMQ repeatable job.",
+    "haystackSessionIds": [
+      "S19",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F115",
+      "F147"
+    ]
+  },
+  {
+    "questionId": "Q166",
+    "questionType": "knowledge-update",
+    "question": "What package manager does the fieldnote client use?",
+    "groundTruth": "pnpm 10 with node-linker=hoisted in .npmrc, and EAS installs with pnpm. The client went pnpm, then npm (because of Metro resolution issues), then back to pnpm.",
+    "haystackSessionIds": [
+      "S04",
+      "S16",
+      "S27",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F020",
+      "F097",
+      "F169",
+      "F245",
+      "F246",
+      "F247",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q167",
+    "questionType": "knowledge-update",
+    "question": "Which Expo SDK is fieldnote on?",
+    "groundTruth": "Expo SDK 55, upgraded from SDK 54 in the 2026-04-30 session.",
+    "haystackSessionIds": [
+      "S04",
+      "S16",
+      "S27",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F020",
+      "F097",
+      "F169",
+      "F245"
+    ]
+  },
+  {
+    "questionId": "Q168",
+    "questionType": "knowledge-update",
+    "question": "How does navigation currently work in the fieldnote app, and what did it replace?",
+    "groundTruth": "Navigation uses file-based routing with Expo Router 6 (SDK 54). Auth screens live in an (auth) group with its own layout, outside the guarded (app) group whose layout redirects to /login when there is no token. This replaced React Navigation 7 with a native stack, migrated in the 2026-03-31 session.",
+    "haystackSessionIds": [
+      "S04",
+      "S14"
+    ],
+    "evidenceFactIds": [
+      "F021",
+      "F082",
+      "F084"
+    ]
+  },
+  {
+    "questionId": "Q169",
+    "questionType": "knowledge-update",
+    "question": "What's fieldnote's on-device database layer?",
+    "groundTruth": "expo-sqlite with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations. The path was raw expo-sqlite with hand-written migrations, then a WatermelonDB trial, which was abandoned.",
+    "haystackSessionIds": [
+      "S04",
+      "S09",
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F023",
+      "F051",
+      "F094"
+    ]
+  },
+  {
+    "questionId": "Q170",
+    "questionType": "knowledge-update",
+    "question": "What Python version and dependency manager does the fieldnote sync server use?",
+    "groundTruth": "Python 3.13 with uv (uv sync from uv.lock). It was previously Python 3.12 with Poetry 2.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F026",
+      "F139",
+      "F140"
+    ]
+  },
+  {
+    "questionId": "Q171",
+    "questionType": "knowledge-update",
+    "question": "What do we lint and format fieldnote's Python server with?",
+    "groundTruth": "ruff, using ruff check and ruff format. It replaced black, flake8 and isort.",
+    "haystackSessionIds": [
+      "S05",
+      "S23"
+    ],
+    "evidenceFactIds": [
+      "F027",
+      "F141"
+    ]
+  },
+  {
+    "questionId": "Q172",
+    "questionType": "knowledge-update",
+    "question": "How are fieldnote access tokens signed, and how long do they last?",
+    "groundTruth": "RS256 with a 30-minute TTL, plus 30-day refresh tokens. The history: HS256 at 15 minutes, then HS256 at 60 minutes, then RS256 at 60 minutes, then 30 minutes.",
+    "haystackSessionIds": [
+      "S05",
+      "S18",
+      "S30",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F028",
+      "F112",
+      "F188",
+      "F227",
+      "F228"
+    ]
+  },
+  {
+    "questionId": "Q173",
+    "questionType": "knowledge-update",
+    "question": "Where is fieldnote's sync server deployed, and what database does it use?",
+    "groundTruth": "On the Fly.io app fieldnote-sync in the fra region, with Neon Postgres. It was previously on Railway with Railway Postgres.",
+    "haystackSessionIds": [
+      "S05",
+      "S30"
+    ],
+    "evidenceFactIds": [
+      "F029",
+      "F187"
+    ]
+  },
+  {
+    "questionId": "Q174",
+    "questionType": "knowledge-update",
+    "question": "What Stripe API version is ledgerline pinned to?",
+    "groundTruth": "2025-09-30.clover. It was previously 2025-03-31.basil.",
+    "haystackSessionIds": [
+      "S06",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F032",
+      "F200"
+    ]
+  },
+  {
+    "questionId": "Q175",
+    "questionType": "knowledge-update",
+    "question": "Which environment variable holds ledgerline's Stripe secret key?",
+    "groundTruth": "STRIPE_SECRET_KEY, set with fly secrets set. It was STRIPE_SECRET first, then STRIPE_API_KEY.",
+    "haystackSessionIds": [
+      "S06",
+      "S17",
+      "S28"
+    ],
+    "evidenceFactIds": [
+      "F033",
+      "F104",
+      "F176"
+    ]
+  },
+  {
+    "questionId": "Q176",
+    "questionType": "knowledge-update",
+    "question": "What database do ledgerline's tests run against?",
+    "groundTruth": "A real postgres:16 image through Testcontainers (@testcontainers/postgresql). It replaced pg-mem, which had one skipped test.",
+    "haystackSessionIds": [
+      "S06",
+      "S13"
+    ],
+    "evidenceFactIds": [
+      "F036",
+      "F079"
+    ]
+  },
+  {
+    "questionId": "Q177",
+    "questionType": "knowledge-update",
+    "question": "How does fieldnote resolve sync conflicts?",
+    "groundTruth": "Field-level last-write-wins with hybrid logical clocks for all fields except notes. Concurrent notes edits create a sync_conflicts record that the inspector resolves in a side-by-side manual merge UI. It started as record-level LWW on the server receive timestamp.",
+    "haystackSessionIds": [
+      "S07",
+      "S18",
+      "S21",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F039",
+      "F108",
+      "F127",
+      "F201",
+      "F202"
+    ]
+  },
+  {
+    "questionId": "Q178",
+    "questionType": "knowledge-update",
+    "question": "How often does fieldnote sync in the background?",
+    "groundTruth": "Every 30 minutes, plus an immediate sync when the app returns to the foreground through an AppState listener. Earlier it was 15 minutes, and before that manual pull-to-refresh only.",
+    "haystackSessionIds": [
+      "S07",
+      "S16",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F040",
+      "F098",
+      "F203"
+    ]
+  },
+  {
+    "questionId": "Q179",
+    "questionType": "knowledge-update",
+    "question": "How are fieldnote's inspection forms defined?",
+    "groundTruth": "As JSON Schema form templates, versioned on the server and cached on-device in form_templates. They were originally hard-coded TypeScript definitions.",
+    "haystackSessionIds": [
+      "S07",
+      "S25"
+    ],
+    "evidenceFactIds": [
+      "F041",
+      "F156",
+      "F157"
+    ]
+  },
+  {
+    "questionId": "Q180",
+    "questionType": "knowledge-update",
+    "question": "How does ledgerline deduplicate inbound Stripe webhook events?",
+    "groundTruth": "With a processed_stripe_events Postgres table that has a unique event_id, and rows are kept 30 days. It was previously a Redis set with a 24-hour TTL.",
+    "haystackSessionIds": [
+      "S08",
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F045",
+      "F134"
+    ]
+  },
+  {
+    "questionId": "Q181",
+    "questionType": "cross-session-synthesis",
+    "question": "List every environment variable or secret ledgerline depends on right now, including local-dev ones, and what each is for.",
+    "groundTruth": "STRIPE_SECRET_KEY: the Stripe secret key, set with fly secrets set. RESEND_API_KEY: the Resend email key, set with fly secrets set. R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY: ledgerline's own bucket-scoped R2 token for the ledgerline-invoices bucket, set as Fly secrets on its Fly app. Locally, DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock lets Testcontainers find OrbStack's Docker socket.",
+    "haystackSessionIds": [
+      "S20",
+      "S28",
+      "S35",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F176",
+      "F220",
+      "F234",
+      "F236",
+      "F125"
+    ]
+  },
+  {
+    "questionId": "Q182",
+    "questionType": "cross-session-synthesis",
+    "question": "How has fieldnote's auth token setup evolved since the sync server was first built, and what's the current signing, TTL and refresh arrangement?",
+    "groundTruth": "History: PyJWT HS256 tokens with a 15-minute TTL, then raised to 60 minutes for long offline stretches, then switched to RS256 with the 60-minute TTL kept. HS256 tokens were still accepted for 7 days during the switch. Current: RS256 access tokens with a 30-minute TTL. The private key is in the JWT_PRIVATE_KEY Fly secret, and tokens carry a kid that matches the JWKS entry at /.well-known/jwks.json. RS256 refresh tokens last 30 days and are used for silent refresh via POST /auth/refresh.",
+    "haystackSessionIds": [
+      "S05",
+      "S18",
+      "S30",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F028",
+      "F112",
+      "F188",
+      "F189",
+      "F190",
+      "F227",
+      "F228"
+    ]
+  },
+  {
+    "questionId": "Q183",
+    "questionType": "cross-session-synthesis",
+    "question": "Across both projects, what retention or expiry windows have we set on data, tokens and credentials, and what are the current values?",
+    "groundTruth": "- fieldnote tombstones are kept 90 days (raised from 30).\n- ledgerline's processed_stripe_events rows are kept 30 days.\n- The old fieldnote-photos S3 bucket has a 30-day lifecycle expiration.\n- fieldnote refresh tokens are valid 30 days and access tokens 30 minutes.\n- HS256 tokens were accepted for 7 days during the RS256 transition.\n- A 90-day rotation reminder is set for the bucket-scoped R2 tokens.",
+    "haystackSessionIds": [
+      "S18",
+      "S22",
+      "S27",
+      "S30",
+      "S32",
+      "S36",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F111",
+      "F205",
+      "F134",
+      "F168",
+      "F228",
+      "F227",
+      "F189",
+      "F234"
+    ]
+  },
+  {
+    "questionId": "Q184",
+    "questionType": "cross-session-synthesis",
+    "question": "What scheduled or recurring jobs run across ledgerline and fieldnote (server and client), and on what schedule?",
+    "groundTruth": "- ledgerline: rollup-usage-hourly is a pg-boss schedule with cron '0 * * * *'. Invoice finalization is also a pg-boss schedule.\n- fieldnote server: an APScheduler interval job fetches Expo push receipts every 15 minutes.\n- fieldnote client: background sync runs via expo-background-task every 30 minutes, plus an immediate sync whenever the app returns to the foreground through an AppState listener.",
+    "haystackSessionIds": [
+      "S24",
+      "S32",
+      "S34"
+    ],
+    "evidenceFactIds": [
+      "F146",
+      "F147",
+      "F215",
+      "F203"
+    ]
+  },
+  {
+    "questionId": "Q185",
+    "questionType": "cross-session-synthesis",
+    "question": "What all went wrong with fieldnote photos over the life of the project, and how was each issue addressed?",
+    "groundTruth": "1. On throttled networks, full-size PUTs to S3 hit 'Network request timed out' and were never retried. Fixed with per-photo resumable retries tracked in the uploads table (attempt_count, status).\n2. S3 egress costs led to moving uploads to R2, then backfilling the existing photos.\n3. Pilot users found uploads too slow on rural cellular, so compression dropped to 1600px at quality 0.7.\n4. 1600px photos were too blurry to read serial plates, so compression went back to 2048px at quality 0.75.\n5. Full presigned R2 URLs with X-Amz-Credential and X-Amz-Signature leaked into logs. The shared R2 token was rotated, the redaction list was extended, and bucket-scoped tokens replaced the shared one.",
+    "haystackSessionIds": [
+      "S11",
+      "S25",
+      "S27",
+      "S36",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F067",
+      "F068",
+      "F153",
+      "F166",
+      "F171",
+      "F226",
+      "F232",
+      "F234",
+      "F235"
+    ]
+  },
+  {
+    "questionId": "Q186",
+    "questionType": "cross-session-synthesis",
+    "question": "What photo resize/compression settings has fieldnote gone through, and which one is live now?",
+    "groundTruth": "1. 2048px long edge, JPEG quality 0.8 (expo-image-manipulator).\n2. 1600px at quality 0.7, because uploads were too slow on rural cellular.\n3. Now: 2048px long edge at JPEG quality 0.75, because 1600px was too blurry for serial plates.",
+    "haystackSessionIds": [
+      "S11",
+      "S27",
+      "S36"
+    ],
+    "evidenceFactIds": [
+      "F064",
+      "F171",
+      "F226"
+    ]
+  },
+  {
+    "questionId": "Q187",
+    "questionType": "cross-session-synthesis",
+    "question": "Walk me through every package manager change in the fieldnote client and where it stands today.",
+    "groundTruth": "1. Started on pnpm 10.\n2. Switched to npm because Metro hit 'Unable to resolve module' errors with pnpm's layout.\n3. Back on pnpm 10 now, with node-linker=hoisted in .npmrc. EAS Build installs with pnpm (detected from pnpm-lock.yaml), and package-lock.json was deleted.\n4. A script that still read package-lock.json was fixed to read pnpm-lock.yaml.\n5. Metro bundling and background sync were verified on iOS and Android.",
+    "haystackSessionIds": [
+      "S04",
+      "S16",
+      "S27",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F020",
+      "F096",
+      "F097",
+      "F169",
+      "F246",
+      "F247",
+      "F248",
+      "F249",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q188",
+    "questionType": "cross-session-synthesis",
+    "question": "How did fieldnote's conflict resolution strategy evolve, and exactly how are conflicts resolved today?",
+    "groundTruth": "History:\n1. Record-level LWW on the server receive timestamp, accepted as lossy for the prototype.\n2. Field-level LWW with hybrid logical clocks, on the server first (field_versions table).\n3. The client HLC implementation was added, stored in hlc_state.\n\nToday:\n- All fields except notes use field-level HLC LWW: the higher HLC wins, and ties are broken by node ID.\n- Concurrent notes edits, where both client and server changed notes after the shared base_hlc, create a sync_conflicts record. An inspector resolves it in a side-by-side manual merge UI.",
+    "haystackSessionIds": [
+      "S07",
+      "S18",
+      "S21",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F039",
+      "F042",
+      "F108",
+      "F109",
+      "F110",
+      "F127",
+      "F128",
+      "F201",
+      "F202"
+    ]
+  },
+  {
+    "questionId": "Q189",
+    "questionType": "cross-session-synthesis",
+    "question": "Recap the whole saga of tenant isolation in ledgerline: every approach we tried, what broke, and what we use now.",
+    "groundTruth": "1. Application-level tenantId filters on every repository method.\n2. Moved to Postgres RLS reading current_setting('app.tenant_id'), set via SET LOCAL in a per-request transaction. The first migration didn't isolate tenants because the app connects as table owner. Fixed with FORCE ROW LEVEL SECURITY.\n3. On Neon's -pooler connections, app.tenant_id leaked across requests.\n\nRLS was then disabled and its policies dropped, and the SET LOCAL wrapper was removed. Isolation is now application-level through a mandatory tenantScope() Drizzle helper that filters on tenant_id.",
+    "haystackSessionIds": [
+      "S03",
+      "S17",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F016",
+      "F101",
+      "F102",
+      "F105",
+      "F106",
+      "F195",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q190",
+    "questionType": "cross-session-synthesis",
+    "question": "What's the history of ledgerline's background job infrastructure, and what queues and schedules exist on it now?",
+    "groundTruth": "It started on BullMQ 5 with Upstash Redis. The workers were ported to pg-boss 10 on the existing Postgres first, then the cron-style jobs. BullMQ and Upstash Redis were removed entirely.\n\nCurrent pg-boss setup:\n- The deliver-webhook queue, with retryBackoff: true.\n- The rollup-usage-hourly schedule, cron '0 * * * *'.\n- An invoice finalization schedule.\n\nStripe webhook dedupe also moved off Redis to the processed_stripe_events table.",
+    "haystackSessionIds": [
+      "S03",
+      "S22",
+      "S24"
+    ],
+    "evidenceFactIds": [
+      "F018",
+      "F133",
+      "F137",
+      "F146",
+      "F147",
+      "F134"
+    ]
+  },
+  {
+    "questionId": "Q191",
+    "questionType": "cross-session-synthesis",
+    "question": "What are the current delivery settings for ledgerline's outbound tenant webhooks, and how did they get there?",
+    "groundTruth": "Events: invoice.finalized and usage.threshold. Originally a BullMQ job with 5 attempts and exponential backoff starting at 30s. After a tenant missed webhooks during their deploys, this changed to 10 attempts with exponential backoff capped at 6 hours. It now runs on the pg-boss queue deliver-webhook with retryBackoff: true.",
+    "haystackSessionIds": [
+      "S08",
+      "S19",
+      "S22"
+    ],
+    "evidenceFactIds": [
+      "F046",
+      "F117",
+      "F137"
+    ]
+  },
+  {
+    "questionId": "Q192",
+    "questionType": "cross-session-synthesis",
+    "question": "Summarize everything about ledgerline's Stripe integration as it stands today: API version, credentials, customer sync and webhook handling.",
+    "groundTruth": "- API version: pinned to 2025-09-30.clover (was 2025-03-31.basil).\n- Key: env var STRIPE_SECRET_KEY, set via fly secrets. It was earlier named STRIPE_SECRET, then STRIPE_API_KEY.\n- Customer sync: creating a customer mirrors it to a Stripe Customer and stores the Stripe ID on the row.\n- Webhooks: a raw-body endpoint verifies the stripe-signature header with stripe.webhooks.constructEvent, using a route-scoped content-type parser that keeps the body as a raw buffer.\n- Dedupe: events are deduplicated in processed_stripe_events (unique event_id, kept 30 days).",
+    "haystackSessionIds": [
+      "S06",
+      "S08",
+      "S17",
+      "S22",
+      "S28",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F200",
+      "F032",
+      "F176",
+      "F033",
+      "F104",
+      "F034",
+      "F044",
+      "F049",
+      "F134"
+    ]
+  },
+  {
+    "questionId": "Q193",
+    "questionType": "cross-session-synthesis",
+    "question": "For incoming webhooks in ledgerline, which signature headers do we verify for each provider, and are any of those headers redacted by the shared logger?",
+    "groundTruth": "Stripe webhooks are verified with the stripe-signature header via stripe.webhooks.constructEvent, using a raw buffer body. Resend webhooks are verified with the svix-id, svix-timestamp and svix-signature headers. Of these, only stripe-signature is on the shared logger's redaction list.",
+    "haystackSessionIds": [
+      "S08",
+      "S35",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F044",
+      "F049",
+      "F224",
+      "F235"
+    ]
+  },
+  {
+    "questionId": "Q194",
+    "questionType": "cross-session-synthesis",
+    "question": "Describe ledgerline's current invoice pipeline end to end: numbering, terms, PDF generation, storage and email delivery.",
+    "groundTruth": "- Numbering: {tenantPrefix}-{YYYY}-{5-digit seq} from a per-tenant sequence that resets yearly.\n- Terms: payment terms are per tenant (payment_terms_days, default Net 30).\n- PDF: rendered with @react-pdf/renderer 4 via an InvoiceDocument component and renderToBuffer, using Noto Sans.\n- Storage: finalized PDFs go to the R2 bucket ledgerline-invoices at tenants/{tenantId}/invoices/{number}.pdf.\n- Email: sent via Resend with React Email templates, with the PDF attached. Bounces mark email_undeliverable.",
+    "haystackSessionIds": [
+      "S24",
+      "S26",
+      "S35",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F148",
+      "F240",
+      "F159",
+      "F160",
+      "F164",
+      "F161",
+      "F219",
+      "F223"
+    ]
+  },
+  {
+    "questionId": "Q195",
+    "questionType": "cross-session-synthesis",
+    "question": "What changes have we made to ledgerline's invoice number format and default payment terms over time, and what are they now?",
+    "groundTruth": "- Invoice numbers: INV-{tenantSlug}-{6-digit global sequence} became {tenantPrefix}-{YYYY}-{5-digit seq}, with a per-tenant sequence that resets every year (after the accountant objected).\n- Payment terms: Net 30, then Net 14, now a per-tenant payment_terms_days setting with a default of Net 30. Tenants change it via PATCH /v1/tenant/settings.",
+    "haystackSessionIds": [
+      "S10",
+      "S15",
+      "S24",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F058",
+      "F148",
+      "F090",
+      "F149",
+      "F240",
+      "F241"
+    ]
+  },
+  {
+    "questionId": "Q196",
+    "questionType": "cross-session-synthesis",
+    "question": "What problems have we hit with ledgerline's invoice PDFs since we started generating them, and how were they resolved?",
+    "groundTruth": "1. Puppeteer's Chromium kept hitting memory limits. Rendering was rewritten with @react-pdf/renderer 4, and PDFs are now stored.\n2. Non-Latin customer names rendered as empty boxes because Helvetica lacks those glyphs. Fixed by registering Noto Sans with Font.register.\n3. After the shared R2 token was rotated, finalization jobs failed to store PDFs with 'InvalidAccessKeyId' and pg-boss retries piled up. Fixed with a bucket-scoped token for ledgerline-invoices, which was confirmed working in the 2026-05-29 session.",
+    "haystackSessionIds": [
+      "S15",
+      "S26",
+      "S37",
+      "S40"
+    ],
+    "evidenceFactIds": [
+      "F089",
+      "F159",
+      "F163",
+      "F164",
+      "F233",
+      "F234",
+      "F254"
+    ]
+  },
+  {
+    "questionId": "Q197",
+    "questionType": "cross-session-synthesis",
+    "question": "Where are ledgerline's and fieldnote's servers and databases hosted now, and where were they before?",
+    "groundTruth": "- ledgerline: on Fly.io in fra with app and worker process groups (fly.toml primary_region = \"fra\"). Its database is Neon Postgres 17 in eu-central-1. Previously it ran on Render (web, worker and Postgres 16, Frankfurt), all of which was deleted.\n- fieldnote: its sync server is the Fly.io app fieldnote-sync in fra with a Neon database. Previously it ran on Railway with Railway Postgres.",
+    "haystackSessionIds": [
+      "S02",
+      "S05",
+      "S28",
+      "S30",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F010",
+      "F194",
+      "F174",
+      "F175",
+      "F029",
+      "F187"
+    ]
+  },
+  {
+    "questionId": "Q198",
+    "questionType": "cross-session-synthesis",
+    "question": "What gotchas did we run into while moving both projects onto Fly.io and Neon, and how did we fix them?",
+    "groundTruth": "- The ledgerline pg_restore into Neon failed with 'role \"render_user\" does not exist'. Fixed by rerunning with --no-owner --no-acl.\n- fieldnote's uv-based Docker image crashed with 'libpq.so.5: cannot open shared object file' because of a psycopg dependency. Fixed by going asyncpg-only, including Alembic's URL.\n- ledgerline's RLS app.tenant_id setting leaked across requests on Neon's -pooler connections. Fixed by dropping RLS for the tenantScope() helper.",
+    "haystackSessionIds": [
+      "S28",
+      "S30",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F177",
+      "F178",
+      "F191",
+      "F192",
+      "F195",
+      "F196",
+      "F197"
+    ]
+  },
+  {
+    "questionId": "Q199",
+    "questionType": "cross-session-synthesis",
+    "question": "Which shared packages, tooling and CI pieces are common to both ledgerline and fieldnote today?",
+    "groundTruth": "- mise with a per-repo .mise.toml pinning Node/Python.\n- @ines-dev/biome-config (Biome 2), which replaced @ines-dev/eslint-config.\n- @ines-dev/tokens for color and spacing design tokens.\n- @ines-dev/log (pino 9) for Node, with a matching structlog config on the Python server.\n- These packages come from GitHub Packages, with the @ines-dev scope pointed at npm.pkg.github.com in .npmrc.\n- Both repos call the reusable ines-dev/ci-templates workflow at v2, which runs on Node 24 with pnpm store caching.",
+    "haystackSessionIds": [
+      "S12",
+      "S29",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F073",
+      "F183",
+      "F184",
+      "F071",
+      "F181",
+      "F072",
+      "F199"
+    ]
+  },
+  {
+    "questionId": "Q200",
+    "questionType": "cross-session-synthesis",
+    "question": "What linting and formatting tools has each part of the stack used over time, and what is current for the JS/TS repos and for fieldnote's Python server?",
+    "groundTruth": "- JS/TS: ESLint 9 flat config plus Prettier 3 via @ines-dev/eslint-config. fieldnote needed a FlatCompat shim for eslint-plugin-react-native's peer conflict. Both repos now use Biome 2, extending @ines-dev/biome-config, and the shim was deleted.\n- Python sync server: black, flake8 and isort were replaced by ruff (ruff check, ruff format).",
+    "haystackSessionIds": [
+      "S05",
+      "S12",
+      "S23",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F070",
+      "F074",
+      "F075",
+      "F183",
+      "F184",
+      "F027",
+      "F141"
+    ]
+  },
+  {
+    "questionId": "Q201",
+    "questionType": "cross-session-synthesis",
+    "question": "What measures do we have in place to protect credentials and secrets across the projects (storage, logging, and cloud tokens)?",
+    "groundTruth": "- ledgerline stores tenant API keys as SHA-256 hashes, with a plaintext prefix for indexed lookup.\n- The shared logger redacts authorization, cookie, x-api-key, stripe-signature, X-Amz-Credential and X-Amz-Signature. Initially it redacted only authorization and cookie.\n- Each project has its own bucket-scoped R2 token (fieldnote-photos, ledgerline-invoices) stored as R2_ACCESS_KEY_ID/R2_SECRET_ACCESS_KEY Fly secrets, with a 90-day rotation reminder.",
+    "haystackSessionIds": [
+      "S10",
+      "S29",
+      "S37"
+    ],
+    "evidenceFactIds": [
+      "F061",
+      "F062",
+      "F182",
+      "F235",
+      "F234",
+      "F236"
+    ]
+  },
+  {
+    "questionId": "Q202",
+    "questionType": "cross-session-synthesis",
+    "question": "Which ORM or local database layers have we used across both projects, and what is each project on now?",
+    "groundTruth": "- ledgerline: moved from Prisma 6.4 to Drizzle ORM, which is now the only ORM. It uses casing: 'snake_case' columns and window-function rating queries via the sql template tag.\n- fieldnote client: started on raw expo-sqlite with hand-written migrations, trialed WatermelonDB 0.28, and is now on expo-sqlite with Drizzle's expo driver and drizzle-kit migrations (dialect 'sqlite', driver 'expo').\n- fieldnote server: async SQLAlchemy 2.0 with asyncpg and Alembic.",
+    "haystackSessionIds": [
+      "S04",
+      "S09",
+      "S13",
+      "S15",
+      "S16",
+      "S23",
+      "S31"
+    ],
+    "evidenceFactIds": [
+      "F077",
+      "F080",
+      "F088",
+      "F198",
+      "F023",
+      "F051",
+      "F094",
+      "F095",
+      "F139"
+    ]
+  },
+  {
+    "questionId": "Q203",
+    "questionType": "cross-session-synthesis",
+    "question": "What happened with the WatermelonDB experiment in fieldnote from start to finish?",
+    "groundTruth": "1. Trialed WatermelonDB 0.28 to replace raw expo-sqlite because hand-written change tracking felt fragile. Inspections and findings were modeled in appSchema, and SQLiteAdapter used jsi: true.\n2. The JSI adapter build failed in the Expo dev client. The next step was to check New Architecture compatibility and port the photos table.\n3. It sat untouched through the photos work.\n4. It was abandoned because New Architecture support was too shaky on Expo SDK 54, and fieldnote reverted to expo-sqlite with Drizzle.",
+    "haystackSessionIds": [
+      "S09",
+      "S11",
+      "S16"
+    ],
+    "evidenceFactIds": [
+      "F051",
+      "F052",
+      "F053",
+      "F054",
+      "F055",
+      "F069",
+      "F094"
+    ]
+  },
+  {
+    "questionId": "Q204",
+    "questionType": "cross-session-synthesis",
+    "question": "How has ledgerline's test setup changed over time, including the test database and test style, and what problems came up?",
+    "groundTruth": "- Database: tests first ran on pg-mem, with one Prisma-generated query unsupported and skipped. They moved to Testcontainers with postgres:16 via @testcontainers/postgresql, which fixed the skipped test.\n- OrbStack: after switching to OrbStack, Testcontainers failed with 'Could not find a working container runtime strategy'. Fixed by setting DOCKER_HOST=unix://$HOME/.orbstack/run/docker.sock.\n- Style: tests changed from nested describe/it to flat test() calls named given/when/then.",
+    "haystackSessionIds": [
+      "S02",
+      "S06",
+      "S13",
+      "S15",
+      "S20"
+    ],
+    "evidenceFactIds": [
+      "F036",
+      "F079",
+      "F124",
+      "F125",
+      "F011",
+      "F091"
+    ]
+  },
+  {
+    "questionId": "Q205",
+    "questionType": "cross-session-synthesis",
+    "question": "Remind me of all my current code-style and commit conventions that you should follow in both repos.",
+    "groundTruth": "- TypeScript 'type' aliases instead of 'interface'.\n- Named exports only, no default exports.\n- No utils.ts files; split by concern (e.g. date.ts, ids.ts).\n- Flat Vitest test() calls named given/when/then, with no nested describe.\n- Conventional Commits with a scope, e.g. feat(billing): or fix(webhooks):.",
+    "haystackSessionIds": [
+      "S04",
+      "S06",
+      "S10",
+      "S15",
+      "S19"
+    ],
+    "evidenceFactIds": [
+      "F035",
+      "F059",
+      "F024",
+      "F060",
+      "F091",
+      "F118"
+    ]
+  },
+  {
+    "questionId": "Q206",
+    "questionType": "cross-session-synthesis",
+    "question": "How do I currently want you to format answers and plans, and which editor should editor-specific instructions target?",
+    "groundTruth": "- Answers: show the code diff first, followed by at most 5 bullets of explanation, with no headers (set in the 2026-04-20 session).\n- Plans: numbered checklists. The short step | files | risk table from the 2026-04-22 session was dropped in the 2026-05-26 session because it renders badly in the terminal (ghostty).\n- Editor-specific instructions should target Zed, not VS Code.",
+    "haystackSessionIds": [
+      "S03",
+      "S20",
+      "S22",
+      "S24",
+      "S38"
+    ],
+    "evidenceFactIds": [
+      "F136",
+      "F014",
+      "F151",
+      "F239",
+      "F123",
+      "F126"
+    ]
+  },
+  {
+    "questionId": "Q207",
+    "questionType": "cross-session-synthesis",
+    "question": "What does my current dev machine setup look like (editor, containers, runtime managers, package tooling, terminal, shell, lint/format), compared to the original setup from the first session?",
+    "groundTruth": "- Editor: Zed (was VS Code).\n- Containers: OrbStack (was Docker Desktop).\n- Runtime versions: mise with per-repo .mise.toml (was nvm + pyenv).\n- Package tooling: pnpm 10 enabled globally via corepack (unchanged); fieldnote's client uses npm per-repo, ledgerline uses pnpm.\n- Terminal: Ghostty (was iTerm2).\n- Shell: the slow zsh startup was fixed by replacing oh-my-zsh with starship (zsh remains the shell).\n- Lint/format: Biome 2 via @ines-dev/biome-config (replaced ESLint 9 + Prettier 3, which were added after the original setup).\n- Homebrew unchanged.",
+    "haystackSessionIds": [
+      "S01",
+      "S12",
+      "S20",
+      "S29"
+    ],
+    "evidenceFactIds": [
+      "F001",
+      "F122",
+      "F002",
+      "F073",
+      "F004",
+      "F007",
+      "F186"
+    ]
+  },
+  {
+    "questionId": "Q208",
+    "questionType": "cross-session-synthesis",
+    "question": "What visibility do we have into failures and problems in fieldnote today, across crash reporting, logging and push delivery?",
+    "groundTruth": "- Crash reports: Sentry via @sentry/react-native.\n- Logging: the sync server emits the shared JSON log schema (ts, level, msg, svc, trace_id) via a structlog processor config.\n- Push delivery: push ticket IDs are stored in push_tickets, and receipts are fetched every 15 minutes by APScheduler. GET /admin/push-failures lists recent delivery failures.",
+    "haystackSessionIds": [
+      "S16",
+      "S29",
+      "S34"
+    ],
+    "evidenceFactIds": [
+      "F099",
+      "F180",
+      "F181",
+      "F214",
+      "F215",
+      "F217"
+    ]
+  },
+  {
+    "questionId": "Q209",
+    "questionType": "cross-session-synthesis",
+    "question": "How has fieldnote's sync API changed since the first endpoint, and what is the status of the old one?",
+    "groundTruth": "Originally a single POST /sync accepted dirty records and returned changes since a client cursor. It was split into POST /v2/sync/push and GET /v2/sync/pull to carry HLC payloads. The legacy POST /sync is kept for one release and returns a 'Deprecation: true' header. Deletions sync as tombstones retained for 90 days.",
+    "haystackSessionIds": [
+      "S09",
+      "S23",
+      "S32"
+    ],
+    "evidenceFactIds": [
+      "F050",
+      "F142",
+      "F143",
+      "F205"
+    ]
+  },
+  {
+    "questionId": "Q210",
+    "questionType": "cross-session-synthesis",
+    "question": "Trace fieldnote's background sync from the very beginning: how it's triggered, how often, and what broke along the way.",
+    "groundTruth": "1. Manual pull-to-refresh only.\n2. expo-background-task at the 15-minute minimum interval.\n3. After the Expo SDK 55 upgrade, sync stopped being scheduled until \"expo-background-task\" was added to app.json plugins and the dev client was rebuilt.\n4. Moved to every 30 minutes plus an immediate sync on foreground via an AppState listener, to save battery.\n5. Verified still working on iOS and Android after the move back to pnpm with the hoisted linker.",
+    "haystackSessionIds": [
+      "S07",
+      "S16",
+      "S27",
+      "S32",
+      "S39"
+    ],
+    "evidenceFactIds": [
+      "F040",
+      "F098",
+      "F170",
+      "F203",
+      "F250"
+    ]
+  },
+  {
+    "questionId": "Q211",
+    "questionType": "abstention",
+    "question": "For ledgerline's usage ingestion, what topic and partition count did we settle on for the Redpanda cluster that buffers incoming events?",
+    "groundTruth": "This was never discussed. Ledgerline never used Redpanda or any event-streaming cluster. Usage events go straight into the POST /v1/usage-events API, which is rate-limited and uses idempotency keys. Background work runs on pg-boss on Postgres.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Redpanda"
+    ]
+  },
+  {
+    "questionId": "Q212",
+    "questionType": "abstention",
+    "question": "When we added the GraphQL layer to ledgerline with Mercurius, how did we handle tenant auth in the resolvers?",
+    "groundTruth": "This was never discussed. Ledgerline has no Mercurius or GraphQL layer. It exposes Fastify REST endpoints such as POST /v1/usage-events and PATCH /v1/tenant/settings.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Mercurius"
+    ]
+  },
+  {
+    "questionId": "Q213",
+    "questionType": "abstention",
+    "question": "What retry policy did we configure on the Temporal Cloud workflow that finalizes ledgerline invoices?",
+    "groundTruth": "This was never discussed. Ledgerline never used Temporal Cloud. Invoice finalization runs as a pg-boss schedule, and earlier it ran on BullMQ.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Temporal Cloud"
+    ]
+  },
+  {
+    "questionId": "Q214",
+    "questionType": "abstention",
+    "question": "Which Avalara tax codes did we map to ledgerline's price plans for sales tax calculation?",
+    "groundTruth": "This was never discussed. Ledgerline has no Avalara integration, and tax calculation was never covered in the sessions.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Avalara"
+    ]
+  },
+  {
+    "questionId": "Q215",
+    "questionType": "abstention",
+    "question": "Did we decide to enable Stripe Tax on ledgerline's synced customers, and in which jurisdictions?",
+    "groundTruth": "This was never discussed. The Stripe work covered customer sync, webhook ingestion and API version pinning. Stripe Tax was never mentioned.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Stripe Tax"
+    ]
+  },
+  {
+    "questionId": "Q216",
+    "questionType": "abstention",
+    "question": "How did we wire TigerBeetle into ledgerline as the double-entry ledger behind invoices?",
+    "groundTruth": "This was never discussed. Ledgerline never used TigerBeetle. Money is stored in Postgres as bigint minor units, with numeric(20,8) unit rates handled through decimal.js.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "TigerBeetle"
+    ]
+  },
+  {
+    "questionId": "Q217",
+    "questionType": "abstention",
+    "question": "Which Open Exchange Rates plan did we pick for ledgerline's multi-currency invoice conversion?",
+    "groundTruth": "This was never discussed. Ledgerline never covered FX conversion or Open Exchange Rates.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Open Exchange Rates"
+    ]
+  },
+  {
+    "questionId": "Q218",
+    "questionType": "abstention",
+    "question": "Before we moved ledgerline's invoice emails to Resend, why did we drop SparkPost?",
+    "groundTruth": "This was never discussed. Ledgerline never used SparkPost. Invoice emails went from Postmark to Resend.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "SparkPost"
+    ]
+  },
+  {
+    "questionId": "Q219",
+    "questionType": "abstention",
+    "question": "What Tinybird pipe did we build for ledgerline's usage analytics dashboards?",
+    "groundTruth": "This was never discussed. Ledgerline never used Tinybird. Usage aggregation is done by the usage_rollups_hourly Postgres table, which a pg-boss schedule populates.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Tinybird"
+    ]
+  },
+  {
+    "questionId": "Q220",
+    "questionType": "abstention",
+    "question": "Which Honeycomb dataset do ledgerline's traces go to, and how is trace_id propagated?",
+    "groundTruth": "This was never discussed. No Honeycomb integration was ever set up. The only related work was the shared JSON log schema with a trace_id field, implemented in @ines-dev/log on pino.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Honeycomb"
+    ]
+  },
+  {
+    "questionId": "Q221",
+    "questionType": "abstention",
+    "question": "When we load-tested fieldnote's sync server with Locust, how many simulated inspectors did it handle?",
+    "groundTruth": "This was never discussed. No Locust load tests were ever run. The only load testing was a k6 run against ledgerline's ingestion endpoint.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Locust"
+    ]
+  },
+  {
+    "questionId": "Q222",
+    "questionType": "abstention",
+    "question": "How did we get ledgerline's secrets from Doppler into the Fly.io deploys?",
+    "groundTruth": "This was never discussed. Doppler was never used. Ledgerline's secrets, such as STRIPE_SECRET_KEY and RESEND_API_KEY, are set directly with fly secrets set.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Doppler"
+    ]
+  },
+  {
+    "questionId": "Q223",
+    "questionType": "abstention",
+    "question": "Why did we decide against rewriting ledgerline's API on Elysia instead of Fastify?",
+    "groundTruth": "This was never discussed. Elysia never came up. Ledgerline has been on Fastify since it was scaffolded.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Elysia"
+    ]
+  },
+  {
+    "questionId": "Q224",
+    "questionType": "abstention",
+    "question": "What broke when we tried running ledgerline on Deno Deploy?",
+    "groundTruth": "This was never discussed. Ledgerline never ran on Deno Deploy. It was hosted on Render, then on Fly.io, and it runs on Node.js (now Node 24 LTS).",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Deno Deploy"
+    ]
+  },
+  {
+    "questionId": "Q225",
+    "questionType": "abstention",
+    "question": "During the ledgerline ORM migration, what made us rule out Objection.js?",
+    "groundTruth": "This was never discussed. Objection.js was never considered in the sessions. Ledgerline moved from Prisma to Drizzle because its rating queries needed window functions and raw SQL.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Objection.js"
+    ]
+  },
+  {
+    "questionId": "Q226",
+    "questionType": "abstention",
+    "question": "What pool size did we set on Supavisor in front of ledgerline's database?",
+    "groundTruth": "This was never discussed. Supavisor was never used. Ledgerline is on Neon Postgres 17, and the only pooling discussed was Neon's -pooler endpoint.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Supavisor"
+    ]
+  },
+  {
+    "questionId": "Q227",
+    "questionType": "abstention",
+    "question": "How did we set up Stripe Connect so ledgerline tenants can collect payouts to their own accounts?",
+    "groundTruth": "This was never discussed. Stripe Connect was never covered. Ledgerline syncs customers and ingests webhooks using a single Stripe secret key.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Stripe Connect"
+    ]
+  },
+  {
+    "questionId": "Q228",
+    "questionType": "abstention",
+    "question": "Which Hookdeck connection did we put in front of ledgerline's outbound tenant webhooks?",
+    "groundTruth": "This was never discussed. Hookdeck was never used. Outbound tenant webhooks are delivered by ledgerline's own pg-boss deliver-webhook queue, with 10 attempts and exponential backoff capped at 6 hours.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Hookdeck"
+    ]
+  },
+  {
+    "questionId": "Q229",
+    "questionType": "abstention",
+    "question": "How did we use Durable Objects to keep ledgerline's per-tenant rate limit consistent across regions?",
+    "groundTruth": "This was never discussed. Durable Objects were never used. The ingestion rate limiter uses an in-memory store on each Fly machine, so the limit applies per instance, which the developer accepted as fine for now.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Durable Objects"
+    ]
+  },
+  {
+    "questionId": "Q230",
+    "questionType": "abstention",
+    "question": "Where does the Pulumi stack for ledgerline's Fly.io and Neon infrastructure live?",
+    "groundTruth": "This was never discussed. Pulumi was never used. Ledgerline's infrastructure is configured through fly.toml (and previously render.yaml), and no infrastructure-as-code tool was set up.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Pulumi"
+    ]
+  },
+  {
+    "questionId": "Q231",
+    "questionType": "abstention",
+    "question": "What did the Snyk scan flag in ledgerline's dependencies after the Node 24 upgrade?",
+    "groundTruth": "This was never discussed. No Snyk scanning was ever set up or run.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Snyk"
+    ]
+  },
+  {
+    "questionId": "Q232",
+    "questionType": "abstention",
+    "question": "When Puppeteer ran out of memory, did we test Gotenberg as a PDF rendering sidecar for ledgerline?",
+    "groundTruth": "This was never discussed. Gotenberg never came up. Ledgerline replaced Puppeteer with @react-pdf/renderer 4.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Gotenberg"
+    ]
+  },
+  {
+    "questionId": "Q233",
+    "questionType": "abstention",
+    "question": "How did we compare ledgerline against Lago before deciding to build our own billing engine?",
+    "groundTruth": "This was never discussed. Lago was never mentioned in the sessions.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Lago"
+    ]
+  },
+  {
+    "questionId": "Q234",
+    "questionType": "abstention",
+    "question": "What sync gateway config did we use when we tried Couchbase Lite for fieldnote's offline storage?",
+    "groundTruth": "This was never discussed. Couchbase Lite was never tried. Fieldnote briefly trialed WatermelonDB and then settled on expo-sqlite with Drizzle ORM.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Couchbase Lite"
+    ]
+  },
+  {
+    "questionId": "Q235",
+    "questionType": "abstention",
+    "question": "Why did we drop RxDB from fieldnote's client?",
+    "groundTruth": "This was never discussed. RxDB was never used. The local database experiment that was dropped was WatermelonDB, because its New Architecture support was too shaky on Expo SDK 54.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "RxDB"
+    ]
+  },
+  {
+    "questionId": "Q236",
+    "questionType": "abstention",
+    "question": "For fieldnote's notes field, how did we wire the Loro CRDT document into the manual merge UI?",
+    "groundTruth": "This was never discussed. No Loro or other CRDT library was used. Concurrent notes edits create a sync_conflicts record that an inspector resolves in a side-by-side manual merge UI. Other fields use field-level HLC last-write-wins.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Loro"
+    ]
+  },
+  {
+    "questionId": "Q237",
+    "questionType": "abstention",
+    "question": "What OneSignal app ID does fieldnote use for assignment push notifications?",
+    "groundTruth": "This was never discussed. Fieldnote never used OneSignal. Assignment pushes go through Expo Push with expo-server-sdk-python.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "OneSignal"
+    ]
+  },
+  {
+    "questionId": "Q238",
+    "questionType": "abstention",
+    "question": "Did we keep Firebase Crashlytics alongside the crash reporter in fieldnote, or remove it?",
+    "groundTruth": "This was never discussed. Crashlytics was never used. Fieldnote's crash reporting is done with @sentry/react-native.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Crashlytics"
+    ]
+  },
+  {
+    "questionId": "Q239",
+    "questionType": "abstention",
+    "question": "Which MapLibre style did we use to show inspection sites on a map in fieldnote?",
+    "groundTruth": "This was never discussed. Fieldnote has no map feature, and MapLibre was never mentioned.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "MapLibre"
+    ]
+  },
+  {
+    "questionId": "Q240",
+    "questionType": "abstention",
+    "question": "How flaky were fieldnote's Detox end-to-end tests on the offline sync flow?",
+    "groundTruth": "This was never discussed. No Detox end-to-end tests were ever set up for fieldnote.",
+    "haystackSessionIds": [],
+    "evidenceFactIds": [],
+    "absentTerms": [
+      "Detox"
+    ]
+  }
+]

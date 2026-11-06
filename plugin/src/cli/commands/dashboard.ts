@@ -19,7 +19,8 @@ import { startDashboard } from "../../dashboard/server.js";
 
 export async function run(args: ParsedArgs): Promise<void> {
 	const port = getFlagInt(args, "port", 9120);
-	const noOpen = args.booleans["no-open"] ?? false;
+	// parseArgs turns "--no-open" into booleans.open = false
+	const noOpen = args.booleans["open"] === false;
 
 	// Initialize all data sources
 	fmt.blank();

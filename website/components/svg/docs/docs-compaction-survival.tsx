@@ -1,10 +1,10 @@
 /**
- * Animated diagram showing that the memory block in the system prompt survives when the conversation history is truncated during compaction.
+ * Animated diagram showing that the memory block survives compaction: codexfi re-injects it into the fresh context window.
  * @component
  */
 export function DocsCompactionSurvival() {
   return (
-    <svg viewBox="0 0 520 200" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing that the memory block in the system prompt survives when the conversation history is truncated during compaction.">
+    <svg viewBox="0 0 520 200" width="100%" className="mx-auto w-full max-w-3xl" role="img" aria-label="A diagram showing that the memory block survives compaction: codexfi re-injects it after the context window is summarized.">
       <title>Compaction Survival Diagram</title>
       <defs>
         <filter id="glow-cs">

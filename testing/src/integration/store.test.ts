@@ -7,15 +7,16 @@
  * getProfile().
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { tmpdir, homedir } from "node:os";
 import * as db from "../../../plugin/src/db.js";
 import * as vs from "../../../plugin/src/store/index.js";
-import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
+import { currentEmbedModelId } from "../../../plugin/src/embedder.js";
 import { searchByVector, list, deleteMemory, getProfile, listStructured, listByType } from "../../../plugin/src/store.js";
-import { deterministicVector } from "../helpers/mock-embedder.js";
+import { deterministicVector, MOCK_DIMS as EMBEDDING_DIMS } from "../helpers/mock-embedder.js";
 
 let tempDir: string;
 
@@ -31,10 +32,13 @@ beforeAll(async () => {
 		throw new Error(`Test isolation failure: tempDir ${tempDir} is inside real store ${realStoreDir}`);
 	}
 
-	// Seed test data — 5 memories for "test-project", 2 for "other-project"
+	// Seed test data — 5 memories for "test-project", 2 for "other-project".
+	// Rows are tagged with the current embedding model: searchByVector() only
+	// compares vectors produced by the same model.
 	const now = new Date().toISOString();
+	const embed_model = currentEmbedModelId();
 
-	db.store.add([
+	db.store.add(([
 		{
 			id: "mem-1",
 			memory: "Authentication uses JWT tokens stored in httpOnly cookies",
@@ -126,7 +130,7 @@ beforeAll(async () => {
 			superseded_by: "",
 			type: "architecture",
 		},
-	]);
+	] as vs.AddRecord[]).map((r) => ({ ...r, embed_model })));
 });
 
 afterAll(() => {

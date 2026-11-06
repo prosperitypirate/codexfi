@@ -1,3 +1,5 @@
+import type { LlmUsage } from "./llm/backend.js";
+
 // ── Shared types — compatible with MemoryBench's UnifiedSession/UnifiedQuestion format ──
 
 export interface UnifiedMessage {
@@ -137,6 +139,7 @@ export interface AnswerPhaseResult {
   answer: string;
   durationMs: number;
   searchResults: SearchResult[];
+  usage?: LlmUsage;
 }
 
 export interface BlockQualityPhaseResult {
@@ -186,7 +189,7 @@ export interface BenchmarkReport {
   answeringModel: string;
   timestamp: string;
   /** Pipeline mode: standard retrieval or block-quality (Tier 2) evaluation. */
-  mode: "retrieval" | "block-quality";
+  mode: "retrieval" | "block-quality" | "memory-bank";
   summary: {
     totalQuestions: number;
     correctCount: number;
@@ -213,7 +216,82 @@ export interface BenchmarkReport {
 
 // ── Checkpoint ──────────────────────────────────────────────────────────────────
 
-export type Phase = "ingest" | "search" | "block-assembly" | "answer" | "evaluate" | "report";
+export type Phase =
+  | "ingest" | "search" | "block-assembly" | "answer" | "evaluate" | "report"
+  // memory-bank mode
+  | "mb-build" | "mb-contexts" | "mb-answer" | "mb-evaluate";
+
+// ── Memory-bank mode ────────────────────────────────────────────────────────────
+
+export const MB_CONDITIONS = ["no-memory", "mb-only", "codexfi-only", "mb+codexfi", "full-context"] as const;
+export type MbCondition = typeof MB_CONDITIONS[number];
+
+export const MB_FILES = [
+  "projectbrief.md",
+  "productContext.md",
+  "systemPatterns.md",
+  "techContext.md",
+  "activeContext.md",
+  "progress.md",
+] as const;
+export type MbFile = typeof MB_FILES[number];
+export type MemoryBankFiles = Record<MbFile, string>;
+
+export interface MbBuildStep {
+  sessionId: string;
+  project: string;
+  /** Estimated tokens per file after this session's update (chars / 4). */
+  tokens: Record<MbFile, number>;
+  totalTokens: number;
+  durationMs: number;
+  usage?: LlmUsage;
+  /** True when the first update exceeded the hard cap and a condense pass ran. */
+  condensed?: boolean;
+  /** Set when the LLM output could not be parsed and the previous bank was kept. */
+  error?: string;
+}
+
+export interface MemoryBankState {
+  model: string;
+  /** Current bank per project. */
+  banks: Record<string, MemoryBankFiles>;
+  /** "<sessionId>::<project>" keys already applied (resume support). */
+  applied: string[];
+  /** Per-update size log, in application order. */
+  history: MbBuildStep[];
+}
+
+export interface MbContextEntry {
+  /** codexfi [MEMORY] block, memoryBankAware=false (codexfi-only condition). */
+  codexfi?: string;
+  /** codexfi [MEMORY] block, memoryBankAware=true (mb+codexfi condition). */
+  codexfiMbAware?: string;
+  durationMs: number;
+}
+
+export interface MbAnswer {
+  questionId: string;
+  condition: MbCondition;
+  answer: string;
+  durationMs: number;
+  contextChars: number;
+  usage?: LlmUsage;
+}
+
+export interface MbEvaluation {
+  questionId: string;
+  questionType: string;
+  condition: MbCondition;
+  question: string;
+  groundTruth: string;
+  hypothesis: string;
+  score: 0 | 1;
+  label: "correct" | "incorrect";
+  explanation: string;
+  contextChars: number;
+  answerDurationMs: number;
+  judgeDurationMs: number;
+}
 
 export interface Checkpoint {
   runId: string;
@@ -227,11 +305,29 @@ export interface Checkpoint {
   totalDurationMs?: number;
   completedPhases: Phase[];
   /** Pipeline mode — determines which phases run and how answers are generated. */
-  mode?: "retrieval" | "block-quality";
+  mode?: "retrieval" | "block-quality" | "memory-bank";
+  /** Dataset id (v1 = src/dataset/, v2 = src/dataset-v2/). Absent on old checkpoints = v1. */
+  dataset?: "v1" | "v2";
+  /** LLM backend used for answer/judge (BENCH_LLM_BACKEND). */
+  llmBackend?: string;
+  /** True when ingest was skipped and an existing runTag reused (--skip-ingest). */
+  skipIngest?: boolean;
   ingestResult?: IngestResult;
   searchResults?: SearchPhaseResult[];
   /** Assembled [MEMORY] blocks per question (block-quality mode only). */
   blockQualityResults?: BlockQualityPhaseResult[];
   answerResults?: AnswerPhaseResult[];
   evaluations?: EvaluationResult[];
+
+  // ── memory-bank mode ──
+  mbConditions?: MbCondition[];
+  memoryBank?: MemoryBankState;
+  /** Per-question codexfi blocks for the codexfi conditions. */
+  mbContexts?: Record<string, MbContextEntry>;
+  /** Note recorded when full-context was skipped (over BENCH_FULL_CONTEXT_MAX_CHARS). */
+  fullContextNote?: string;
+  /** condition → questionId → answer */
+  mbAnswers?: Partial<Record<MbCondition, Record<string, MbAnswer>>>;
+  /** condition → questionId → evaluation */
+  mbEvaluations?: Partial<Record<MbCondition, Record<string, MbEvaluation>>>;
 }

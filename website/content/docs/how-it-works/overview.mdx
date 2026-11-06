@@ -1,147 +1,118 @@
 ---
 title: Architecture Overview
-description: How codexfi captures, stores, and retrieves memories across coding sessions.
+description: How codexfi captures, stores, and retrieves memories across Claude Code sessions.
 ---
 
 # Architecture Overview
 
-codexfi is an [OpenCode](https://opencode.ai) plugin that runs entirely in-process. There are no servers to run, no Docker containers, no infrastructure to manage — just two API keys (Voyage AI for embedding, one LLM provider for extraction).
+codexfi is a [Claude Code](https://code.claude.com) plugin made of three plain pieces: **hooks** that inject memory and queue work, a **short-lived background worker** that does the slow part, and an **MCP server** that gives Claude explicit memory tools. There are no servers to run, no ports, no Docker, and no API keys — extraction runs through your own Claude Code login and embeddings run on your machine.
 
 ## System diagram
 
 <DocsSessionFlow />
 
-## Plugin hooks
+## Claude Code hooks
 
-codexfi registers five hooks with the OpenCode plugin system:
+| Claude Code event | What codexfi does | Typical time |
+|-------------------|-------------------|--------------|
+| `SessionStart` (startup / clear / compact) | Injects the structured `[MEMORY]` project picture; queues auto-init for a brand-new project | ~110 ms |
+| `SessionStart` (resume) | Nothing — earlier context is replayed from the transcript | — |
+| `UserPromptSubmit` | Embeds the prompt locally, searches project + user scope, injects memories not yet shown this session | ~250 ms |
+| `Stop` | Queues a turn job and starts the worker if none is running | ~90 ms |
+| `PreCompact`, `SessionEnd` | Queues a session-summary job | ~90 ms |
 
-| Hook | Purpose |
-|------|---------|
-| `experimental.chat.messages.transform` | Caches recent messages for extraction |
-| `experimental.chat.system.transform` | Injects the `[MEMORY]` block into every system prompt |
-| `chat.message` | Fetches memories on turn 1, semantic refresh on turn 2+ |
-| `tool.memory` | Registers the `memory` tool for explicit agent use |
-| `event` | Handles auto-save after assistant turns, compaction, session cleanup |
+Every hook fails silently — a codexfi problem never blocks your session. Hook traffic from subagents is ignored, so exploration noise never becomes memory.
 
 ## Data flow: retrieval
 
-### Turn 1 (session start)
+### Session start
 
-On the first user message, four parallel fetches populate the memory cache:
+On `startup`, `clear`, and after `compact`, codexfi lists the project's structured memories and your user preferences and injects them as the `[MEMORY]` block (Project Brief, Architecture, Tech Context, Product Context, Progress & Status, Active Context, Recent Sessions, User Preferences). The block is kept under Claude Code's 10,000-character limit for injected context by dropping whole trailing items — never cutting a fact in half.
 
-<DocsParallelFetch />
+If the project has a `memory-bank/`, the structured sections are skipped (the bank already carries them) and only session summaries newer than your last bank save are added. See [Memory Bank](/docs/guides/claude-code-setup#memory-bank).
 
-1. **Profile** — the user's cross-project preferences
-2. **User semantic search** — user-scoped memories matching the query
-3. **Project list** — all structured project memories (brief, architecture, tech context, etc.)
-4. **Project semantic search** — project-scoped memories semantically similar to the message
+If the project has no memories yet, an **auto-init** job is queued: the worker reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions such as `CLAUDE.md`, and more) plus the last 20 git commits, and seeds the first memories.
 
-If zero project memories exist and the directory has code, **auto-initialization** kicks in silently. codexfi reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions, and more) plus the recent 20 git commits, then extracts initial memories using the init extraction mode. Memories are re-fetched immediately so they are visible in the Turn 1 `[MEMORY]` block.
+### Every prompt
 
-If zero project memories exist and the directory is empty, a `[MEMORY - NEW PROJECT]` hint is injected into the system prompt to guide the agent.
+Each prompt is embedded on-device and searched against both the project and user scopes in parallel. Matches go into a **Relevant to Current Task** block — minus anything already injected in this session, since it is still in Claude's context. List-style prompts ("list all my preferences") additionally pull memories by type, so enumeration questions aren't limited to the top semantic hits.
 
-After the Turn 1 response is delivered, **background enrichment** fires as a separate pass. It generates a directory tree and extracts additional context from entry points and CI configs — enriching the memory store without delaying the first response.
-
-### Turn 2+ (semantic refresh)
-
-Each subsequent user message triggers a single semantic search (~300ms) that refreshes the "Relevant to Current Task" section. This means topic switches cause different memories to surface automatically.
-
-### Every LLM call (system.transform)
-
-The `[MEMORY]` block is rebuilt from the cache and injected into the system prompt. This happens on every LLM call, not just the first. The block contains structured sections (Project Brief, Architecture, Active Context, Recent Sessions, etc.) plus semantically matched memories. Because injection happens through the system prompt — not a tool call or conversation turn — it consumes no conversation context tokens.
+When you ask Claude to remember something, codexfi adds a short note pointing it at the `memory_add` tool.
 
 ## Data flow: storage
 
-### After every assistant turn
+### After every turn
 
-1. The last 8 messages are snapshotted
-2. The configured extraction LLM analyzes the conversation and returns a JSON array of typed facts
-3. Each fact is embedded into a 1024-dimension vector using `voyage-code-3`
-4. **Deduplication** — cosine similarity check against existing memories (threshold: 0.12 general, 0.25 structural types). Duplicates trigger an update instead of an insert.
-5. **Aging rules** — `progress` type: only the latest survives. `active-context` type: only the latest survives. `session-summary`: capped at 3; oldest condensed into `learned-pattern`.
-6. **Contradiction detection** — nearby memories are checked by the LLM for semantic contradictions. Stale memories are marked as superseded.
+1. The `Stop` hook queues a job and returns immediately.
+2. A single background worker (one per machine, guarded by a lock file) reads the transcript **from where it last stopped** — a byte cursor, so each turn is extracted exactly once. Long turns are split into windows on message boundaries instead of being truncated.
+3. Each window goes to the LLM — `claude -p --safe-mode` with Haiku by default — which returns a JSON array of typed facts.
+4. Each fact is embedded locally.
+5. **Deduplication** — a fact very close to an existing memory updates it in place instead of adding a copy.
+6. **Supersede** — nearby memories are checked by the LLM; stale ones are marked `superseded_by` the new fact.
+7. **Aging** — `progress` and `active-context` keep only the latest; `session-summary` keeps the newest 3 and condenses older ones into `learned-pattern`.
 
-A 15-second cooldown prevents duplicate processing from OpenCode's double-fire of the completion event.
+The worker exits when the queue is empty. codexfi's own `claude -p` calls run with `--safe-mode` (no plugins or hooks) and `CODEXFI_DISABLE=1`, so they can never trigger codexfi recursively.
 
 ### Session summaries
 
-Every N turns (default: 5), a `session-summary` memory is generated in addition to the per-turn facts. Session summaries capture the high-level arc of what was worked on.
-
-When the summary count exceeds 3, the oldest is condensed by the LLM into a compact `learned-pattern` memory, then deleted. This prevents unbounded growth while preserving distilled knowledge.
+`PreCompact` and `SessionEnd` queue a summary job: the worker first extracts any turns not yet processed, then writes a `session-summary` describing the arc of the session.
 
 ## Compaction survival
 
 <DocsCompactionSurvival />
 
-When OpenCode truncates the conversation history (compaction), the `[MEMORY]` block is **unaffected** because it lives in the system prompt, not message history.
+When Claude Code compacts a conversation:
 
-Additionally, codexfi:
+1. `PreCompact` queues a session summary, so nothing from the compacted turns is lost.
+2. `SessionStart` fires again with source `compact`, and codexfi re-injects the full `[MEMORY]` project picture into the fresh context window.
+3. The per-session "already shown" list is reset, so relevant memories can surface again on the next prompt.
 
-1. Intercepts the compaction event
-2. Injects current memories into the compaction context for richer summaries
-3. Sets a flag to trigger a full memory cache refresh on the next turn
+## Explicit tools (MCP)
 
-This means memory is never lost to compaction.
+The plugin ships a stdio MCP server with four tools — `memory_search`, `memory_add`, `memory_list`, and `memory_forget`. Claude uses them when it needs history that isn't already in context or when you ask it to remember something. See the [Memory Tools reference](/docs/api-reference/memory-tool-api).
 
 ## Technology stack
 
 | Component | Technology |
 |-----------|-----------|
-| Storage | SQLite with WAL mode — built in to the runtime (`bun:sqlite` on Bun, `node:sqlite` on Node), zero npm dependencies, multi-agent safe, ACID transactions |
-| Search | Exact nearest neighbor cosine similarity over Float32Array BLOBs |
-| Embeddings | [Voyage AI](https://www.voyageai.com/) `voyage-code-3` — 1024 dimensions |
-| Extraction | Multi-provider LLM (Anthropic/xAI/Google) with automatic fallback |
-| Runtime | [Bun](https://bun.sh/) (OpenCode CLI/TUI) · Node/Electron (OpenCode Desktop) — the plugin is runtime-adaptive |
+| Host integration | Claude Code plugin — hooks, MCP stdio server, skill |
+| Extraction LLM | Your Claude Code login via `claude -p --safe-mode` (Haiku by default); Anthropic API optional |
+| Embeddings | On-device ONNX via transformers.js — `jina-embeddings-v2-base-code`, 768 dimensions; local-only |
+| Storage | SQLite with WAL mode — built in to the runtime (`bun:sqlite` on Bun, `node:sqlite` on Node), no native npm dependencies |
+| Search | Exact nearest-neighbor cosine similarity over Float32Array BLOBs, blended with recency |
+| Runtime | Bun, or Node ≥ 22.5 — picked automatically by the launcher |
 | Validation | [Zod](https://zod.dev/) schemas for memory records |
 
 ### Why SQLite?
 
-codexfi originally used LanceDB for vector storage. LanceDB is excellent software, but its native NAPI bindings broke on OpenCode Desktop auto-updates — users got cryptic module loading errors with no workaround. We replaced it with SQLite, which ships **built in** to the JavaScript runtime (like `node:fs`) — zero npm packages, zero native binaries to rebuild per platform.
+SQLite ships **built in** to both Bun and Node — no native binaries to rebuild per platform, nothing to break on upgrades. The store loads `bun:sqlite` under Bun and `node:sqlite` under Node; both drivers share the same on-disk format, so the same `~/.codexfi` database works under either runtime.
 
-OpenCode runs the plugin under two runtimes: **Bun** for the CLI/TUI, and **Node** (an Electron `utilityProcess`) for the Desktop app. The store is therefore **runtime-adaptive** — it loads `bun:sqlite` under Bun and `node:sqlite` under Node. Both are built-in drivers that share the identical on-disk file format, so the same `~/.codexfi` database is read and written by either runtime with no migration. This keeps the "zero native dependencies" guarantee on every OpenCode surface.
-
-SQLite with WAL (Write-Ahead Logging) also solves multi-agent concurrency. Many developers run multiple OpenCode agents simultaneously. WAL mode allows 100+ concurrent readers without blocking, with writers safely queued via `busy_timeout`. This was validated with stress tests spawning 20+ real OS processes hitting the same database file — zero data loss, zero corruption.
-
-| | LanceDB | SQLite WAL | JSONL (interim) |
-|---|---|---|---|
-| Concurrent reads | Yes | 100+ readers, zero blocking | Stale data |
-| Concurrent writes | Untested with multi-process | Single writer, others queue safely | Data loss |
-| Native dependencies | NAPI binary (broke on updates) | None (built into Bun & Node) | None |
-| Storage size (3.5k records) | ~35MB | ~35MB | ~93MB |
-| Search at 50k records | ~2ms (indexed) | ~20ms (exact NN) | ~20ms (exact NN) |
-| Crash recovery | Lance format | Full ACID | Atomic rename only |
+WAL (Write-Ahead Logging) mode handles concurrency: several Claude Code sessions can read the store at once while the single background worker writes, with writers safely queued via `busy_timeout`. This is validated by stress tests that spawn 20 real OS processes against the same database file.
 
 ## File structure
 
 ```
-plugin/src/
-├── index.ts          — plugin hooks (system.transform, chat.message, tool.memory, event)
-├── config.ts         — centralized constants, pricing, thresholds
-├── types.ts          — Zod schemas for memory records
-├── prompts.ts        — all LLM prompt templates
-├── db.ts             — thin adapter (imports from store/)
-├── store.ts          — business logic: dedup, aging, contradiction, search with recency blending
-├── store/            — SQLite persistence layer
-│   ├── index.ts      — public API (add, search, scan, update, delete, init, reload)
-│   ├── sqlite.ts     — connection management, WAL config, pragmas
-│   ├── schema.ts     — CREATE TABLE, indexes
-│   ├── crud.ts       — add, update, deleteById, getById, scan, countRows
-│   ├── search.ts     — vector search with cosine scoring + filters
-│   ├── cosine.ts     — Float32Array cosine distance (pure math)
-│   └── types.ts      — MemoryRecord, SearchResult, FilterOptions
-├── extractor.ts      — multi-provider extraction with fallback and retry
-├── embedder.ts       — Voyage AI embedding via fetch
-├── retry.ts          — exponential backoff with jitter
-├── telemetry.ts      — cost tracking (CostLedger + ActivityLog)
-├── plugin-config.ts  — user config from ~/.codexfi/codexfi.jsonc
-└── services/
-    ├── auto-init-config.ts — init file list (28 files) and total char cap
-    ├── auto-save.ts  — background extraction after assistant turns
-    ├── compaction.ts — context window compaction handling
-    ├── context.ts    — [MEMORY] block formatting
-    ├── directory-tree.ts — project tree generator for background enrichment
-    ├── disabled-warning.ts — warning hint when plugin is misconfigured
-    ├── fresh-project-hint.ts — [MEMORY - NEW PROJECT] hint for empty directories
-    ├── privacy.ts    — <private> tag stripping
-    └── tags.ts       — project/user tag computation
+plugin/
+├── .claude-plugin/plugin.json   manifest (+ MCP server declaration)
+├── hooks/hooks.json             SessionStart · UserPromptSubmit · Stop · PreCompact · SessionEnd
+├── scripts/run.sh               runtime launcher (bun → node ≥ 22.5 → silent no-op)
+├── skills/memory-bank-sync/     "save bank" helper skill
+├── dist/codexfi.js              single-file bundle (CLI + hooks + worker + MCP)
+└── src/
+    ├── claude/       Claude Code integration
+    │   ├── hooks.ts        hook handlers (read hooks inject, write hooks enqueue)
+    │   ├── context.ts      SessionStart block + per-prompt block (Memory-Bank aware, per-session dedup)
+    │   ├── transcript.ts   incremental transcript reader (exactly-once byte cursor)
+    │   ├── worker.ts       detached single-instance job worker (extraction, summaries, auto-init)
+    │   ├── state.ts        sessions/, queue/, worker.lock, logs/ under ~/.codexfi
+    │   ├── mcp.ts          stdio MCP server: memory_search / memory_add / memory_list / memory_forget
+    │   └── runtime.ts      init, tags, disable switches, 10k-cap fitting
+    ├── llm.ts        Claude via `claude -p --safe-mode` (default) or Anthropic API
+    ├── embedder.ts   local, on-device ONNX embeddings only; model-specific thresholds
+    ├── extractor.ts  extraction / summary / contradiction / condensation prompts → JSON
+    ├── store.ts      ingest, addMemory, dedup, supersede, aging, search, re-embed migration
+    ├── store/        SQLite (bun:sqlite | node:sqlite) vector store, WAL, migrations
+    ├── services/     memory-bank detection, query intent, [MEMORY] formatter, privacy, tags
+    ├── cli/          `codexfi status | list | search | stats | export | forget | dashboard | install`
+    └── dashboard/    local web dashboard
 ```

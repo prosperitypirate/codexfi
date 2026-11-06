@@ -8,11 +8,11 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   metadataBase: new URL("https://codexfi.com"),
   title: {
-    default: "codexfi — Persistent memory for AI coding agents",
+    default: "codexfi — Persistent memory for Claude Code",
     template: "%s | codexfi",
   },
   description:
-    "Your AI remembers everything — architecture, decisions, patterns, progress — across every session, automatically.",
+    "Claude Code remembers everything — decisions, fixes, conventions, progress — across every session, automatically. No API keys.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

@@ -9,6 +9,7 @@
  *   - PRAGMA integrity_check passes
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -90,8 +91,8 @@ describe("concurrent mixed read/write", () => {
 
 		for (const { proc, role } of procs) {
 			const exitCode = await proc.exited;
-			const stdout = await new Response(proc.stdout).text();
-			const stderr = await new Response(proc.stderr).text();
+			const stdout = await new Response(proc.stdout as ReadableStream).text();
+			const stderr = await new Response(proc.stderr as ReadableStream).text();
 
 			if (exitCode !== 0) {
 				console.error(`${role} failed:`, stderr);

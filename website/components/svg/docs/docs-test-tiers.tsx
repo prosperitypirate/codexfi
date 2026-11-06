@@ -1,5 +1,5 @@
 /**
- * Three-panel diagram showing the Unit, Integration, and E2E test tier architecture.
+ * Three-panel diagram showing the Unit, Integration, and Stress test tier architecture.
  * @component
  */
 export function DocsTestTiers() {
@@ -9,7 +9,7 @@ export function DocsTestTiers() {
       width="100%"
       className="mx-auto w-full max-w-3xl"
       role="img"
-      aria-label="Three test tiers: Unit (fast, isolated), Integration, and E2E (slow, real)"
+      aria-label="Three test tiers: Unit (fast, isolated), Integration (real store), and Stress (concurrent processes)"
     >
       <title>Test Tiers Architecture</title>
       <defs>
@@ -88,24 +88,24 @@ export function DocsTestTiers() {
           <text x="80" y="58" fontSize="10" fill="#c084fc" textAnchor="middle">~30s</text>
           
           <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real store.db</text>
-          <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real embedder</text>
+          <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">offline · no API keys</text>
         </g>
 
         {/* Arrow 2 to 3 */}
         <line x1="356" y1="55" x2="374" y2="55" className="stroke-border arrow-draw-tt" strokeWidth="1.5" markerEnd="url(#arrowhead-tt)" style={{ animationDelay: '0.7s' }} />
 
-        {/* Panel 3: E2E — fade-in on outer g, glow on inner g to avoid animation conflict */}
+        {/* Panel 3: Stress — fade-in on outer g, glow on inner g to avoid animation conflict */}
         <g transform="translate(380, 0)" className="panel-tt panel-3">
           <g className="glow-pulse-tt">
             <rect x="0" y="0" width="160" height="110" rx="10" className="fill-card" stroke="#a855f7" strokeWidth="2" filter="url(#glow-tt)" />
-            <text x="80" y="28" fontSize="10" fontWeight="700" letterSpacing="1.5" fill="#a855f7" textAnchor="middle">E2E</text>
+            <text x="80" y="28" fontSize="10" fontWeight="700" letterSpacing="1.5" fill="#a855f7" textAnchor="middle">STRESS</text>
             
             <rect x="52" y="47" width="56" height="16" rx="8" fill="#a855f7" opacity="0.15" />
             <rect x="52" y="47" width="56" height="16" rx="8" stroke="#a855f7" strokeWidth="1" fill="none" opacity="0.5" />
-            <text x="80" y="58" fontSize="10" fill="#a855f7" textAnchor="middle">5–10 min</text>
+            <text x="80" y="58" fontSize="10" fill="#a855f7" textAnchor="middle">~1s</text>
             
-            <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">real opencode</text>
-            <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">13 scenarios</text>
+            <text x="80" y="76" fontSize="9" className="fill-muted-foreground" textAnchor="middle">20 OS processes</text>
+            <text x="80" y="90" fontSize="9" className="fill-muted-foreground" textAnchor="middle">one shared store.db</text>
           </g>
         </g>
 
@@ -113,7 +113,7 @@ export function DocsTestTiers() {
         <g>
           <line x1="0" y1="122" x2="560" y2="122" className="stroke-border" opacity="0.4" />
           <text x="80" y="136" fontSize="9" className="fill-muted-foreground" textAnchor="middle">fast · isolated</text>
-          <text x="480" y="136" fontSize="9" className="fill-muted-foreground" textAnchor="middle">slow · real</text>
+          <text x="480" y="136" fontSize="9" className="fill-muted-foreground" textAnchor="middle">concurrent · real</text>
         </g>
       </g>
     </svg>

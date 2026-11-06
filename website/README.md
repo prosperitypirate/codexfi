@@ -11,7 +11,7 @@
 
 -----
 
-The documentation and landing site for [codexfi](https://www.npmjs.com/package/codexfi) — the OpenCode memory plugin.
+The documentation and landing site for [codexfi](https://github.com/prosperitypirate/codexfi) — persistent memory for Claude Code.
 
 Live at **[codexfi.com](https://codexfi.com)**.
 
@@ -55,9 +55,9 @@ A clean build with zero warnings is required before merging any PR.
 
 ---
 
-## Developing with OpenCode
+## Developing with Claude Code
 
-This project is built and maintained using [OpenCode](https://opencode.ai) as the primary coding agent. If you're using OpenCode to work on the website, here's what the agent needs to know.
+This project is built and maintained using [Claude Code](https://code.claude.com) as the primary coding agent. If you're using an agent to work on the website, here's what it needs to know.
 
 ### Key rules for the agent
 
@@ -69,7 +69,7 @@ This project is built and maintained using [OpenCode](https://opencode.ai) as th
 
 ### Starting a session
 
-When opening OpenCode in this repo, give it this context up front:
+When opening a session in this repo, give the agent this context up front:
 
 ```
 We are working on the codexfi.com website (website/ directory).
@@ -81,12 +81,10 @@ Do not push to main — branch + PR only.
 
 ### Shell environment note
 
-OpenCode's bash tool runs in a **non-interactive shell** — it does not source `~/.zshrc` or `~/.zprofile`. This means `nvm` and any PATH additions from your shell profile are not available by default.
-
-To ensure the correct Node version and pnpm are available, run from `website/`:
+An agent's shell may not load `nvm` or the PATH additions from your shell profile. If `node` or `pnpm` resolve to the wrong version, run from `website/`:
 
 ```bash
-source ~/.nvm/nvm.sh && nvm use && pnpm dev
+source ~/.nvm/nvm.sh && nvm use && pnpm build
 ```
 
 ## Structure

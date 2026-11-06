@@ -1,12 +1,12 @@
 /**
- * Animated diagram showing the 7-step pipeline from message snapshot to extraction, embedding, and storage.
+ * Animated diagram showing the 7-step pipeline from transcript window to extraction, embedding, and storage.
  * @component
  */
 export function DocsExtractionPipeline() {
   const steps = [
-    { y: 40, n: 1, name: "Message Snapshot", sub: "last 8 messages", color: "#c084fc" },
-    { y: 96, n: 2, name: "LLM Extraction", sub: "returns JSON facts", color: "#a855f7" },
-    { y: 152, n: 3, name: "Embedding", sub: "voyage-code-3, 1024d", color: "#a855f7" },
+    { y: 40, n: 1, name: "Transcript Window", sub: "new turns only (byte cursor)", color: "#c084fc" },
+    { y: 96, n: 2, name: "LLM Extraction", sub: "claude -p (haiku) → JSON facts", color: "#a855f7" },
+    { y: 152, n: 3, name: "Embedding", sub: "on-device, jina-v2 768d", color: "#a855f7" },
     { y: 208, n: 4, name: "Deduplication", sub: "cosine similarity check", color: "#c084fc" },
     { y: 264, n: 5, name: "Storage", sub: "insert into store.db", color: "#a855f7" },
     { y: 320, n: 6, name: "Aging Rules", sub: "progress / summaries", color: "#c084fc" },

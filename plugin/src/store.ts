@@ -8,20 +8,15 @@ import { createHash, randomUUID } from "node:crypto";
 
 import {
 	CHUNK_TRUNCATION,
-	CONTRADICTION_CANDIDATE_DISTANCE,
 	CONTRADICTION_CANDIDATE_LIMIT,
-	DEDUP_DISTANCE,
-	ENUM_BASE_SCORE,
 	MAX_SESSION_SUMMARIES,
 	RECENCY_DECAY,
-	STRUCTURAL_CONTRADICTION_DISTANCE,
-	STRUCTURAL_DEDUP_DISTANCE,
 	STRUCTURAL_TYPES,
 	VERSIONING_SKIP_TYPES,
 	validateId,
 } from "./config.js";
 import { store } from "./db.js";
-import { embed } from "./embedder.js";
+import { activeThresholds, currentEmbedModelId, embed, embedBatch } from "./embedder.js";
 import { condenseToLearnedPattern, detectContradictions, extractMemories } from "./extractor.js";
 import { withRetry, DB_RETRY, DB_SEARCH_RETRY } from "./retry.js";
 import type { ExtractionMode, IngestResult, Message, SearchResult } from "./types.js";
@@ -65,13 +60,13 @@ function safeParseJson(raw: unknown, fallback: Record<string, unknown> = {}): Re
 async function findDuplicate(
 	userId: string,
 	vector: number[],
-	distanceThreshold: number = DEDUP_DISTANCE,
+	distanceThreshold: number = activeThresholds().dedupDistance,
 ): Promise<Record<string, unknown> | null> {
 	try {
 		if (store.countRows() === 0) return null;
 
 		const results = store.search(vector, {
-			filter: { user_id: userId, superseded_by: "" },
+			filter: { user_id: userId, superseded_by: "", embed_model: currentEmbedModelId() },
 			limit: 1,
 		});
 
@@ -97,14 +92,14 @@ async function findContradictionCandidates(
 	limit: number = CONTRADICTION_CANDIDATE_LIMIT,
 ): Promise<Array<Record<string, unknown>>> {
 	const maxDistance = STRUCTURAL_TYPES.has(memoryType)
-		? STRUCTURAL_CONTRADICTION_DISTANCE
-		: CONTRADICTION_CANDIDATE_DISTANCE;
+		? activeThresholds().structuralContradictionDistance
+		: activeThresholds().contradictionDistance;
 
 	try {
 		if (store.countRows() === 0) return [];
 
 		const results = store.search(vector, {
-			filter: { user_id: userId, superseded_by: "", excludeId: newId },
+			filter: { user_id: userId, superseded_by: "", excludeId: newId, embed_model: currentEmbedModelId() },
 			limit,
 		});
 
@@ -258,7 +253,6 @@ async function ageActiveContext(userId: string, newId: string): Promise<void> {
 	try {
 		const rows = await getMemoriesByType(userId, "active-context");
 		const toDelete = rows.filter(row => (row.id as string) !== newId);
-		console.log(`[codexfi:store] ageActiveContext | userId=${userId} | existing=${rows.length} | deleting=${toDelete.length} | newId=${newId}`);
 		for (const row of toDelete) {
 			store.deleteById(row.id as string);
 		}
@@ -297,6 +291,7 @@ async function ageSessionSummaries(userId: string): Promise<void> {
 						chunk: "",
 						superseded_by: "",
 						type: "learned-pattern",
+						embed_model: currentEmbedModelId(),
 					}]);
 					return Promise.resolve();
 				},
@@ -335,6 +330,34 @@ export async function ingest(
 	const now = new Date().toISOString();
 
 	for (const fact of facts) {
+		results.push(await storeFact(fact, safeUserId, baseMetadata, now));
+	}
+
+	return results;
+}
+
+/**
+ * Store one already-formed memory (no extraction LLM call) with the same dedup,
+ * aging and contradiction handling as ingest(). Used by the memory_add tool,
+ * where the agent has already written the fact it wants kept.
+ */
+export async function addMemory(
+	text: string,
+	userId: string,
+	options: { type?: string; metadata?: Record<string, unknown> } = {},
+): Promise<IngestResult> {
+	const safeUserId = validateId(userId, "user_id");
+	const fact = { memory: text.trim(), type: options.type || "learned-pattern", chunk: "" };
+	return storeFact(fact, safeUserId, options.metadata ?? {}, new Date().toISOString());
+}
+
+async function storeFact(
+	fact: { memory: string; type?: string; chunk?: string },
+	safeUserId: string,
+	baseMetadata: Record<string, unknown>,
+	now: string,
+): Promise<IngestResult> {
+	{
 		const factText = fact.memory;
 		const factType = fact.type || (baseMetadata.type as string) || "";
 		const factChunk = (fact.chunk || "").slice(0, CHUNK_TRUNCATION);
@@ -344,7 +367,7 @@ export async function ingest(
 		const factHash = createHash("md5").update(factText).digest("hex");
 		const vector = await embed(factText, "document");
 
-		const threshold = STRUCTURAL_TYPES.has(factType) ? STRUCTURAL_DEDUP_DISTANCE : DEDUP_DISTANCE;
+		const threshold = STRUCTURAL_TYPES.has(factType) ? activeThresholds().structuralDedupDistance : activeThresholds().dedupDistance;
 		const dup = await findDuplicate(safeUserId, vector, threshold);
 
 		if (dup) {
@@ -358,55 +381,51 @@ export async function ingest(
 						metadata_json: metadataStr,
 						chunk: factChunk,
 						// Keep the raw `type` column in sync with metadata_json.type on
-						// every refresh, not just at initial insert (was previously only
-						// set in the `store.add()` branch below). See issue #201.
+						// every refresh, not just at initial insert. See issue #201.
 						type: factType,
+						vector,
+						embed_model: currentEmbedModelId(),
 					});
 					return Promise.resolve();
 				},
 				"store update (dedup)",
 				DB_RETRY,
 			);
-			results.push({ id: dup.id as string, memory: factText, type: factType, event: "UPDATE" });
-		} else {
-			// New insert — full pipeline: add, aging, contradiction detection
-			const memId = randomUUID();
-			await withRetry(
-				() => {
-					store.add([{
-						id: memId,
-						memory: factText,
-						user_id: safeUserId,
-						vector,
-						metadata_json: metadataStr,
-						created_at: now,
-						updated_at: now,
-						hash: factHash,
-						chunk: factChunk,
-						superseded_by: "",
-						type: factType,
-					}]);
-					return Promise.resolve();
-				},
-				"store write (new memory)",
-				DB_RETRY,
-			);
-			results.push({ id: memId, memory: factText, type: factType, event: "ADD" });
-
-			if (factType) {
-				await applyAgingRules(safeUserId, factType, memId);
-			}
-
-			if (factType === "active-context") {
-				console.log(`[codexfi:store] active-context stored | id=${memId} | preview="${factText.slice(0, 120).replace(/\n/g, " ")}"`);
-			}
-
-			// Contradiction detection — mark stale memories as superseded
-			await checkAndSupersede(safeUserId, factText, vector, memId, factType);
+			return { id: dup.id as string, memory: factText, type: factType, event: "UPDATE" };
 		}
-	}
 
-	return results;
+		// New insert — full pipeline: add, aging, contradiction detection
+		const memId = randomUUID();
+		await withRetry(
+			() => {
+				store.add([{
+					id: memId,
+					memory: factText,
+					user_id: safeUserId,
+					vector,
+					metadata_json: metadataStr,
+					created_at: now,
+					updated_at: now,
+					hash: factHash,
+					chunk: factChunk,
+					superseded_by: "",
+					type: factType,
+					embed_model: currentEmbedModelId(),
+				}]);
+				return Promise.resolve();
+			},
+			"store write (new memory)",
+			DB_RETRY,
+		);
+
+		if (factType) {
+			await applyAgingRules(safeUserId, factType, memId);
+		}
+
+		// Contradiction detection — mark stale memories as superseded
+		await checkAndSupersede(safeUserId, factText, vector, memId, factType);
+		return { id: memId, memory: factText, type: factType, event: "ADD" };
+	}
 }
 
 // ── Public API: search ──────────────────────────────────────────────────────────
@@ -448,7 +467,7 @@ export async function searchByVector(
 	const rows = await withRetry(
 		() => Promise.resolve(
 			store.search(queryVector, {
-				filter: { user_id: safeUserId, superseded_by: "" },
+				filter: { user_id: safeUserId, superseded_by: "", embed_model: currentEmbedModelId() },
 				limit,
 			})
 		),
@@ -523,7 +542,7 @@ export async function searchByVector(
 				id: tr.id as string,
 				memory: tr.memory as string,
 				chunk: (tr.chunk as string) || "",
-				score: ENUM_BASE_SCORE,
+				score: activeThresholds().enumBase,
 				metadata: meta,
 				created_at: (tr.created_at as string) || null,
 				date: d ? d.toISOString().slice(0, 10) : null,
@@ -685,6 +704,37 @@ export async function getProfile(
 		metadata: r.metadata,
 		created_at: r.created_at,
 	}));
+}
+
+// ── Public API: embedding-model migration ───────────────────────────────────────
+
+/** Number of rows whose vector came from a different embedding model than the current one. */
+export function countStaleEmbeddings(): number {
+	if (store.countRows() === 0) return 0;
+	return store.staleEmbeddingRows(currentEmbedModelId(), 1_000_000).length;
+}
+
+/**
+ * Re-embed up to `max` rows whose vectors came from another model (e.g.
+ * pre-1.0 rows tagged LEGACY_EMBED_MODEL) with the current embedder, `batchSize` at a time.
+ * Returns how many rows were migrated. Safe to interrupt and resume.
+ */
+export async function reembedStale(max = 500, batchSize = 32): Promise<number> {
+	if (store.countRows() === 0) return 0;
+	const current = currentEmbedModelId();
+	const stale = store.staleEmbeddingRows(current, max);
+	let done = 0;
+	for (let i = 0; i < stale.length; i += batchSize) {
+		const batch = stale.slice(i, i + batchSize);
+		const vectors = await embedBatch(batch.map((r) => r.memory), "document");
+		for (let j = 0; j < batch.length; j++) {
+			const vector = vectors[j];
+			if (!vector) continue;
+			store.update({ id: batch[j]!.id }, { vector, embed_model: current });
+			done++;
+		}
+	}
+	return done;
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────

@@ -207,7 +207,7 @@ export function MemoryFlowSVG() {
         ))}
       </g>
 
-      {/* LEFT: CONVERSATION (OpenCode) */}
+      {/* LEFT: CONVERSATION (Claude Code) */}
       <g>
         <rect x="50" y="40" width="250" height="310" rx="12" className="fill-card stroke-border" strokeWidth="1.5" />
         
@@ -216,7 +216,7 @@ export function MemoryFlowSVG() {
         <circle cx="70" cy="52" r="4" fill="#ff5f56" />
         <circle cx="85" cy="52" r="4" fill="#ffbd2e" />
         <circle cx="100" cy="52" r="4" fill="#27c93f" />
-        <text x="175" y="55" textAnchor="middle" className="fill-muted-foreground" fontSize="10" fontWeight="500">OpenCode Agent</text>
+        <text x="175" y="55" textAnchor="middle" className="fill-muted-foreground" fontSize="10" fontWeight="500">Claude Code</text>
 
         {/* Chat Bubbles */}
         {/* User bubble 1 */}
@@ -298,7 +298,7 @@ export function MemoryFlowSVG() {
         <rect x="740" y="270" width="170" height="60" rx="6" className="fill-secondary stroke-border" strokeWidth="1" />
         <circle cx="760" cy="285" r="4" fill="#4ade80" filter="url(#glow-green)" />
         <text x="775" y="289" className="fill-foreground" fontSize="11" fontWeight="600">Storage Active</text>
-        <text x="750" y="308" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">DIMENSIONS: 1024</text>
+        <text x="750" y="308" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">DIMENSIONS: 768</text>
         <text x="750" y="320" className="fill-muted-foreground" fontSize="9" fontFamily="var(--font-mono, monospace)">INDEX: COSINE</text>
       </g>
     </svg>

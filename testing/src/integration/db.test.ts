@@ -6,10 +6,11 @@
  * deleteById) work correctly through the adapter.
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { setupTempDb, teardownTempDb } from "../helpers/temp-db.js";
 import { refresh, store } from "../../../plugin/src/db.js";
-import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
+import { MOCK_DIMS as EMBEDDING_DIMS } from "../helpers/mock-embedder.js";
 
 let tempDir: string;
 

@@ -19,7 +19,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CREATE_TABLE, CREATE_INDEXES } from "./schema.js";
+import { CREATE_TABLE, CREATE_INDEXES, LEGACY_EMBED_MODEL } from "./schema.js";
 import { openDatabase, type DatabaseLike } from "./driver.js";
 
 let db: DatabaseLike | null = null;
@@ -53,13 +53,40 @@ export function open(dbPath: string): void {
 	// Temp tables in memory
 	db.run("PRAGMA temp_store = MEMORY");
 
-	// Create schema (idempotent)
+	// Create schema (idempotent), then migrate older databases forward
 	db.run(CREATE_TABLE);
+	migrate(db);
 	for (const sql of CREATE_INDEXES) {
 		db.run(sql);
 	}
 
 	currentPath = dbPath;
+}
+
+/**
+ * Forward-only migrations for databases created by older codexfi versions.
+ * Each step checks the live schema first, so it is safe to run on every open.
+ */
+function migrate(conn: DatabaseLike): void {
+	const hasColumn = () =>
+		(conn.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>).some((c) => c.name === "embed_model");
+	if (hasColumn()) return;
+	// Several hook/worker processes may open an old database at the same moment.
+	// BEGIN IMMEDIATE takes the write lock (waiting up to busy_timeout), and the
+	// column is re-checked inside the transaction so only the first one migrates.
+	conn.run("BEGIN IMMEDIATE");
+	try {
+		if (!hasColumn()) {
+			conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
+			// Label every pre-1.0 row with the legacy marker so the local re-embed
+			// pass can find and migrate them (see LEGACY_EMBED_MODEL).
+			conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+		}
+		conn.run("COMMIT");
+	} catch (e) {
+		try { conn.run("ROLLBACK"); } catch { /* already rolled back */ }
+		if (!hasColumn()) throw e;
+	}
 }
 
 /** Close the database connection. Safe to call multiple times. */

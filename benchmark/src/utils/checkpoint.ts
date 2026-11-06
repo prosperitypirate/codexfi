@@ -4,7 +4,7 @@ import type { Checkpoint, Phase } from "../types.js";
 
 const RUNS_DIR = join(import.meta.dir, "../../data/runs");
 
-function runDir(runId: string): string {
+export function runDir(runId: string): string {
   return join(RUNS_DIR, runId);
 }
 
@@ -37,4 +37,23 @@ export function isPhaseComplete(cp: Checkpoint, phase: Phase): boolean {
 
 export function reportPath(runId: string): string {
   return join(runDir(runId), "report.json");
+}
+
+/**
+ * Throttled checkpoint writer for per-item progress inside a phase: writes at
+ * most once per `intervalMs`; call flush() at the end of the phase.
+ */
+export function throttledSaver(cp: Checkpoint, intervalMs = 2000): { save(): void; flush(): void } {
+  let last = 0;
+  let dirty = false;
+  return {
+    save() {
+      dirty = true;
+      const now = Date.now();
+      if (now - last >= intervalMs) { saveCheckpoint(cp); last = now; dirty = false; }
+    },
+    flush() {
+      if (dirty) { saveCheckpoint(cp); dirty = false; last = Date.now(); }
+    },
+  };
 }

@@ -47,15 +47,6 @@ export const DB_SEARCH_RETRY: RetryConfig = {
 	jitter: 0.25,
 };
 
-/** Default retry config for embedding API calls. */
-export const EMBED_RETRY: RetryConfig = {
-	maxRetries: 3,
-	baseDelayMs: 500,
-	maxDelayMs: 10_000,
-	jitter: 0.25,
-	timeoutMs: 10_000,
-};
-
 /**
  * Default retry config for extraction LLM calls.
  *

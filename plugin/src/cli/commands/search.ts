@@ -1,7 +1,7 @@
 /**
  * `codexfi search <query>` — semantic search over stored memories.
  *
- * Uses the same vector search pipeline as the plugin: Voyage AI embedding →
+ * Uses the same vector search pipeline as the plugin: local embedding →
  * cosine similarity → recency blending → threshold filtering.
  *
  * Flags:
@@ -13,7 +13,7 @@
 
 import type { ParsedArgs } from "../args.js";
 import { getFlag, getFlagInt } from "../args.js";
-import { SIMILARITY_THRESHOLD } from "../../config.js";
+import { activeThresholds } from "../../embedder.js";
 import * as fmt from "../fmt.js";
 import { initDb, resolveTags } from "../shared.js";
 import * as store from "../../store.js";
@@ -83,7 +83,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		console.log(`     ${r.memory}`);
 
 		// Show chunk excerpt if it adds detail beyond the memory text
-		if (r.chunk && r.chunk.trim() !== r.memory && r.score >= SIMILARITY_THRESHOLD) {
+		if (r.chunk && r.chunk.trim() !== r.memory && r.score >= activeThresholds().snippet) {
 			const excerpt = r.chunk.trim().slice(0, 200);
 			const lines = excerpt.split("\n").slice(0, 3);
 			for (const line of lines) {

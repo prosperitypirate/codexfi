@@ -1,164 +1,189 @@
 /**
- * Unit tests for telemetry.ts — CostLedger persistence and ActivityLog ring buffer.
+ * Unit tests for telemetry.ts — CostLedger (generic per-backend buckets,
+ * legacy costs.json normalisation, persistence) and the ActivityLog ring buffer.
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
+import { describe, test, expect, beforeEach } from "bun:test";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 
-// We can't directly instantiate CostLedger/ActivityLog since they're exported
-// as singletons. But we CAN test the singletons with fresh temp dirs.
+import { ACTIVITY_MAX } from "../../../plugin/src/config.js";
 import { ledger, activityLog } from "../../../plugin/src/telemetry.js";
-import {
-	EMBEDDING_MODEL,
-	XAI_EXTRACTION_MODEL,
-	ANTHROPIC_EXTRACTION_MODEL,
-	GOOGLE_EXTRACTION_MODEL,
-} from "../../../plugin/src/config.js";
+import { makeTempDir } from "../helpers/test-env.js";
 
 let tempDir: string;
 
 beforeEach(async () => {
-	tempDir = mkdtempSync(join(tmpdir(), "oc-test-telemetry-"));
-	// Reset ledger state, then init from fresh temp dir
-	await ledger.reset();
+	tempDir = makeTempDir("telemetry");
 	await ledger.init(tempDir);
-});
-
-afterEach(() => {
-	try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
+	await ledger.reset();
+	await activityLog.init(tempDir);
 });
 
 // ── CostLedger ──────────────────────────────────────────────────────────────────
 
 describe("CostLedger", () => {
-	test("starts with zero costs", () => {
+	test("starts empty", () => {
 		const snap = ledger.snapshot();
 		expect(snap.total_cost_usd).toBe(0);
-		expect(snap.voyage.calls).toBe(0);
-		expect(snap.anthropic.calls).toBe(0);
+		expect(snap.backends).toEqual({});
 	});
 
-	test("records Voyage costs correctly", async () => {
-		await ledger.recordVoyage(1_000_000); // 1M tokens
-		const snap = ledger.snapshot();
-		expect(snap.voyage.calls).toBe(1);
-		expect(snap.voyage.tokens).toBe(1_000_000);
-		// $0.18 per M tokens
-		expect(snap.voyage.cost_usd).toBeCloseTo(0.18, 4);
-		expect(snap.total_cost_usd).toBeCloseTo(0.18, 4);
-		expect(snap.voyage.model).toBe(EMBEDDING_MODEL);
+	test("recordLlm creates a bucket per backend and accumulates", async () => {
+		await ledger.recordLlm("claude-cli", "claude-haiku-4-5", 600, 120, 0.002);
+		await ledger.recordLlm("claude-cli", "claude-haiku-4-5", 400, 80, 0.001);
+		const b = ledger.snapshot().backends["claude-cli"]!;
+		expect(b.calls).toBe(2);
+		expect(b.prompt_tokens).toBe(1000);
+		expect(b.completion_tokens).toBe(200);
+		expect(b.cost_usd).toBeCloseTo(0.003, 8);
+		expect(b.model).toBe("claude-haiku-4-5");
 	});
 
-	test("records Anthropic costs correctly", async () => {
-		await ledger.recordAnthropic(100_000, 10_000); // 100k in, 10k out
-		const snap = ledger.snapshot();
-		expect(snap.anthropic.calls).toBe(1);
-		expect(snap.anthropic.prompt_tokens).toBe(100_000);
-		expect(snap.anthropic.completion_tokens).toBe(10_000);
-		// $1.00/M input + $5.00/M output = $0.10 + $0.05 = $0.15
-		expect(snap.anthropic.cost_usd).toBeCloseTo(0.15, 4);
-		expect(snap.anthropic.model).toBe(ANTHROPIC_EXTRACTION_MODEL);
+	test("recordEmbedding counts tokens, not prompt/completion", async () => {
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 1_000_000, 0);
+		const b = ledger.snapshot().backends.local!;
+		expect(b.calls).toBe(1);
+		expect(b.tokens).toBe(1_000_000);
+		expect(b.prompt_tokens).toBe(0);
+		expect(b.cost_usd).toBe(0);
 	});
 
-	test("records xAI costs with cached tokens", async () => {
-		// 10k prompt, 5k cached, 2k completion
-		await ledger.recordXai(10_000, 5_000, 2_000);
+	test("total_cost_usd is the sum across backends", async () => {
+		await ledger.recordLlm("anthropic-api", "claude-haiku-4-5", 100_000, 10_000, 0.15);
+		await ledger.recordLlm("claude-cli", "haiku", 1, 1, 0.05);
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 10, 0);
 		const snap = ledger.snapshot();
-		expect(snap.xai.calls).toBe(1);
-		expect(snap.xai.prompt_tokens).toBe(10_000);
-		expect(snap.xai.cached_tokens).toBe(5_000);
-		expect(snap.xai.completion_tokens).toBe(2_000);
-		// (10k-5k)*0.20/M + 5k*0.05/M + 2k*0.50/M = 0.001 + 0.00025 + 0.001 = 0.00225
-		expect(snap.xai.cost_usd).toBeCloseTo(0.00225, 6);
-		expect(snap.xai.model).toBe(XAI_EXTRACTION_MODEL);
-	});
-
-	test("records Google costs correctly", async () => {
-		await ledger.recordGoogle(50_000, 5_000);
-		const snap = ledger.snapshot();
-		expect(snap.google.calls).toBe(1);
-		expect(snap.google.prompt_tokens).toBe(50_000);
-		expect(snap.google.completion_tokens).toBe(5_000);
-		expect(snap.google.model).toBe(GOOGLE_EXTRACTION_MODEL);
-	});
-
-	test("accumulates multiple calls", async () => {
-		await ledger.recordVoyage(1000);
-		await ledger.recordVoyage(2000);
-		await ledger.recordVoyage(3000);
-		const snap = ledger.snapshot();
-		expect(snap.voyage.calls).toBe(3);
-		expect(snap.voyage.tokens).toBe(6000);
-	});
-
-	test("persists to disk and survives re-init", async () => {
-		await ledger.recordVoyage(5000);
-
-		// Re-init from same directory — should load persisted data
-		await ledger.init(tempDir);
-		const snap = ledger.snapshot();
-		expect(snap.voyage.calls).toBe(1);
-		expect(snap.voyage.tokens).toBe(5000);
-	});
-
-	test("reset zeroes everything", async () => {
-		await ledger.recordVoyage(1000);
-		await ledger.recordAnthropic(1000, 500);
-		await ledger.reset();
-
-		const snap = ledger.snapshot();
-		expect(snap.total_cost_usd).toBe(0);
-		expect(snap.voyage.calls).toBe(0);
-		expect(snap.anthropic.calls).toBe(0);
+		expect(snap.total_cost_usd).toBeCloseTo(0.2, 8);
+		expect(Object.keys(snap.backends).sort()).toEqual(["anthropic-api", "claude-cli", "local"]);
 		expect(snap.last_updated).not.toBe("");
 	});
 
-	test("snapshot returns a deep copy", () => {
+	test("persists to costs.json and survives re-init", async () => {
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 5000, 0);
+		const onDisk = JSON.parse(readFileSync(join(tempDir, "costs.json"), "utf8"));
+		expect(onDisk.backends.local.tokens).toBe(5000);
+
+		await ledger.init(tempDir);
+		expect(ledger.snapshot().backends.local!.tokens).toBe(5000);
+	});
+
+	test("reset zeroes everything", async () => {
+		await ledger.recordLlm("claude-cli", "haiku", 1, 1, 0.5);
+		await ledger.reset();
+		const snap = ledger.snapshot();
+		expect(snap.total_cost_usd).toBe(0);
+		expect(snap.backends).toEqual({});
+		expect(snap.last_updated).not.toBe("");
+	});
+
+	test("snapshot returns a deep copy", async () => {
+		await ledger.recordLlm("claude-cli", "haiku", 1, 1, 0);
 		const snap1 = ledger.snapshot();
-		snap1.voyage.calls = 999;
-		const snap2 = ledger.snapshot();
-		expect(snap2.voyage.calls).not.toBe(999);
+		snap1.backends["claude-cli"]!.calls = 999;
+		expect(ledger.snapshot().backends["claude-cli"]!.calls).toBe(1);
+	});
+});
+
+describe("CostLedger legacy costs.json (pre-1.0 shape)", () => {
+	const LEGACY = {
+		anthropic: { calls: 3, prompt_tokens: 3000, completion_tokens: 300, cost_usd: 0.0045, model: "claude-haiku-4-5" },
+		voyage: { calls: 7, tokens: 7000, cost_usd: 0.00126, model: "voyage-code-3" },
+		xai: { calls: 2, prompt_tokens: 200, completion_tokens: 20, cost_usd: 0.001 },
+		google: { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 },
+		total_cost_usd: 0.00576,
+		last_updated: "2026-03-01T00:00:00.000Z",
+	};
+
+	test("is normalised into the backends map on load", async () => {
+		writeFileSync(join(tempDir, "costs.json"), JSON.stringify(LEGACY));
+		await ledger.init(tempDir);
+		const snap = ledger.snapshot();
+
+		// anthropic → anthropic-api; removed remote providers are dropped, total recomputed
+		expect(Object.keys(snap.backends)).toEqual(["anthropic-api"]);
+		expect(snap.backends["anthropic-api"]).toMatchObject({ calls: 3, prompt_tokens: 3000, completion_tokens: 300, tokens: 0 });
+		expect(snap.total_cost_usd).toBeCloseTo(0.0045, 8);
+		expect(snap.last_updated).toBe(LEGACY.last_updated);
+	});
+
+	test("new calls accumulate on top of normalised legacy data and re-save in the new shape", async () => {
+		writeFileSync(join(tempDir, "costs.json"), JSON.stringify(LEGACY));
+		await ledger.init(tempDir);
+		await ledger.recordLlm("anthropic-api", "claude-haiku-4-5", 1000, 100, 0.0015);
+
+		const snap = ledger.snapshot();
+		expect(snap.backends["anthropic-api"]!.calls).toBe(4);
+		expect(snap.total_cost_usd).toBeCloseTo(0.0045 + 0.0015, 8);
+
+		const onDisk = JSON.parse(readFileSync(join(tempDir, "costs.json"), "utf8"));
+		expect(onDisk.backends["anthropic-api"].calls).toBe(4);
+		expect(onDisk.anthropic).toBeUndefined();
+		expect(Object.keys(onDisk.backends)).toEqual(["anthropic-api"]);
+	});
+
+	test("legacy remote-provider buckets in a backends-map ledger are dropped on load", async () => {
+		const bucket = { calls: 1, prompt_tokens: 0, completion_tokens: 0, tokens: 10, cost_usd: 0.5 };
+		writeFileSync(join(tempDir, "costs.json"), JSON.stringify({
+			backends: { "claude-cli": { ...bucket, cost_usd: 0.25 }, voyage: bucket, xai: bucket, google: bucket },
+			total_cost_usd: 1.75,
+			last_updated: "2026-10-01T00:00:00.000Z",
+		}));
+		await ledger.init(tempDir);
+		const snap = ledger.snapshot();
+		expect(Object.keys(snap.backends)).toEqual(["claude-cli"]);
+		expect(snap.total_cost_usd).toBeCloseTo(0.25, 8);
+	});
+
+	test("garbage costs.json falls back to an empty ledger", async () => {
+		writeFileSync(join(tempDir, "costs.json"), "{ not json");
+		await ledger.init(tempDir);
+		expect(ledger.snapshot().backends).toEqual({});
+	});
+
+	test("load() re-reads (and normalises) the file written by another process", async () => {
+		writeFileSync(join(tempDir, "costs.json"), JSON.stringify(LEGACY));
+		await ledger.load();
+		expect(ledger.snapshot().backends["anthropic-api"]!.calls).toBe(3);
 	});
 });
 
 // ── ActivityLog ─────────────────────────────────────────────────────────────────
 
 describe("ActivityLog", () => {
-	test("records and retrieves Voyage activity", () => {
-		activityLog.recordVoyage(100, 0.001);
-		const recent = activityLog.recent(1);
-		expect(recent.length).toBeGreaterThanOrEqual(1);
-		expect(recent[0]!.api).toBe("voyage");
-		expect(recent[0]!.operation).toBe("embed");
-		expect(recent[0]!.tokens).toBe(100);
+	test("recordLlm stores backend, model, operation and token counts", () => {
+		activityLog.recordLlm("claude-cli", "claude-haiku-4-5", "extraction", 500, 100, 0.01);
+		const [e] = activityLog.recent(1);
+		expect(e).toMatchObject({
+			api: "claude-cli", model: "claude-haiku-4-5", operation: "extraction",
+			prompt_tokens: 500, completion_tokens: 100, tokens: null,
+		});
 	});
 
-	test("records Anthropic extraction activity", () => {
-		activityLog.recordAnthropic(500, 100, 0.01);
-		const recent = activityLog.recent(1);
-		expect(recent[0]!.api).toBe("anthropic");
-		expect(recent[0]!.operation).toBe("extraction");
-		expect(recent[0]!.prompt_tokens).toBe(500);
-		expect(recent[0]!.completion_tokens).toBe(100);
+	test("recordEmbedding defaults the operation to embed", () => {
+		activityLog.recordEmbedding("local", "local:jina-v2-base-code", 100, 0);
+		const [e] = activityLog.recent(1);
+		expect(e).toMatchObject({ api: "local", operation: "embed", tokens: 100, prompt_tokens: null });
 	});
 
-	test("recent() returns entries in reverse chronological order", () => {
-		activityLog.recordVoyage(1, 0);
-		activityLog.recordVoyage(2, 0);
-		activityLog.recordVoyage(3, 0);
+	test("entries from removed remote providers in an old activity.json are dropped on load", async () => {
+		const entry = (api: string) => ({ ts: "2026-10-01T00:00:00.000Z", api, model: "m", operation: "embed", prompt_tokens: null, completion_tokens: null, tokens: 1, cost_usd: 0 });
+		writeFileSync(join(tempDir, "activity.json"), JSON.stringify([entry("voyage"), entry("local"), entry("xai"), entry("claude-cli")]));
+		await activityLog.init(tempDir);
+		expect(activityLog.recent(10).map((e) => e.api)).toEqual(["claude-cli", "local"]);
+	});
+
+	test("recent() is newest-first and respects the limit", () => {
+		for (let i = 1; i <= 5; i++) activityLog.recordEmbedding("local", "m", i, 0);
 		const recent = activityLog.recent(3);
-		// Most recent first
-		expect(recent[0]!.tokens).toBe(3);
-		expect(recent[2]!.tokens).toBe(1);
+		expect(recent.map((e) => e.tokens)).toEqual([5, 4, 3]);
 	});
 
-	test("recent() respects limit parameter", () => {
-		for (let i = 0; i < 10; i++) {
-			activityLog.recordVoyage(i, 0);
-		}
-		const recent = activityLog.recent(3);
-		expect(recent.length).toBe(3);
+	test(`ring buffer keeps at most ACTIVITY_MAX (${ACTIVITY_MAX}) entries`, () => {
+		for (let i = 0; i < ACTIVITY_MAX + 25; i++) activityLog.recordEmbedding("local", "m", i, 0);
+		const all = activityLog.recent(ACTIVITY_MAX * 2);
+		expect(all.length).toBe(ACTIVITY_MAX);
+		expect(all[0]!.tokens).toBe(ACTIVITY_MAX + 24);
 	});
 });

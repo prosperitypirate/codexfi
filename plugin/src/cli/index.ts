@@ -6,19 +6,24 @@
  * command module, and handles top-level errors with formatted output.
  *
  * Commands:
- *   install              Register plugin with OpenCode + create slash commands
+ *   install              Install the plugin into Claude Code (marketplace + plugin)
  *   list                 Display stored memories in a formatted table
  *   search <query>       Semantic search over memories
- *   stats                Database statistics, type distribution, API costs
- *   status               Health check — verify DB, API keys, plugin registration
+ *   stats                Database statistics, type distribution, usage & costs
+ *   status               Health check — Claude Code, LLM backend, embeddings, store, worker
  *   export               Export memories to JSON or CSV
  *   forget <id>          Delete a memory by ID (or short prefix)
  *   dashboard            Launch the on-demand web dashboard
  *   help                 Show this help message
  *
+ * Internal entrypoints (invoked by the Claude Code plugin, not by people):
+ *   hook <event>         Claude Code hook handler (reads hook JSON on stdin)
+ *   worker               Background extraction worker (drains ~/.codexfi/queue)
+ *   mcp                  MCP stdio server (memory_search / add / list / forget)
+ *
  * Global flags:
  *   --json               Output machine-readable JSON instead of formatted text
- *   --no-tui             Skip interactive prompts (for LLM agent-driven installs)
+ *   --no-tui             Never prompt (accepted for agent-driven installs)
  *   --help, -h           Show help for the current command
  *   --version            Print version and exit
  */
@@ -43,8 +48,8 @@ const COMMANDS: Record<string, {
 	load: () => Promise<{ run: (args: import("./args.js").ParsedArgs) => Promise<void> }>;
 }> = {
 	install: {
-		description: "Register plugin with OpenCode and create /memory-init command",
-		usage: "codexfi install [--no-tui] [--voyage-key <key>] [--anthropic-key <key>]",
+		description: "Install the codexfi plugin into Claude Code",
+		usage: "codexfi install [--dry-run] [--uninstall] [--source <repo|path>] [--llm-backend auto|claude-cli|anthropic-api] [--anthropic-key <k>]",
 		load: () => import("./commands/install.js"),
 	},
 	list: {
@@ -58,12 +63,12 @@ const COMMANDS: Record<string, {
 		load: () => import("./commands/search.js"),
 	},
 	stats: {
-		description: "Database statistics, type distribution, API costs",
+		description: "Database statistics, type distribution, usage & costs",
 		usage: "codexfi stats [--json]",
 		load: () => import("./commands/stats.js"),
 	},
 	status: {
-		description: "Health check - verify DB, API keys, plugin registration",
+		description: "Health check - Claude Code, LLM backend, embeddings, store, worker",
 		usage: "codexfi status [--json]",
 		load: () => import("./commands/status.js"),
 	},
@@ -104,15 +109,16 @@ function printHelp(): void {
 	console.log(fmt.bold("  Global flags:"));
 	fmt.blank();
 	console.log(`    ${fmt.cyan("--json".padEnd(maxCmd + 2))} ${fmt.dim("Machine-readable JSON output")}`);
-	console.log(`    ${fmt.cyan("--no-tui".padEnd(maxCmd + 2))} ${fmt.dim("Skip interactive prompts (for LLM agents)")}`);
+	console.log(`    ${fmt.cyan("--no-tui".padEnd(maxCmd + 2))} ${fmt.dim("Never prompt (install is non-interactive anyway)")}`);
 	console.log(`    ${fmt.cyan("--help, -h".padEnd(maxCmd + 2))} ${fmt.dim("Show help for a command")}`);
 	console.log(`    ${fmt.cyan("--version".padEnd(maxCmd + 2))} ${fmt.dim("Print version and exit")}`);
 
 	fmt.blank();
 	console.log(fmt.bold("  Examples:"));
 	fmt.blank();
-	console.log(`    ${fmt.dim("$")} codexfi install`);
-	console.log(`    ${fmt.dim("$")} codexfi install --no-tui`);
+	console.log(`    ${fmt.dim("$")} codexfi install            ${fmt.dim("# add the plugin to Claude Code (no API keys needed)")}`);
+	console.log(`    ${fmt.dim("$")} codexfi install --dry-run  ${fmt.dim("# show what install would do")}`);
+	console.log(`    ${fmt.dim("$")} codexfi status`);
 	console.log(`    ${fmt.dim("$")} codexfi list --type architecture`);
 	console.log(`    ${fmt.dim("$")} codexfi search "how is auth handled"`);
 	console.log(`    ${fmt.dim("$")} codexfi stats`);
@@ -134,7 +140,47 @@ function printCommandHelp(name: string): void {
 
 // ── Main ────────────────────────────────────────────────────────────────────────
 
+/**
+ * Fast path for the plugin's internal entrypoints — no banner, no arg parsing,
+ * stdout reserved for the protocol (hook JSON / MCP JSON-RPC).
+ */
+async function runInternal(cmd: string, rest: string[]): Promise<boolean> {
+	if (cmd === "hook" || cmd === "worker" || cmd === "mcp") {
+		// stdout carries the protocol (hook JSON / MCP JSON-RPC). Any library or
+		// engine logging must go to stderr, or it would corrupt the reply.
+		const toStderr = (...a: unknown[]) => process.stderr.write(`${a.map(String).join(" ")}\n`);
+		console.log = toStderr;
+		console.info = toStderr;
+		console.debug = toStderr;
+		console.warn = toStderr;
+	}
+	switch (cmd) {
+		case "hook": {
+			const { runHook } = await import("../claude/hooks.js");
+			await runHook((rest[0] ?? "") as import("../claude/hooks.js").HookEvent);
+			return true;
+		}
+		case "worker": {
+			const { runWorker } = await import("../claude/worker.js");
+			await runWorker();
+			return true;
+		}
+		case "mcp": {
+			const { runMcpServer } = await import("../claude/mcp.js");
+			await runMcpServer();
+			return true;
+		}
+		default:
+			return false;
+	}
+}
+
 async function main(): Promise<void> {
+	const [internalCmd, ...rest] = process.argv.slice(2);
+	// Internal entrypoints end by letting the event loop drain (process.exit()
+	// could truncate a pending stdout write to a pipe on macOS).
+	if (internalCmd && (await runInternal(internalCmd, rest).catch(() => true))) return;
+
 	const args = parseArgs();
 
 	// --version flag

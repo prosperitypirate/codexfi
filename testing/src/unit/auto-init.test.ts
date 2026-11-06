@@ -1,29 +1,23 @@
 /**
- * Unit tests for auto-init features introduced in v0.5.0 (Issue #114).
+ * Unit tests for project auto-init (plugin/src/claude/auto-init.ts +
+ * services/auto-init-config.ts).
  *
- * Tests verify:
- * 1. INIT_FILES list contains all expected entries (Phase 2)
- * 2. INIT_TOTAL_CHAR_CAP is set to 15000 (Phase 2)
- * 3. generateDirectoryTree() produces correct output format (Phase 3)
- * 4. generateDirectoryTree() respects TREE_IGNORE exclusions (Phase 3)
- * 5. generateDirectoryTree() respects maxDepth cap (Phase 3)
- * 6. generateDirectoryTree() handles empty directories (Phase 3)
- * 7. generateDirectoryTree() handles permission errors gracefully (Phase 3)
- * 8. buildFreshProjectHint() includes project name from path (Phase 4)
- * 9. buildFreshProjectHint() contains [MEMORY - NEW PROJECT] header (Phase 4)
- * 10. buildFreshProjectHint() is pure ASCII (no emoji, no Unicode) (Phase 4)
+ *   1. INIT_FILES / INIT_TOTAL_CHAR_CAP — which files seed a new project
+ *   2. collectInitContent() — corpus assembly: per-file caps, total cap,
+ *      git log, <private> stripping, missing files
  *
- * Testing pattern: direct function testing with temp directories for
- * filesystem tests. No mocking — matches project convention.
+ * runAutoInit() (LLM extraction + store) is covered by the worker integration
+ * test's "init" job.
  */
 
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
+import { describe, test, expect, beforeEach } from "bun:test";
+import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { INIT_FILES, INIT_TOTAL_CHAR_CAP } from "../../../plugin/src/services/auto-init-config.js";
-import { generateDirectoryTree, TREE_IGNORE } from "../../../plugin/src/services/directory-tree.js";
-import { buildFreshProjectHint } from "../../../plugin/src/services/fresh-project-hint.js";
+import { collectInitContent } from "../../../plugin/src/claude/auto-init.js";
+import { makeTempDir } from "../helpers/test-env.js";
 
 // ── INIT_FILES and INIT_TOTAL_CHAR_CAP (Phase 2) ──────────────────
 
@@ -62,153 +56,65 @@ describe("INIT_TOTAL_CHAR_CAP", () => {
 	});
 });
 
-// ── generateDirectoryTree (Phase 3) ────────────────────────────────
+// ── collectInitContent ─────────────────────────────────────────────
 
-describe("generateDirectoryTree", () => {
-	let tempDir: string;
+describe("collectInitContent", () => {
+	let dir: string;
 
 	beforeEach(() => {
-		tempDir = mkdtempSync(join(tmpdir(), "oc-test-tree-"));
+		dir = makeTempDir("init");
 	});
 
-	afterEach(() => {
-		try { rmSync(tempDir, { recursive: true, force: true }); } catch {}
+	test("returns empty string for a directory with no known files and no git", () => {
+		expect(collectInitContent(dir)).toBe("");
 	});
 
-	test("generates tree for a project directory with correct format", () => {
-		// Create: src/index.ts, src/utils/helper.ts, package.json
-		mkdirSync(join(tempDir, "src", "utils"), { recursive: true });
-		writeFileSync(join(tempDir, "src", "index.ts"), "");
-		writeFileSync(join(tempDir, "src", "utils", "helper.ts"), "");
-		writeFileSync(join(tempDir, "package.json"), "{}");
-
-		const tree = generateDirectoryTree(tempDir, 3);
-
-		// Root line should be the directory name
-		const lines = tree.split("\n");
-		expect(lines[0]).toMatch(/\/$/); // root ends with /
-
-		// Should contain our files
-		expect(tree).toContain("src/");
-		expect(tree).toContain("index.ts");
-		expect(tree).toContain("helper.ts");
-		expect(tree).toContain("package.json");
-
-		// Should use tree connectors
-		expect(tree).toMatch(/[├└]── /);
+	test("includes known files under === name === headers, in INIT_FILES order", () => {
+		writeFileSync(join(dir, "package.json"), `{"name":"demo-app"}`);
+		writeFileSync(join(dir, "README.md"), "# Demo App\nA demo.");
+		writeFileSync(join(dir, "random.txt"), "not an init file");
+		const out = collectInitContent(dir);
+		expect(out).toContain("=== README.md ===\n# Demo App");
+		expect(out).toContain("=== package.json ===\n{\"name\":\"demo-app\"}");
+		expect(out.indexOf("README.md")).toBeLessThan(out.indexOf("package.json"));
+		expect(out).not.toContain("not an init file");
 	});
 
-	test("ignores node_modules, .git, dist, and other TREE_IGNORE entries", () => {
-		mkdirSync(join(tempDir, "src"), { recursive: true });
-		mkdirSync(join(tempDir, "node_modules", "lodash"), { recursive: true });
-		mkdirSync(join(tempDir, ".git", "objects"), { recursive: true });
-		mkdirSync(join(tempDir, "dist"), { recursive: true });
-		writeFileSync(join(tempDir, "src", "app.ts"), "");
-		writeFileSync(join(tempDir, "node_modules", "lodash", "index.js"), "");
-
-		const tree = generateDirectoryTree(tempDir, 3);
-
-		expect(tree).toContain("src/");
-		expect(tree).toContain("app.ts");
-		expect(tree).not.toContain("node_modules");
-		expect(tree).not.toContain("dist");
-		// .git is hidden (starts with .) AND in TREE_IGNORE — double excluded
+	test("caps each file at its maxChars", () => {
+		const readmeCap = INIT_FILES.find((f) => f.name === "README.md")!.maxChars;
+		writeFileSync(join(dir, "README.md"), "x".repeat(readmeCap + 500));
+		const out = collectInitContent(dir);
+		const body = out.split("=== README.md ===\n")[1]!;
+		expect(body.length).toBe(readmeCap);
 	});
 
-	test("includes .github/ despite being a dotfile", () => {
-		mkdirSync(join(tempDir, ".github", "workflows"), { recursive: true });
-		writeFileSync(join(tempDir, ".github", "workflows", "ci.yml"), "");
-
-		const tree = generateDirectoryTree(tempDir, 3);
-
-		expect(tree).toContain(".github/");
-		expect(tree).toContain("workflows/");
-		expect(tree).toContain("ci.yml");
+	test("never exceeds INIT_TOTAL_CHAR_CAP of file content", () => {
+		for (const f of INIT_FILES) writeFileSync(join(dir, f.name), "Q".repeat(f.maxChars));
+		const out = collectInitContent(dir);
+		const qs = (out.match(/Q/g) ?? []).length;
+		expect(qs).toBeLessThanOrEqual(INIT_TOTAL_CHAR_CAP);
 	});
 
-	test("respects maxDepth — depth 1 shows only top-level", () => {
-		mkdirSync(join(tempDir, "src", "deep", "nested"), { recursive: true });
-		writeFileSync(join(tempDir, "src", "deep", "nested", "file.ts"), "");
-
-		const tree = generateDirectoryTree(tempDir, 1);
-
-		expect(tree).toContain("src/");
-		// depth 1 = only top-level entries; "deep" is at depth 2
-		expect(tree).not.toContain("deep");
-		expect(tree).not.toContain("nested");
-		expect(tree).not.toContain("file.ts");
+	test("redacts <private> content", () => {
+		writeFileSync(join(dir, "README.md"), "Public intro. <private>internal-host.corp:5432</private> End.");
+		const out = collectInitContent(dir);
+		expect(out).toContain("[REDACTED]");
+		expect(out).not.toContain("internal-host.corp");
 	});
 
-	test("handles empty directories gracefully", () => {
-		const tree = generateDirectoryTree(tempDir, 3);
-
-		// Should have at least the root line
-		const lines = tree.split("\n");
-		expect(lines.length).toBeGreaterThan(0);
-		expect(lines[0]).toMatch(/\/$/);
-	});
-
-	test("sorts directories before files", () => {
-		writeFileSync(join(tempDir, "zebra.ts"), "");
-		mkdirSync(join(tempDir, "alpha"), { recursive: true });
-		writeFileSync(join(tempDir, "alpha", "file.ts"), "");
-
-		const tree = generateDirectoryTree(tempDir, 3);
-		const lines = tree.split("\n").slice(1); // skip root
-
-		// First entry should be the directory "alpha/"
-		const firstEntry = lines[0];
-		expect(firstEntry).toContain("alpha/");
-	});
-});
-
-describe("TREE_IGNORE", () => {
-	test("contains standard build/dependency directories", () => {
-		expect(TREE_IGNORE.has("node_modules")).toBe(true);
-		expect(TREE_IGNORE.has(".git")).toBe(true);
-		expect(TREE_IGNORE.has("dist")).toBe(true);
-		expect(TREE_IGNORE.has("build")).toBe(true);
-		expect(TREE_IGNORE.has("__pycache__")).toBe(true);
-		expect(TREE_IGNORE.has("target")).toBe(true);
-		expect(TREE_IGNORE.has("coverage")).toBe(true);
-	});
-});
-
-// ── buildFreshProjectHint (Phase 4) ────────────────────────────────
-
-describe("buildFreshProjectHint", () => {
-	test("includes project name extracted from directory path", () => {
-		const hint = buildFreshProjectHint("/Users/dev/my-awesome-project");
-		expect(hint).toContain("my-awesome-project");
-	});
-
-	test("contains [MEMORY - NEW PROJECT] header on first line", () => {
-		const hint = buildFreshProjectHint("/some/path");
-		const firstLine = hint.split("\n")[0];
-		expect(firstLine).toBe("[MEMORY - NEW PROJECT]");
-	});
-
-	test("is pure ASCII — no emoji or special Unicode characters", () => {
-		const hint = buildFreshProjectHint("/test/project");
-		for (let i = 0; i < hint.length; i++) {
-			const code = hint.charCodeAt(i);
-			if (code > 127) {
-				throw new Error(
-					`Non-ASCII character at position ${i}: ` +
-					`U+${code.toString(16).padStart(4, "0")} "${hint[i]}"`
-				);
-			}
-		}
-	});
-
-	test("mentions codexfi by name", () => {
-		const hint = buildFreshProjectHint("/test/project");
-		expect(hint).toContain("codexfi");
-	});
-
-	test("handles root directory without crashing", () => {
-		const hint = buildFreshProjectHint("/");
-		// Should not throw; project name extraction handles edge case
-		expect(hint).toContain("[MEMORY - NEW PROJECT]");
+	test("appends the recent git log for git repositories", () => {
+		const git = (...args: string[]) =>
+			execFileSync("git", args, {
+				cwd: dir,
+				stdio: "ignore",
+				env: { ...process.env, GIT_AUTHOR_NAME: "t", GIT_AUTHOR_EMAIL: "t@example.invalid", GIT_COMMITTER_NAME: "t", GIT_COMMITTER_EMAIL: "t@example.invalid" },
+			});
+		git("init", "-q");
+		writeFileSync(join(dir, "README.md"), "# Repo");
+		git("add", "README.md");
+		git("commit", "-q", "-m", "feat: initial scaffold");
+		const out = collectInitContent(dir);
+		expect(out).toContain("=== git log (recent) ===");
+		expect(out).toContain("feat: initial scaffold");
 	});
 });

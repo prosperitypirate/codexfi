@@ -1,35 +1,12 @@
 /**
- * Multi-provider extraction layer — LLM calls, JSON parsing, and memory extraction logic.
+ * Memory extraction layer — prompt dispatch, JSON parsing, and memory extraction logic.
  *
- * Supports xAI (Grok), Google (Gemini), and Anthropic (Claude) as extraction providers.
- * All callers use callLlm() which dispatches to the active provider with fallback.
+ * All LLM calls go through llm.ts (Claude via the user's Claude Code login, or an
+ * Anthropic API key). callLlm() never throws — on failure it returns "[]".
  */
 
-import {
-	ANTHROPIC_API_KEY,
-	ANTHROPIC_BASE_URL,
-	ANTHROPIC_EXTRACTION_MODEL,
-	ANTHROPIC_PRICE_INPUT_PER_M,
-	ANTHROPIC_PRICE_OUTPUT_PER_M,
-	EXTRACTION_PROVIDER,
-	GOOGLE_API_KEY,
-	GOOGLE_BASE_URL,
-	GOOGLE_EXTRACTION_MODEL,
-	GOOGLE_PRICE_INPUT_PER_M,
-	GOOGLE_PRICE_OUTPUT_PER_M,
-	LLM_MAX_TOKENS,
-	LLM_TEMPERATURE,
-	LLM_TIMEOUT_MS,
-	MAX_CONTENT_CHARS,
-	MAX_SUMMARY_CHARS,
-	XAI_API_KEY,
-	XAI_BASE_URL,
-	XAI_EXTRACTION_MODEL,
-	XAI_PRICE_CACHED_PER_M,
-	XAI_PRICE_INPUT_PER_M,
-	XAI_PRICE_OUTPUT_PER_M,
-	type ExtractionProvider,
-} from "./config.js";
+import { MAX_CONTENT_CHARS, MAX_SUMMARY_CHARS } from "./config.js";
+import { callLlm, callLlmStrict } from "./llm.js";
 import {
 	CONDENSE_SYSTEM,
 	CONDENSE_USER,
@@ -42,235 +19,9 @@ import {
 	SUMMARY_SYSTEM,
 	SUMMARY_USER,
 } from "./prompts.js";
-import { withRetry, EXTRACT_RETRY } from "./retry.js";
-import { ledger, activityLog } from "./telemetry.js";
 import type { ExtractedFact, ExtractionMode, Message } from "./types.js";
 
-// ── Provider-specific callers ───────────────────────────────────────────────────
-
-async function callXai(system: string, user: string): Promise<string> {
-	if (!XAI_API_KEY) {
-		throw new Error("XAI_API_KEY is not set");
-	}
-
-	const response = await fetch(`${XAI_BASE_URL}/chat/completions`, {
-		method: "POST",
-		headers: {
-			"Authorization": `Bearer ${XAI_API_KEY}`,
-			"Content-Type": "application/json",
-		},
-		signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-		body: JSON.stringify({
-			model: XAI_EXTRACTION_MODEL,
-			messages: [
-				{ role: "system", content: system },
-				{ role: "user", content: user },
-			],
-			max_tokens: LLM_MAX_TOKENS,
-			temperature: LLM_TEMPERATURE,
-			reasoning_effort: "none",
-		}),
-	});
-
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`xAI API error ${response.status}: ${body}`);
-	}
-
-	const data = await response.json();
-
-	// Extract content
-	let raw = "";
-	try {
-		raw = data.choices?.[0]?.message?.content ?? "";
-	} catch {
-		console.warn("xai call: unexpected response structure");
-	}
-
-	// Record telemetry
-	try {
-		const usage = data.usage ?? {};
-		const promptTokens = usage.prompt_tokens ?? 0;
-		const completionTokens = usage.completion_tokens ?? 0;
-		const cachedTokens = usage.prompt_tokens_details?.cached_tokens ?? 0;
-		const cost =
-			(promptTokens - cachedTokens) * XAI_PRICE_INPUT_PER_M / 1_000_000 +
-			cachedTokens * XAI_PRICE_CACHED_PER_M / 1_000_000 +
-			completionTokens * XAI_PRICE_OUTPUT_PER_M / 1_000_000;
-		await ledger.recordXai(promptTokens, cachedTokens, completionTokens);
-		activityLog.recordXai(promptTokens, cachedTokens, completionTokens, cost);
-	} catch {
-		// Telemetry failure should never block extraction
-	}
-
-	return raw.trim();
-}
-
-async function callGoogle(system: string, user: string): Promise<string> {
-	if (!GOOGLE_API_KEY) {
-		throw new Error("GOOGLE_API_KEY is not set");
-	}
-
-	const response = await fetch(
-		`${GOOGLE_BASE_URL}/models/${GOOGLE_EXTRACTION_MODEL}:generateContent`,
-		{
-			method: "POST",
-			headers: {
-				"x-goog-api-key": GOOGLE_API_KEY,
-				"Content-Type": "application/json",
-			},
-			signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-			body: JSON.stringify({
-				system_instruction: {
-					parts: [{ text: system }],
-				},
-				contents: [
-					{
-						parts: [{ text: user }],
-					},
-				],
-				generationConfig: {
-					temperature: LLM_TEMPERATURE,
-					maxOutputTokens: LLM_MAX_TOKENS,
-					responseMimeType: "application/json",
-				},
-			}),
-		},
-	);
-
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`Google API error ${response.status}: ${body}`);
-	}
-
-	const data = await response.json();
-
-	// Extract content — native API: candidates[0].content.parts[0].text
-	let raw = "";
-	try {
-		raw = data.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-	} catch {
-		console.warn("google call: unexpected response structure");
-	}
-
-	// Record telemetry
-	try {
-		const usage = data.usageMetadata ?? {};
-		const promptTokens = usage.promptTokenCount ?? 0;
-		const completionTokens = usage.candidatesTokenCount ?? 0;
-		const cost =
-			promptTokens * GOOGLE_PRICE_INPUT_PER_M / 1_000_000 +
-			completionTokens * GOOGLE_PRICE_OUTPUT_PER_M / 1_000_000;
-		await ledger.recordGoogle(promptTokens, completionTokens);
-		activityLog.recordGoogle(promptTokens, completionTokens, cost);
-	} catch {
-		// Telemetry failure should never block extraction
-	}
-
-	return raw.trim();
-}
-
-async function callAnthropic(system: string, user: string): Promise<string> {
-	if (!ANTHROPIC_API_KEY) {
-		throw new Error("ANTHROPIC_API_KEY is not set");
-	}
-
-	const response = await fetch(`${ANTHROPIC_BASE_URL}/messages`, {
-		method: "POST",
-		headers: {
-			"x-api-key": ANTHROPIC_API_KEY,
-			"anthropic-version": "2023-06-01",
-			"Content-Type": "application/json",
-		},
-		signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
-		body: JSON.stringify({
-			model: ANTHROPIC_EXTRACTION_MODEL,
-			max_tokens: LLM_MAX_TOKENS,
-			temperature: LLM_TEMPERATURE,
-			system,
-			messages: [{ role: "user", content: user }],
-		}),
-	});
-
-	if (!response.ok) {
-		const body = await response.text();
-		throw new Error(`Anthropic API error ${response.status}: ${body}`);
-	}
-
-	const data = await response.json();
-
-	// Extract content — content[0].text
-	let raw = "";
-	try {
-		raw = data.content?.[0]?.text ?? "";
-	} catch {
-		console.warn("anthropic call: unexpected response structure");
-	}
-
-	// Record telemetry
-	try {
-		const usage = data.usage ?? {};
-		const promptTokens = usage.input_tokens ?? 0;
-		const completionTokens = usage.output_tokens ?? 0;
-		const cost =
-			promptTokens * ANTHROPIC_PRICE_INPUT_PER_M / 1_000_000 +
-			completionTokens * ANTHROPIC_PRICE_OUTPUT_PER_M / 1_000_000;
-		await ledger.recordAnthropic(promptTokens, completionTokens);
-		activityLog.recordAnthropic(promptTokens, completionTokens, cost);
-	} catch {
-		// Telemetry failure should never block extraction
-	}
-
-	return raw.trim();
-}
-
-// ── Provider dispatcher with fallback ───────────────────────────────────────────
-
-const PROVIDER_FALLBACK_ORDER: ExtractionProvider[] = ["anthropic", "xai", "google"];
-
-const PROVIDER_FN: Record<ExtractionProvider, (s: string, u: string) => Promise<string>> = {
-	anthropic: callAnthropic,
-	xai: callXai,
-	google: callGoogle,
-};
-
-/**
- * Route to the configured extraction provider with automatic fallback.
- * Tries the primary provider first, then falls back through remaining providers.
- *
- * @returns Raw LLM response text (string). All callers MUST pass the result through
- *   `parseJsonArray()` to get typed facts. On total failure, returns the string `"[]"`
- *   which `parseJsonArray()` safely parses to an empty array — zero memories extracted
- *   for this turn, but the system continues without error.
- *
- * Silent degradation rationale: extraction failure should never block the user's
- * coding session. The next turn will retry automatically.
- */
-export async function callLlm(system: string, user: string): Promise<string> {
-	const primary = EXTRACTION_PROVIDER;
-	const fallbackOrder = [primary, ...PROVIDER_FALLBACK_ORDER.filter(p => p !== primary)];
-
-	for (const provider of fallbackOrder) {
-		try {
-			return await withRetry(
-				() => PROVIDER_FN[provider](system, user),
-				`LLM ${provider}`,
-				EXTRACT_RETRY,
-			);
-		} catch (error) {
-			console.warn(
-				`Provider ${provider} failed after retries: ${error instanceof Error ? error.message : error}`,
-			);
-			// Try next provider
-		}
-	}
-
-	// All providers exhausted — return valid JSON array string so parseJsonArray()
-	// returns [] rather than throwing. This is intentionally a string, not an array,
-	// because callLlm's contract returns raw LLM text for parseJsonArray() to process.
-	console.error("All extraction providers failed — skipping extraction for this turn");
-	return "[]";
-}
+export { callLlm };
 
 // ── JSON parsing ────────────────────────────────────────────────────────────────
 
@@ -321,6 +72,12 @@ export function parseJsonArray(raw: string): Array<{ memory: string; type: strin
 
 		return [];
 	} catch {
+		// Models occasionally wrap the array in prose ("Here are the memories: [...]").
+		const start = cleaned.indexOf("[");
+		const end = cleaned.lastIndexOf("]");
+		if (start !== -1 && end > start && (start > 0 || end < cleaned.length - 1)) {
+			return parseJsonArray(cleaned.slice(start, end + 1));
+		}
 		console.warn("Failed to parse JSON array:", raw.slice(0, 200));
 		return [];
 	}
@@ -358,16 +115,18 @@ export async function extractMemories(
 
 	const truncated = conversation.slice(0, MAX_CONTENT_CHARS);
 
+	// Strict: an LLM failure must surface to the caller (the worker keeps the
+	// transcript offset and retries) instead of looking like "nothing to extract".
 	let raw: string;
 	switch (mode) {
 		case "init":
-			raw = await callLlm(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated));
+			raw = (await callLlmStrict(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated), { operation: "init" })).text;
 			break;
 		case "summary":
-			raw = await callLlm(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated));
+			raw = (await callLlmStrict(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated), { operation: "summary" })).text;
 			break;
 		default:
-			raw = await callLlm(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated));
+			raw = (await callLlmStrict(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated), { operation: "extraction" })).text;
 			break;
 	}
 
@@ -402,6 +161,7 @@ export async function detectContradictions(
 			CONTRADICTION_USER
 				.replace("{new_memory}", newMemory)
 				.replace("{candidates}", candidatesText),
+			{ operation: "contradiction" },
 		);
 
 		if (!raw) return [];
@@ -440,6 +200,7 @@ export async function condenseToLearnedPattern(
 		const raw = await callLlm(
 			CONDENSE_SYSTEM,
 			CONDENSE_USER.replace("{summary}", summaryText.slice(0, MAX_SUMMARY_CHARS)),
+			{ operation: "condense" },
 		);
 		const items = parseJsonArray(raw);
 		return items.length > 0 ? items[0] : null;

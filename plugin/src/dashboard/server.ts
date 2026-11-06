@@ -7,16 +7,15 @@
  * API endpoints:
  *   GET /                     — HTML dashboard (self-contained, no external deps)
  *   GET /api/stats            — Memory counts, type distribution, per-project breakdown
- *   GET /api/costs            — Cumulative API cost ledger by provider
+ *   GET /api/costs            — Cumulative usage/cost ledger by backend ({ backends: {...} })
  *   POST /api/costs/reset     — Zero out the cost ledger
- *   GET /api/activity         — Recent API call activity (in-memory ring buffer)
+ *   GET /api/activity         — Recent LLM / embedding calls (ring buffer)
  *   GET /api/memories?limit=N           — Recent memories across all projects
  *   GET /api/memories?user_id=X&limit=N — Memories for a specific project/scope
  *   DELETE /api/memories/:id            — Delete a single memory by ID
- *   GET /api/search?q=...               — Semantic search (requires VOYAGE_API_KEY)
+ *   GET /api/search?q=...               — Semantic search (local embeddings)
  */
 
-import { VOYAGE_API_KEY } from "../config.js";
 import { store, refresh as refreshDb } from "../db.js";
 import { ledger, activityLog } from "../telemetry.js";
 import { nameRegistry } from "../names.js";
@@ -191,10 +190,6 @@ async function handleSearch(url: URL): Promise<Response> {
 	const query = url.searchParams.get("q") ?? "";
 	if (!query.trim()) {
 		return json({ error: "Missing ?q= parameter" }, 400);
-	}
-
-	if (!VOYAGE_API_KEY) {
-		return json({ error: "VOYAGE_API_KEY not set — semantic search unavailable" }, 503);
 	}
 
 	const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);

@@ -75,8 +75,8 @@ export async function run(args: ParsedArgs): Promise<void> {
 	if (memories.length === 0) {
 		fmt.warn("No memories found for this scope.");
 		fmt.blank();
-		fmt.info(`Try ${fmt.cyan("codexfi install")} and start an OpenCode session,`);
-		fmt.info("or use /memory-init to seed project memory manually.");
+		fmt.info(`Try ${fmt.cyan("codexfi install")} and start a Claude Code session in this project -`);
+		fmt.info("codexfi seeds project memory automatically on the first session.");
 		return;
 	}
 

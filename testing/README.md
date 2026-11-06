@@ -1,273 +1,154 @@
 # codexfi Test Suite
 
-Four test tiers covering unit logic, integration, concurrent safety, and full end-to-end agent sessions.
+Tests for the codexfi **Claude Code plugin**: the hook handlers, background worker,
+MCP server, transcript reader, SQLite vector store, embedder and LLM plumbing.
 
-> **Storage:** bun:sqlite with WAL mode. Replaced JSONL (v0.5) and LanceDB (v0.4) to support
-> concurrent multi-agent read/write without data loss. See design doc `011-sqlite-vector-store.md`.
-
-## Prerequisites
-
-**1. Plugin built**
-```bash
-cd plugin && bun run build
-```
-
-**2. OpenCode CLI installed**
-```bash
-bun install -g opencode-ai
-# Verify: opencode --version  (1.2.10+)
-```
-
-**3. Plugin set to LOCAL dev build in `~/.config/opencode/opencode.json`**
-
-> **CRITICAL:** The E2E test harness imports `plugin/src/db.ts` and `plugin/src/store.ts`
-> directly to verify memories. If `opencode.json` uses the npm-published `"codexfi"` package
-> instead of the local dev build, the `opencode run` sessions will write to the npm plugin's
-> store while the test harness reads from the local plugin's store — resulting in **0 memories
-> found and all scenarios failing**.
-
-```json
-{
-  "plugin": ["file:///Users/neo/Development/codexfi/plugin"]
-}
-```
-
-After testing, restore to the published package:
-```json
-{
-  "plugin": ["codexfi"]
-}
-```
-
-**4. API keys in `~/.codexfi/codexfi.jsonc`**
-
-The plugin reads keys from `codexfi.jsonc` — env vars are not read by the plugin. Run `bunx codexfi install` or create the file manually:
-```jsonc
-{
-  "voyageApiKey": "pa-...",
-  "anthropicApiKey": "sk-ant-...",
-  "extractionProvider": "anthropic"
-}
-```
-An AI provider key for the OpenCode agent sessions is also required — set this in your shell or `.env` (e.g. `ANTHROPIC_API_KEY`) for OpenCode's own model calls.
-
-## Test tiers
-
-| Tier | Tests | Command | Time | Requirements |
-|------|-------|---------|------|-------------|
-| Unit | 171 | `bun test src/unit/` | ~1s | None |
-| Integration | 34 | `bun test src/integration/` | ~4s | `VOYAGE_API_KEY` |
-| Stress | 3 | `bun test src/stress/` | ~1s | None |
-| E2E | 15 scenarios | `bun run test:e2e` | ~10min | Live opencode + API keys |
-
-### Stress tests (concurrent multi-agent safety)
-
-These validate the SQLite WAL store under multi-process contention — the scenario where
-multiple OpenCode agents read and write the same `store.db` simultaneously.
-
-| Test | Processes | Operations | Validates |
-|------|-----------|-----------|-----------|
-| `concurrent-writes` | 20 writers | 400 INSERTs | Zero data loss, all IDs unique, `PRAGMA integrity_check = ok` |
-| `concurrent-reads` | 20 readers | 400 searches against 500 seeded records | All searches return results, no errors, DB intact |
-| `concurrent-mixed` | 15 writers + 15 readers | 300 writes + 300 reads simultaneously | Zero data loss, all reads succeed, no SQLITE_BUSY errors |
-
-Each test spawns real OS child processes (not async concurrency within one process) hitting
-the same `.db` file — matching the actual multi-agent deployment pattern.
-
-## Running
+Everything runs offline. No test calls the network, the real `claude` CLI, the
+Anthropic API, or downloads an embedding model, and no test reads or writes your
+real `~/.codexfi`.
 
 ```bash
 cd testing
-bun install                    # first time only
-bun test src/unit/             # unit tests only
-bun test src/integration/      # integration tests only
-bun test src/stress/           # concurrent stress tests only
-bun run test:e2e               # all 15 E2E scenarios (live dashboard at localhost:4243)
-bun run test:e2e:scenario 01   # single E2E scenario
+bun install          # once
+bun test src/unit/ src/integration/      # = bun run test   (~4 s)
+bun test src/stress/                     # = bun run test:stress (~1 s)
+bun run typecheck
 ```
 
-E2E output is printed to stdout with ANSI colours and shown live at `http://localhost:4243`.
-Each run is also saved to `results/` (gitignored). After each scenario, the test harness
-**automatically deletes all memories it created** from the store.
+`src/integration/plugin-load.test.ts` runs the **built bundle**. Rebuild it after
+changing plugin source: `cd plugin && npm run build` (or `bun run test:bundle`).
 
-## Latest run results (2026-04-06) — SQLite WAL store (PR #151)
+## Tiers
 
-> **Note:** Snapshot from PR #151. Suite has since grown to 171 unit / 34 integration / 15 E2E. Run locally for fresh numbers; see CI for per-PR results.
+| Tier | Tests | Command | What it covers |
+|------|-------|---------|----------------|
+| Unit | 243 | `bun test src/unit/` | Pure logic + small on-disk state, in-process |
+| Integration | 150 (+1 todo) | `bun test src/integration/` | Hooks, worker, MCP, store, embedder, context against a temp SQLite DB; the shipped bundle under Bun and Node |
+| Stress | 3 | `bun test src/stress/` | 15–20 OS processes hammering one SQLite WAL database |
 
-Full run against `feat/pure-ts-vector-store` branch. Storage: bun:sqlite with WAL mode.
-Extraction via Anthropic Haiku.
+## Sandbox (how isolation works)
 
-```
-Unit:        139 pass,  0 fail  (1.0s)
-Integration:  31 pass,  0 fail  (3.5s)
-Stress:        3 pass,  0 fail  (0.7s)  ← 20 writers + 20 readers + 15+15 mixed
-E2E:       12/13 pass             (629s)
-```
+Plugin modules read their environment **at import time** (`config.ts` captures
+`CODEXFI_DATA_DIR`, `plugin-config.ts` reads `~/.codexfi/codexfi.jsonc`), and
+`bun test` shares one module cache across all files. So
+[`src/helpers/preload.ts`](src/helpers/preload.ts) builds a sandbox before any
+plugin module loads. It runs through `bunfig.toml` (`[test].preload`) **and** is the
+first import of every test file, so it also applies when `bun test` is started
+from another directory.
 
-```
-FAIL  01  Cross-Session Memory Continuity       17.5s  ← flaky: agent omitted project name
-PASS  02  README-Based Project-Brief Seeding    14.9s
-PASS  03  Transcript Noise Guard                15.0s
-PASS  04  Project Brief Always Present          19.5s
-PASS  05  Memory Aging                          50.3s
-PASS  06  Existing Codebase Auto-Init           68.1s
-PASS  07  Enumeration Hybrid Retrieval          38.2s
-PASS  08  Cross-Synthesis (isWideSynthesis)     54.9s
-PASS  09  maxMemories=20 Under Load            176.9s
-PASS  10  Knowledge Update / Superseded         67.3s
-PASS  11  System Prompt Memory Injection        23.2s
-PASS  12  Multi-Turn Per-Turn Refresh           59.2s
-PASS  13  Auto-Init Turn 1 Visibility           24.0s
-```
+| What | How |
+|------|-----|
+| Home dir | `node:os` `homedir()` is mocked to a temp dir (Bun ignores runtime `HOME` changes); `HOME` is set too, so child processes inherit it |
+| Data dir | `CODEXFI_DATA_DIR` → temp dir (store, queue, sessions, logs, costs) |
+| Worker | `CODEXFI_NO_WORKER=1`: hooks never spawn a detached worker; tests call `runWorker()` in-process |
+| LLM | `plugin/src/llm.ts` is mocked: `callLlm` / `callLlmStrict` → [`helpers/fake-llm.ts`](src/helpers/fake-llm.ts) (`setLlmHandler`, `llmCalls`). All other llm.ts exports stay real |
+| `claude` binary | `CODEXFI_CLAUDE_BIN` → a shell stub that logs argv/stdin and prints canned JSON. Even an un-mocked call can't reach the real CLI |
+| Embeddings | `@huggingface/transformers` is mocked with a deterministic bag-of-words model ([`helpers/mock-embedder.ts`](src/helpers/mock-embedder.ts)): shared words → similar, unrelated → ~0, identical → 1 |
+| Keys / Claude env | `ANTHROPIC_API_KEY`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_PROJECT_DIR`, `CODEXFI_DISABLE` are unset |
 
-Scenario 01 failure: agent recalled all tech facts (SQLite, Bun, TypeScript, Repository pattern)
-but said "a CLI task management tool" instead of "taskflow". Previous solo run passed. Extraction
-variance, not a store bug.
+`bun test` emits no exit event, so a run can't delete its own sandbox
+(`$TMPDIR/codexfi-test-*`). Each run removes sandboxes older than one hour instead.
 
-### Previous results (2026-03-07) — JSONL store
+### Helpers
 
-```
-12/13 PASS (scenario 09 was known K=20 margin, not a regression)
-```
+| File | Purpose |
+|------|---------|
+| `helpers/preload.ts` | Sandbox + module mocks (above) |
+| `helpers/test-env.ts` | `makeTempDir`, `resetRuntimeState` (queue/sessions/logs/lock), `captureStdout` (patches `process.stdout.write` **and** `console.log/info/debug`, since Bun's console bypasses stdout.write), `writeTranscript`, `markEmbedderReady` / `markEmbedderMissing` (fake model weights on disk for `isEmbedderReady()`) |
+| `helpers/temp-db.ts` | `setupTempDb` / `teardownTempDb`: a fresh SQLite store per suite |
+| `helpers/fake-llm.ts` | Controllable LLM fake + `realLlm` (the real exports, used against the stub binary) |
+| `helpers/mock-embedder.ts` | `bowVector`, `deterministicVector`, `cosine`, `MOCK_DIMS`, the fake transformers module |
+| `helpers/mock-fetch.ts` | Route-based `fetch` mock (Anthropic response builders) |
 
-### Previous results (2026-02-25) — plugin embedded rewrite
+Writing a new test:
 
-```
-12/12 PASS  —  Total: ~465s (~7.8 min)
-```
+```ts
+import "../helpers/preload.js"; // ALWAYS first, before any plugin import
+import { describe, test, expect, beforeAll, afterAll } from "bun:test";
+import { setLlmHandler, resetFakeLlm } from "../helpers/fake-llm.js";
+import { setupTempDb, teardownTempDb } from "../helpers/temp-db.js";
+import { EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
-### Observations and known issues
+beforeAll(setupTempDb);
+afterAll(teardownTempDb);
 
-**Scenario 04 — project-brief type not extracted without README**
-The `project-brief` memory type is never saved when there's no README. The agent extracts `tech-context` and `progress` instead. The scenario still passes because memory recall works — but the `project-brief` count assertion is diagnostic only (non-blocking). Root cause: `seedProjectBrief` likely only fires on `triggerSilentAutoInit` (README path), not on conversation-only sessions.
-
-**Scenario 03 — assertion updated (not a bug)**
-The original assertion checked `s2.text` for the project name "ferrite-api". The LLM responded correctly ("a Rust web service") without always naming it. Changed to check the backend memory content directly — more reliable.
-
-**Scenario 09 — memory count is non-deterministic**
-The xAI extractor consolidates facts differently each run — 6 short sessions produced 5 memories once, 18 another time. The scenario uses rich, detailed session messages (8 sessions) to ensure consistent ≥8 memory count. This mirrors the same ingest nondeterminism seen in the benchmark.
-
-## Known issue: OpenCode Desktop app interference
-
-If the OpenCode desktop app is running, it sets `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, and `OPENCODE_CLIENT` in your shell environment. The `opencode run` CLI inherits these and its internal server then requires Basic Auth — but run-mode sends no auth headers, causing every CLI session to fail silently.
-
-**The test harness already handles this automatically** via `cleanEnv()` in `src/opencode.ts`, which strips those three variables before spawning each `opencode run` process. You do not need to close the desktop app.
-
-If you run `opencode run` manually from a terminal where the desktop app is active and see unexpected failures, unset those vars first:
-```bash
-env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
-  opencode run "your message" --dir /path/to/project -m anthropic/claude-sonnet-4-6
+test("extracts", async () => {
+	setLlmHandler((system) => (system === EXTRACTION_SYSTEM ? '[{"memory":"x","type":"tech-context"}]' : "[]"));
+	// ...
+});
 ```
 
-This is a known bug in `opencode` v1.2.10 — tracked at https://github.com/anomalyco/opencode/issues/14532.
+Gotchas:
+- Thresholds are model-specific (`embedder.ts` `activeThresholds()`). Assert relative
+  to it, not to hard-coded similarities.
+- Module mocks are process-wide. Don't `mock.module()` plugin modules in individual
+  files; extend the preload instead.
+- The worker waits until a job is 1.5 s old before reading its transcript (Claude Code
+  flushes final lines late). `worker.test.ts` back-dates `createdAt` to skip that.
+- Some suites are sequential by design (`worker.test.ts` turn jobs, `db.test.ts`), so
+  `bun test --randomize` is not supported. File order doesn't matter.
+- Seeded rows need `embed_model: currentEmbedModelId()`: vector search ignores rows
+  from other embedding models.
 
-## Resolved: `codexfi.jsonc` previously deleted by OpenCode Desktop
+## What each file covers
 
-The OpenCode Desktop app periodically deletes unrecognized files from `~/.config/opencode/`.
-This was the root cause of config file disappearance — fixed by moving the config to
-`~/.codexfi/codexfi.jsonc` (PR #156). The `~/.codexfi/` directory is not managed by
-OpenCode, so the config is no longer affected. See issue #155 for forensic details.
+### Unit (`src/unit/`)
 
-## Scenarios
+| File | Covers |
+|------|--------|
+| `llm.test.ts` | `buildClaudeArgs` (`--safe-mode`, `--tools ""`, `--setting-sources ""`, `--no-session-persistence`, `--system-prompt`, no `--bare`); `findClaudeBinary` order (`CODEXFI_CLAUDE_BIN` → `CLAUDE_CODE_EXECPATH` → PATH, cache reset); `resolveBackend`; real CLI path against the stub (stdin, argv, `CODEXFI_DISABLE=1`, usage parsing) |
+| `transcript.test.ts` | `recordsToMessages` (system-reminder stripping, queued_command, tool_use one-liners, tool_result errors only, thinking/hook attachments/sidechains/meta skipped, same-role merging, caps); `readTranscriptFrom` (byte offsets, partial trailing line, shrunk-file reset, corrupt lines, UTF-8); `windowMessages` |
+| `state.test.ts` | Session load/save (atomic, unsafe ids, 2,000-id cap, prune); job queue order/remove; worker lock (acquire/release, stale takeover, live foreign lock); `logLine` (format, 2 MB rotation, never throws) |
+| `runtime.test.ts` | `fitToLimit` (whole bullets, continuation lines, empty headers, under 10k); `isDisabled` (`CODEXFI_DISABLE`, `excludePaths` segment-aware) |
+| `memory-bank.test.ts` | Bank detection in cwd / parents, `maxDepth`, ignores dirs without core files, `lastSavedAt` |
+| `config.test.ts` | `validateId`, constants, sandbox values; env vs `codexfi.jsonc` precedence in fresh processes (incl. API-key env fallback) |
+| `plugin-config.test.ts` | Config path, `writeApiKeys` (merging, defaults, ASCII, no `extractionProvider`), JSONC loading (comments, `excludePaths` filtering, invalid regexes, malformed file) |
+| `telemetry.test.ts` | `recordLlm` / `recordEmbedding` buckets + totals, persistence, legacy `costs.json` normalisation, ActivityLog ring buffer |
+| `auto-init.test.ts` | `INIT_FILES`, `collectInitContent` (per-file/total caps, git log, `<private>` stripping) |
+| `context.test.ts` | `formatContextForPrompt` sections, display threshold, Recent Sessions, per-type caps, cross-section dedup |
+| `vector-store.test.ts` | Cosine, CRUD, filters, BLOB round-trip, lifecycle |
+| `names`, `retry`, `prompts`, `ingest-result-schema` | Name registry, retry/backoff, prompt guards, `IngestResult` schema |
 
-| # | Name | What it tests |
-|---|------|---------------|
-| 01 | Cross-Session Memory Continuity | Auto-save fires after session end; session 2 recalls facts from session 1 |
-| 02 | README-Based Project-Brief Seeding | `triggerSilentAutoInit` reads README on first session; project-brief memory is created and recalled in session 2 |
-| 03 | Transcript Noise Guard | Saved memories contain no raw `[user]`/`[assistant]` transcript lines; memory recall works across sessions |
-| 04 | Project-Brief Always Present | Memories accumulate from conversation even without README; session 2 recalls project facts |
-| 05 | Memory Aging | Backend replaces older `progress` memories with newest; only 1 survives across 3 sessions |
-| 06 | Existing Codebase Auto-Init | `triggerSilentAutoInit` reads real project files (package.json, tsconfig, src/) on first open; memories are created without any conversation seeding |
-| 07 | Enumeration Hybrid Retrieval | `types[]` param fires for "list all preferences" queries; answer covers preferences seeded across multiple sessions, not just the most recent |
-| 08 | Cross-Synthesis (isWideSynthesis) | "across both projects" heuristic fires; answer synthesises facts from two separate project memory namespaces |
-| 09 | maxMemories=20 Under Load | With >10 memories stored, facts from early sessions still recalled — confirms K=20 retrieval depth |
-| 10 | Knowledge Update / Superseded | After ORM migration, agent answers with the new ORM (Tortoise), not the stale one (SQLAlchemy); backend reflects superseded state |
-| 11 | System Prompt Memory Injection | [MEMORY] block is injected via `system.transform` into the system prompt (not as a synthetic message part); agent references seeded facts |
-| 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories as the user switches topics mid-session |
-| 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode, re-fetches memories for Turn 1 visibility, background enrichment fires after first response |
-| 14 | Active-Context Singleton Aging | New `active-context` insert deletes prior ones for the project; only the latest survives; agent recalls the current focus from `## Active Context` injection |
-| 15 | Recent Sessions Shows Last 3 Summaries | `## Recent Sessions` section renders the latest 3 `session-summary` memories with truncation; older summaries do not appear |
+### Integration (`src/integration/`)
 
-## Architecture
+| File | Covers |
+|------|--------|
+| `hooks.test.ts` | `runHook`: stop / pre-compact / session-end enqueue; `agent_id` and `CODEXFI_DISABLE` no-ops; session-start (resume emits nothing, baseline + injected ids, auto-init, warmup when weights missing, < 10k output); user-prompt-submit (once-per-session injection, remember note, short prompts) |
+| `worker.test.ts` | `runWorker` with fake LLM: turn extraction from a fixture transcript (privacy, hook-attachment exclusion), offset advance, repeat job stores nothing, incremental next turn, tiny exchanges, summary job, init job, lock, settle delay |
+| `mcp.test.ts` | `handleRpc`: initialize (instructions), tools/list (4 tools), ping, -32601 / -32602, notifications; memory_add ↔ memory_search round trip, dedup update, contradiction only with candidates, scopes, `<private>`, list/forget, `excludePaths` |
+| `claude-context.test.ts` | `buildSessionContext` (structured sections, memory-bank mode keeps only newer sessions, `memoryBank: "off"`); `buildPromptContext` (relevance, already-injected exclusion, enumeration extras) |
+| `store-embeddings.test.ts` | `embed_model` migration of a pre-1.0 DB, cross-model search isolation, `addMemory` (dedup refreshes vector, contradiction supersede), `countStaleEmbeddings` / `reembedStale`, `ingest`, progress / active-context / session-summary aging |
+| `embedder.test.ts` | Local path with the mocked model: model selection, prefixes, input cap, query memoisation, cache dir, `isEmbedderReady`, `activeThresholds` |
+| `plugin-load.test.ts` | `dist/codexfi.js` under **Bun and Node** from an external cwd: `--version`, `hook stop` (enqueue, silent, fast), garbage stdin, `CODEXFI_DISABLE`, resume; MCP stdio initialize/tools/list; `run.sh`; `hooks.json` / `plugin.json` wiring; no static `bun:` imports, transformers external |
+| `store-node-runtime.test.ts` | Store + telemetry + names bundled for Node and run under `node:sqlite` (byte-identical vector BLOBs, `embed_model`, `costs.json` backends) |
+| `store.test.ts`, `db.test.ts`, `active-context-aging.test.ts` | Store CRUD/search/list/profile, db adapter, singleton aging through the real `addMemory` path |
 
-```
-testing/
-├── src/
-│   ├── unit/                  — 139 unit tests (cosine math, CRUD, filters, serialisation)
-│   ├── integration/           — 31 integration tests (store, db, embedder, plugin-load)
-│   ├── stress/                — 3 concurrent multi-process tests
-│   │   ├── worker.ts          — child process entry point (write or read mode)
-│   │   ├── concurrent-writes.test.ts   — 20 processes × 20 writes, zero loss
-│   │   ├── concurrent-reads.test.ts    — 20 processes × 20 searches on 500 records
-│   │   └── concurrent-mixed.test.ts    — 15 writers + 15 readers simultaneously
-│   ├── helpers/
-│   │   └── temp-db.ts         — test isolation (redirects store to temp dir)
-│   ├── e2e/
-│   │   ├── runner.ts          — entry point, runs scenarios, emits live SSE events
-│   │   ├── opencode.ts        — spawns opencode serve sessions
-│   │   ├── memory-api.ts      — direct store access for verification
-│   │   ├── report.ts          — ANSI result formatting
-│   │   ├── live/
-│   │   │   ├── emitter.ts     — SSE event emitter (same pattern as benchmark)
-│   │   │   ├── server.ts      — Bun.serve on port 4243
-│   │   │   └── page.ts        — self-contained HTML live dashboard
-│   │   └── scenarios/
-│   │       ├── 01-cross-session.ts ... 15-recent-sessions-three.ts
-│   ├── results/               — gitignored; JSON output of each run
-│   ├── package.json
-│   └── tsconfig.json
-```
+### Stress (`src/stress/`)
 
-### Key changes for plugin
+| Test | Processes | Operations | Validates |
+|------|-----------|-----------|-----------|
+| `concurrent-writes` | 20 writers | 400 INSERTs | Zero data loss, unique IDs, `PRAGMA integrity_check = ok` |
+| `concurrent-reads` | 20 readers | 400 searches over 500 seeded rows | All searches return results, DB intact |
+| `concurrent-mixed` | 15 writers + 15 readers | 300 writes + 300 reads | Zero data loss, no `SQLITE_BUSY` |
 
-1. **`memory-api.ts` rewired** — imports `store.*` and `db.*` from `plugin/src/` directly instead of making HTTP calls to `localhost:8020`. Calls `db.refresh()` before reads to pick up writes from the `opencode serve` child process.
+Each spawns real OS processes on the same `.db` file, the same pattern as concurrent
+hook / worker / MCP processes.
 
-2. **`opencode.ts` uses server mode** — `opencode run` exits before async plugin event handlers (auto-save, extraction) complete. Switched to `opencode serve` with per-directory server caching so the plugin process stays alive for extraction to finish. `waitForMemories(dir, N, 30_000)` polls until data appears.
+## Known engine issues pinned by `test.todo`
 
-3. **`runner.ts` refreshes store** — calls `db.refresh()` before cleanup deletes to fix lock contention when the serve process is still holding a stale reference.
+Run `bun test --todo` to execute them (they fail until fixed):
 
-4. **Scenario 12 calls `addMemoryDirect()`** — this imports `store.ingest()` directly in the test runner process (not in a child `opencode serve` process), so extraction provider/model config must be correct in the built `dist/index.js`. Different config lifecycle than scenarios 01-11.
+- **MCP stdout pollution**: `store.ts` `ageActiveContext()` logs with `console.log`.
+  In the MCP server process stdout is the JSON-RPC channel, so `memory_add` with
+  type `active-context` writes a non-protocol line into the stream
+  (`mcp.test.ts`).
 
-## How `opencode run` is used
+## Removed
 
-Most scenarios use **single-shot mode** via `opencode run`:
-```bash
-opencode run "<message>" --dir <isolated-tmp-dir> -m anthropic/claude-sonnet-4-6 --format json
-```
-
-`--format json` emits one JSON event per line. The test harness parses these to extract:
-- Session ID
-- Full text response (concatenated text parts)
-- Exit code and timing
-
-Each scenario gets its own isolated `createTestDir()` directory under `/private/tmp/oc-test-<name>-<uuid>`, so tests never share state.
-
-### Persistent server mode (`opencode serve`)
-
-Scenario 12 uses **persistent server mode** for true multi-turn testing. Each `opencode run` invocation is a separate process — the plugin's in-memory session caches reset between runs, making it impossible to test per-turn refresh (turns 2+). `opencode serve` keeps a single plugin process alive across turns.
-
-The test harness provides helpers in `opencode.ts`:
-- `startServer(dir)` — spawns `opencode serve --dir <dir>`, waits for the HTTP API to become ready
-- `createSession(port, model)` — `POST /session` to create a new session
-- `sendServerMessage(port, sessionId, message)` — `POST /session/:id/message` to send a user message and collect the streamed response
-- `deleteSession(port, sessionId)` — `DELETE /session/:id` to clean up
-- `stopServer(handle)` — kills the server process
-
-The `model` field in the server API must be an object `{ providerID, modelID }`, not a string like `"anthropic/claude-sonnet-4-6"`.
-
-### Direct embedded store seeding
-
-For deterministic test setup, `memory-api.ts` provides:
-- `addMemoryDirect(projectTag, content, type?)` — calls `store.ingest()` directly to seed a memory (runs through the LLM extractor in the test runner process)
-- `searchMemories(projectTag, query, limit?)` — calls `store.search()` directly to verify semantic search results
-- `getMemoriesForDir(dir)` — calls `store.list()` for all memories under a project tag
-- `waitForMemories(dir, count, timeoutMs)` — polls `store.list()` until `count` memories appear (used for async auto-save)
-
-## Memory tag computation
-
-The plugin identifies each project by hashing the absolute directory path:
-```
-projectTag = "opencode_project_" + sha256(directory)[:16]
-```
-
-The test harness replicates this logic in `memory-api.ts:projectTagForDir()` to query the backend for exactly the memories that the plugin would have written.
+The OpenCode-era E2E harness (`src/e2e/`, `opencode run` / `opencode serve`
+scenarios) was deleted with the OpenCode plugin entry, along with the tests for
+removed modules (`disabled-warning`, `directory-tree`, `fresh-project-hint`,
+`checkConfigFile`, xAI/Google providers, the Voyage AI embedding provider
+(`embeddingProvider` / `voyageApiKey`), `extractionProvider`, the old
+`record{Xai,Google,Anthropic,Voyage}` ledger API). Old E2E run outputs remain in
+`results/` and `src/results/` for history.

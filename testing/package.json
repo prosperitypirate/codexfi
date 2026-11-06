@@ -2,13 +2,15 @@
   "name": "codexfi-testing",
   "version": "0.1.0",
   "private": true,
-  "description": "Tests for the codexfi plugin — unit, integration, and E2E",
+  "description": "Tests for the codexfi Claude Code plugin — unit, integration and stress",
   "scripts": {
     "test": "bun test src/unit/ src/integration/",
     "test:unit": "bun test src/unit/",
     "test:integration": "bun test src/integration/",
-    "test:e2e": "bun run src/e2e/runner.ts",
-    "test:e2e:scenario": "bun run src/e2e/runner.ts --scenario"
+    "test:stress": "bun test src/stress/",
+    "test:all": "bun test src/",
+    "test:bundle": "cd ../plugin && npm run build && cd ../testing && bun test src/integration/plugin-load.test.ts",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {},
   "devDependencies": {

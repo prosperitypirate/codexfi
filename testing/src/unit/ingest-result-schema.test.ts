@@ -21,6 +21,7 @@
  *   - No test asserted IngestResult had a `type` field at all.
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect } from "bun:test";
 import { IngestResultSchema } from "../../../plugin/src/types.js";
 import { EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";

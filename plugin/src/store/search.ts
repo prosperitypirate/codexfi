@@ -34,6 +34,8 @@ export function search(
 	// Score each candidate with cosine distance
 	const scored: Array<{ rec: typeof candidates[0]; dist: number }> = [];
 	for (const rec of candidates) {
+		// Vectors from a different embedding model are not comparable.
+		if (rec.vector.length !== qv.length) continue;
 		const dist = cosineDistance(qv, rec.vector);
 		scored.push({ rec, dist });
 	}
@@ -53,6 +55,7 @@ export function search(
 		chunk: rec.chunk,
 		superseded_by: rec.superseded_by,
 		type: rec.type,
+		embed_model: rec.embed_model,
 		_distance: dist,
 	}));
 }

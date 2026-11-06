@@ -23,7 +23,7 @@ body:
     attributes:
       label: Component
       options:
-        - Plugin (OpenCode integration)
+        - Plugin (Claude Code integration)
         - Memory store (LanceDB / embeddings)
         - Website (codexfi.com)
         - Benchmark

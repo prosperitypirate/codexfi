@@ -28,7 +28,7 @@ export function Footer() {
               codexfi
             </p>
             <p className="text-sm text-muted-foreground">
-              Persistent memory for AI coding agents.
+              Persistent memory for Claude Code.
             </p>
           </div>
 

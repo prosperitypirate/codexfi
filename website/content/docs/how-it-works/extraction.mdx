@@ -1,23 +1,33 @@
 ---
 title: Extraction Pipeline
-description: How codexfi uses LLMs to extract structured memories from conversations.
+description: How codexfi turns Claude Code transcripts into structured memories — in the background, on your own Claude Code login.
 ---
 
 # Extraction Pipeline
 
-After every assistant turn, codexfi runs an extraction pipeline to identify and store key facts from the conversation. This happens in the background and is invisible to the user.
+After every turn, codexfi extracts the key facts from the conversation and stores them. It all happens in a short-lived background worker, so your session never waits for it.
 
 <DocsExtractionPipeline />
 
 ## Pipeline steps
 
-### 1. Message snapshot
+### 1. Transcript window
 
-The last 8 messages from the conversation are collected. Each message is formatted as `[role] content` and concatenated into a single text block. Content longer than the maximum character limit is truncated.
+The `Stop` hook only queues a job. The worker then reads the session's transcript **from the byte offset where it last stopped**, so every turn is extracted exactly once — never skipped, never repeated. User and assistant messages are formatted as plain text; codexfi's own injected `[MEMORY]` blocks are skipped, so memories are never re-extracted from themselves.
+
+Turns longer than 12,000 characters are split into windows on message boundaries rather than truncated.
 
 ### 2. LLM extraction
 
-The conversation text is sent to the configured extraction provider with a system prompt instructing it to identify important facts. The LLM returns a JSON array of typed facts:
+Each window is sent to the LLM with a system prompt instructing it to identify durable facts. By default this is **your own Claude Code**:
+
+```bash
+claude -p --safe-mode --model haiku --output-format json --tools "" …
+```
+
+`--safe-mode` keeps your normal login while skipping plugins, hooks, `CLAUDE.md`, MCP servers, and auto-memory, and the call runs in a neutral temp directory — roughly 600 tokens of overhead per call. You can switch to the Anthropic API with an API key instead; see [Configuration](/docs/configuration#llm-backend).
+
+The LLM returns a JSON array of typed facts:
 
 ```json
 [
@@ -36,31 +46,31 @@ Each fact is an atomic, self-contained piece of knowledge with an assigned [memo
 
 ### 3. Embedding
 
-Each extracted fact is embedded into a 1024-dimension vector using Voyage AI's `voyage-code-3` model. This model is specifically optimized for code and technical content.
+Each fact is embedded **on your machine** with an ONNX model (default `jina-embeddings-v2-base-code`, 768 dimensions), loaded through transformers.js. The weights are downloaded once into `~/.codexfi/models`; after that, embedding needs no network. There is no remote embedding provider — memory text never leaves your machine for embedding.
 
-The embedding uses `input_type: "document"` for storage and `input_type: "query"` for retrieval, which Voyage AI uses to optimize the embedding for each purpose.
+Every memory records which model produced its vector, and only vectors from the same model are ever compared.
 
 ### 4. Deduplication
 
 <DocsDedupCosine />
 
-Before storing, each fact is checked against existing memories using cosine similarity:
+Before storing, each fact is compared with existing memories. Thresholds are tuned per embedding model; with the default local model:
 
-| Memory category | Dedup threshold | Meaning |
+| Memory category | Dedup distance | Meaning |
 |----------------|-----------------|---------|
-| General types | 0.12 | Very close matches are considered duplicates |
-| Structural types | 0.25 | Wider threshold — structural knowledge evolves |
+| General types | 0.16 | Very close matches are considered duplicates |
+| Structural types | 0.34 | Wider threshold — structural knowledge evolves |
 
-If a duplicate is found, the existing memory is **updated** (text refreshed, timestamp updated) rather than creating a new entry. This keeps memory count manageable.
+If a duplicate is found, the existing memory is **updated** in place — text, vector, and type are refreshed — instead of adding a copy.
 
 ### 5. Storage
 
-New memories (non-duplicates) are inserted into the vector store with:
+New memories are inserted into the local SQLite store with:
 
 - A UUID identifier
 - The memory text
-- The embedding vector
-- Metadata (type, scope)
+- The embedding vector and the model that produced it
+- Metadata (type, scope, date)
 - Source chunk (the conversation excerpt that produced this fact)
 - Timestamps (created_at, updated_at)
 
@@ -68,76 +78,33 @@ New memories (non-duplicates) are inserted into the vector store with:
 
 After insertion, type-specific aging rules run:
 
-- **`progress`**: all older progress memories are deleted (only latest survives)
-- **`session-summary`**: if count exceeds 3, oldest is condensed into a `learned-pattern`
+- **`progress`** and **`active-context`**: only the latest survives
+- **`session-summary`**: the newest 3 are kept; older ones are condensed into a `learned-pattern`
 
 ### 7. Contradiction detection
 
-The system searches for semantically nearby existing memories (within contradiction distance) and asks the LLM: "Does this new fact supersede any of these?"
-
-If contradictions are found, the old memories are marked as `superseded_by` the new one. They remain in the database but are excluded from search results.
+The worker finds semantically nearby memories and asks the LLM: "Does this new fact supersede any of these?" Superseded memories are marked `superseded_by` the new one — they stay in the database but are excluded from search and from the `[MEMORY]` block.
 
 ## Extraction modes
 
-The pipeline runs in three modes:
+### Turn mode
 
-### Normal mode
-
-Used after every assistant turn. Extracts atomic facts from the recent conversation with types assigned per fact.
+Queued by the `Stop` hook after every turn. Extracts atomic facts from the new part of the transcript.
 
 ### Summary mode
 
-Triggered every N turns (default: 5). Generates a high-level session summary covering what was worked on, decisions made, and progress achieved.
+Queued by `PreCompact` and `SessionEnd`. The worker first extracts any turns not yet processed, then writes a `session-summary` covering what was worked on, decisions made, and progress.
 
 ### Init mode
 
-Used during auto-initialization when a new project is detected. Reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions like AGENTS.md and CLAUDE.md, and more) plus the recent 20 git commits. Extracts foundational facts about the project using a specialized init extraction prompt.
+Queued on a project's first session, when it has no memories yet. Reads 28 common project files (README, package.json, Dockerfile, tsconfig, monorepo configs, agent instructions like `CLAUDE.md` and `AGENTS.md`, and more) plus the last 20 git commits, and extracts foundational facts with a dedicated init prompt. Disable with `"autoInit": false`.
 
-After init mode completes, memories are re-fetched immediately so they appear in the Turn 1 `[MEMORY]` block — the agent has project context from its very first response.
+## The background worker
 
-### Background enrichment
-
-After the Turn 1 response is delivered, a separate enrichment pass fires in the background. It generates a directory tree of the project structure and extracts additional context from entry points and CI configuration files. This enriches the memory store without delaying the initial response.
-
-## Extraction providers
-
-codexfi supports three extraction providers. The configured primary provider is tried first, with automatic fallback through the remaining providers.
-
-Set your provider via `"extractionProvider"` in `codexfi.jsonc` — see [Configuration](/docs/configuration#extraction-provider) for details.
-
-<DocsProviderSpeed />
-
-### Anthropic (default)
-
-- **Model**: `claude-haiku-4-5`
-- **Speed**: ~14 seconds per session
-- **Notes**: Most consistent extraction quality. Reliable JSON output.
-
-### xAI
-
-- **Model**: `grok-4.3`
-- **Speed**: ~5 seconds per session
-- **Notes**: Fastest and cheapest. Slightly higher variance in extraction quality.
-
-### Google
-
-- **Model**: `gemini-3-flash-preview`
-- **Speed**: ~21 seconds per session
-- **Notes**: Uses native `responseMimeType: "application/json"` for guaranteed JSON output.
-
-### Fallback behavior
-
-If the primary provider fails after retries, the plugin tries the next provider in order: `anthropic` → `xai` → `google`. If all providers fail, extraction is silently skipped for that turn — the user's session is never interrupted.
-
-## Retry strategy
-
-All LLM calls and database operations use exponential backoff with jitter:
-
-- **LLM extraction**: retries with configurable delay and jitter
-- **Database writes**: retries for transient write errors
-- **Embedding calls**: retries for Voyage AI API errors
-
-Telemetry failures never block extraction or embedding operations.
+- **One worker per machine.** An exclusive lock file ensures a single worker, with takeover if a previous one died. Several concurrent Claude Code sessions share one queue.
+- **Exits when idle.** There is no daemon: the worker starts when a job is queued and exits when the queue is empty.
+- **No recursion.** codexfi's own `claude -p` calls run with `--safe-mode` and `CODEXFI_DISABLE=1`, so they can never trigger codexfi hooks.
+- **Failures never reach your session.** Failed LLM calls are retried with exponential backoff and jitter; if extraction still fails, that turn is skipped and logged to `~/.codexfi/logs/worker.log`.
 
 ## JSON parsing
 
@@ -150,6 +117,4 @@ LLM responses are parsed with tolerance for common quirks:
 
 ## Privacy
 
-Before extraction, content wrapped in `<private>...</private>` tags is stripped. Nothing inside private tags is sent to any LLM provider or stored in the database.
-
-Messages that are fully private (entire content inside private tags) are excluded from the extraction snapshot entirely.
+Before extraction, content wrapped in `<private>...</private>` tags is stripped. Nothing inside private tags is sent to the LLM or stored in the database. Directories listed in [`excludePaths`](/docs/configuration#excludepaths) are never read at all.

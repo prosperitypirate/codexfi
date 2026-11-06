@@ -13,11 +13,11 @@ Browse, search, export, and inspect — everything the plugin does, accessible f
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-1.2-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
 [![Pure TypeScript](https://img.shields.io/badge/Pure-TypeScript-CF3CFF?style=flat)](https://github.com/prosperitypirate/codexfi)
-[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Semantic_Search-5B6BF5?style=flat)](https://www.voyageai.com/)
+[![Local Embeddings](https://img.shields.io/badge/Local-Embeddings-5B6BF5?style=flat)](https://github.com/prosperitypirate/codexfi)
 [![ANSI Colors](https://img.shields.io/badge/ANSI-Color_Output-FF6B35?style=flat)](https://no-color.org/)
 [![NO_COLOR](https://img.shields.io/badge/NO__COLOR-Respected-888888?style=flat)](https://no-color.org/)
 [![JSON Output](https://img.shields.io/badge/JSON-Machine_Readable-F7DF1E?style=flat)](https://github.com/prosperitypirate/codexfi)
-[![OpenCode](https://img.shields.io/badge/OpenCode-Plugin_CLI-FF6B35?style=flat)](https://opencode.ai)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-Plugin_CLI-D97757?style=flat)](https://claude.com/claude-code)
 
 </div>
 
@@ -26,14 +26,21 @@ Browse, search, export, and inspect — everything the plugin does, accessible f
 ## Quick Start
 
 ```bash
-# Install globally
+# Install into Claude Code (no API keys needed)
 bunx codexfi install
 
-# Or from the plugin directory during development
-bun run cli install        # register plugin + create /memory-init command
-bun run cli status         # verify everything is working
-bun run cli list           # see what the agent remembers
+# Or directly with the Claude Code CLI
+claude plugin marketplace add prosperitypirate/codexfi
+claude plugin install codexfi@codexfi
+
+# From the plugin directory during development
+bun run cli install --dry-run   # show what install would do
+bun run cli status              # verify everything is working
+bun run cli list                # see what the agent remembers
 ```
+
+codexfi is zero-config: background extraction runs through your own Claude Code
+login (`claude -p`) and embeddings run on-device. API keys are optional.
 
 ---
 
@@ -41,58 +48,71 @@ bun run cli list           # see what the agent remembers
 
 ### `install` — Set up the plugin
 
-Registers the plugin with OpenCode, creates the `/memory-init` slash command, and configures API keys.
+Finds the `claude` CLI and installs codexfi through Claude Code's plugin system:
+adds the `codexfi` marketplace, then installs `codexfi@codexfi`. Steps that are
+already done are skipped. Never prompts — safe for agent-driven installs.
 
 ```
 $ codexfi install
 
 Install
-───────────
-  - Plugin path: /path/to/codexfi
+-----------
+  [ok] Claude Code CLI /Users/you/.local/bin/claude
 
-  Step 1 — Register plugin with OpenCode
+  Plan:
+    claude plugin marketplace add prosperitypirate/codexfi
+    claude plugin install codexfi@codexfi
 
-  ✓ Registered plugin in opencode.json
+  [ok] Add the codexfi marketplace
+  [ok] Install the codexfi plugin
+------------------------------------------------------------
+  [ok] codexfi is installed.
 
-  Step 2 — Create slash commands
-
-  ✓ Created /memory-init slash command
-
-  Step 3 — Configure API keys
-
-  ✓ VOYAGE_API_KEY set (pa-PNK...)
-  ✓ ANTHROPIC_API_KEY set — extraction ready
-
-  ✓ Setup complete!
+  * Restart Claude Code (or start a new session) to activate the plugin.
 ```
 
-For non-interactive (LLM agent-driven) installs:
+```bash
+codexfi install --dry-run                         # print the plan, change nothing
+codexfi install --source /path/to/codexfi         # use a local checkout as the marketplace
+codexfi install --uninstall                       # print the uninstall commands
+
+# Optional LLM backend — written to ~/.codexfi/codexfi.jsonc (key values are never printed)
+codexfi install --llm-backend anthropic-api --anthropic-key sk-ant-...
+```
+
+To uninstall:
 
 ```bash
-codexfi install --no-tui
-codexfi install --no-tui --voyage-key pa-... --anthropic-key sk-ant-...
+claude plugin uninstall codexfi@codexfi
+claude plugin marketplace remove codexfi
+rm -rf ~/.codexfi   # optional: deletes all memories and usage data
 ```
 
 ---
 
 ### `status` — Health check
 
-Verifies database, API keys, plugin registration, and log file in one glance.
+Checks the Claude Code CLI, LLM backend, embeddings, store, background worker,
+Memory Bank, and whether Claude Code has the plugin enabled. Read-only; API keys
+are reported as set/unset only.
 
 ```
-$ bunx codexfi status
+$ codexfi status
 
 Status
-──────────
-  ✓ Data directory ~/.codexfi
-  ✓ Vector store ~/.codexfi/store/store.db
-  ✓ Config file ~/.codexfi/codexfi.jsonc
-  ✓ Voyage API key set (pa-PNK...)
-  ✓ Extraction API key anthropic (sk-ant...)
-  ✓ OpenCode plugin registered in opencode.json
-  ✓ Log file ~/.codexfi.log
+----------
+  [ok] Claude Code CLI 2.1.318 (Claude Code) - /Users/you/.local/bin/claude
+  [ok] LLM backend claude-cli (configured: auto, model: haiku)
+  [ok] Embeddings local - bge-small-en-v1.5 (384 dims), model cached in ~/.codexfi/models
+  [ok] Data directory ~/.codexfi
+  [ok] Config file none (optional - defaults in use)
+  [ok] Vector store 140 active / 152 total memories - ~/.codexfi/store/store.db
+  [ok] Background worker idle, 0 queued job(s)
+  [ok] Memory Bank none for this directory
+  [ok] Claude Code plugin enabled (codexfi@codexfi)
+  * API keys anthropic: unset (optional)
 
-  7/7 checks passed — system healthy.
+  9/9 checks passed - system healthy.
 ```
 
 ```bash
@@ -111,7 +131,7 @@ $ codexfi list --limit 5
 
 Memories
 ────────────
-  - Scope: project (/Users/neo/my-project)
+  - Scope: project (/Users/you/my-project)
   - Showing 5 of 5 max
 
   ID       │ Type           │ Memory                                        │    Updated
@@ -134,7 +154,7 @@ codexfi list --json              # raw JSON output
 
 ### `search` — Semantic search
 
-Vector search over memories using the same Voyage AI embedding pipeline as the plugin.
+Vector search over memories using the same embedding pipeline as the plugin (local, on-device embeddings).
 
 ```
 $ codexfi search "how is authentication handled"
@@ -144,7 +164,7 @@ $ codexfi search "how is authentication handled"
 Search Results
 ──────────────────
   - Query: "how is authentication handled"
-  - Scope: /Users/neo/my-project
+  - Scope: /Users/you/my-project
   - Found 3 results
 
   1. 87% █████████████████░░░ architecture 2026-02-20
@@ -169,7 +189,8 @@ codexfi search "deployment" --json
 
 ### `stats` — Database statistics
 
-Memory counts, type distribution, per-project breakdown, and cumulative API costs.
+Memory counts, type distribution, per-project breakdown, and cumulative usage per backend.
+Claude Code costs are notional — the figure Claude Code reports; subscription users are not billed per call.
 
 ```
 $ codexfi stats
@@ -193,15 +214,17 @@ Memory Types
   preference         │      7 │    5% │ █
   error-solution     │      6 │    4% │ █
 
-API Costs
-─────────────
-  Total: $0.5041
+Usage & Costs
+-----------------
+  Total: $0.0748
 
-  Provider     │  Calls │     Tokens │       Cost
-  ────────────-+-──────-+-──────────-+-──────────
-  Anthropic    │    274 │     299.9K │    $0.4891
-  xAI          │     57 │      63.7K │    $0.0107
-  Voyage AI    │    672 │      23.7K │    $0.0043
+  Backend                    | Model             |  Calls |     Tokens |       Cost
+  ---------------------------+-------------------+--------+------------+-----------
+  Claude Code (subscription) | claude-haiku-4-5  |     42 |      34.0K |   $0.0712*
+  Anthropic API              | claude-haiku-4-5  |      3 |       2.3K |    $0.0035
+  Local embeddings           | bge-small-en-v1.5 |    120 |       9.0K |       free
+
+  * notional - the cost Claude Code reports; subscription users are not billed per call
 ```
 
 ---
@@ -238,7 +261,7 @@ $ codexfi dashboard
   - Press Ctrl+C to stop
 ```
 
-The dashboard shows real-time stats, API costs, activity feed, memory type distribution,
+The dashboard shows real-time stats, usage & costs per backend, LLM/embedding activity feed, memory type distribution,
 recent memories, project/scope breakdown, and semantic search — all in a single self-contained
 HTML page with no external dependencies.
 
@@ -282,7 +305,7 @@ Every command supports these flags:
 | Flag | Description |
 |---|---|
 | `--json` | Machine-readable JSON output (suppresses formatting) |
-| `--no-tui` | Skip interactive prompts (for LLM agent-driven installs) |
+| `--no-tui` | Never prompt (accepted for agent-driven installs; install never prompts anyway) |
 | `--help`, `-h` | Show help for the current command |
 | `--version` | Print version and exit |
 
@@ -292,16 +315,17 @@ Every command supports these flags:
 
 ```
 src/cli/
-├── index.ts                — entry point, command router, help text
+├── index.ts                — entry point, command router, help text,
+│                             internal hook / worker / mcp entrypoints
 ├── fmt.ts                  — ANSI colors, tables, spinners, layout (zero deps)
 ├── args.ts                 — argument parser (zero deps)
 ├── shared.ts               — DB init + tag resolution shared utilities
 └── commands/
-    ├── install.ts          — plugin registration + slash command creation
+    ├── install.ts          — Claude Code marketplace add + plugin install
     ├── list.ts             — formatted memory table with type colors
     ├── search.ts           — semantic search with similarity bars
-    ├── stats.ts            — DB stats, type distribution, API costs
-    ├── status.ts           — health check (7 verifications)
+    ├── stats.ts            — DB stats, type distribution, usage per backend
+    ├── status.ts           — health check (9 verifications)
     ├── export.ts           — JSON/CSV export with RFC 4180 quoting
     ├── forget.ts           — delete by ID with prefix resolution
     └── dashboard.ts        — web dashboard launcher

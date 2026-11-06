@@ -46,6 +46,7 @@ interface RawRow {
 	chunk: string;
 	superseded_by: string;
 	type: string;
+	embed_model?: string;
 }
 
 function rowToRecord(row: RawRow): MemoryRecord {
@@ -61,6 +62,7 @@ function rowToRecord(row: RawRow): MemoryRecord {
 		chunk: row.chunk,
 		superseded_by: row.superseded_by,
 		type: row.type,
+		embed_model: row.embed_model ?? "",
 	};
 }
 
@@ -71,8 +73,8 @@ export function add(rows: AddRecord[]): void {
 	const db = getDb();
 	const stmt = db.prepare(`
 		INSERT OR REPLACE INTO memories
-			(id, memory, user_id, vector, metadata_json, created_at, updated_at, hash, chunk, superseded_by, type)
-		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+			(id, memory, user_id, vector, metadata_json, created_at, updated_at, hash, chunk, superseded_by, type, embed_model)
+		VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)
 	`);
 
 	const tx = db.transaction(() => {
@@ -90,6 +92,7 @@ export function add(rows: AddRecord[]): void {
 				row.chunk,
 				row.superseded_by,
 				row.type,
+				row.embed_model ?? "",
 			);
 		}
 	});
@@ -118,6 +121,8 @@ export function update(where: { id: string }, values: UpdateValues): void {
 	if (values.chunk !== undefined) { setClauses.push("chunk = ?"); params.push(values.chunk); }
 	if (values.superseded_by !== undefined) { setClauses.push("superseded_by = ?"); params.push(values.superseded_by); }
 	if (values.type !== undefined) { setClauses.push("type = ?"); params.push(values.type); }
+	if (values.embed_model !== undefined) { setClauses.push("embed_model = ?"); params.push(values.embed_model); }
+	if (values.vector !== undefined) { setClauses.push("vector = ?"); params.push(vectorToBlob(toFloat32(values.vector))); }
 
 	if (setClauses.length === 0) return;
 
@@ -134,6 +139,16 @@ export function deleteById(id: string): void {
 export function getById(id: string): MemoryRecord | undefined {
 	const row = getDb().prepare("SELECT * FROM memories WHERE id = ?").get(id) as RawRow | null;
 	return row ? rowToRecord(row) : undefined;
+}
+
+/**
+ * Ids + text of rows whose vector came from a different embedding model —
+ * a light query (no vectors / chunks) for the re-embed pass.
+ */
+export function staleEmbeddingRows(currentModel: string, limit: number): Array<{ id: string; memory: string }> {
+	return getDb()
+		.prepare("SELECT id, memory FROM memories WHERE embed_model != ? LIMIT ?")
+		.all(currentModel, limit) as Array<{ id: string; memory: string }>;
 }
 
 /** Total number of records (including superseded). */
@@ -165,6 +180,10 @@ export function scan(
 	if (filter.excludeId !== undefined) {
 		whereClauses.push("id != ?");
 		params.push(filter.excludeId);
+	}
+	if (filter.embed_model !== undefined) {
+		whereClauses.push("embed_model = ?");
+		params.push(filter.embed_model);
 	}
 
 	const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";

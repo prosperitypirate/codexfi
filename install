@@ -1,44 +1,39 @@
 #!/usr/bin/env bash
+# codexfi installer — adds the codexfi plugin to Claude Code.
+# Usage: curl -fsSL https://codexfi.com/install | bash
 set -euo pipefail
 
-# Only emit color codes when writing to a real terminal
 if [[ -t 1 ]]; then
-  CYAN='\033[0;36m'
-  GREEN='\033[0;32m'
-  RED='\033[0;31m'
-  MUTED='\033[0;2m'
-  NC='\033[0m'
+  CYAN='\033[0;36m'; GREEN='\033[0;32m'; RED='\033[0;31m'; MUTED='\033[0;2m'; NC='\033[0m'
 else
-  CYAN=''
-  GREEN=''
-  RED=''
-  MUTED=''
-  NC=''
+  CYAN=''; GREEN=''; RED=''; MUTED=''; NC=''
 fi
 
 echo ""
-echo -e "${CYAN}  codexfi${NC} ${MUTED}-- persistent memory for AI coding agents${NC}"
+echo -e "${CYAN}  codexfi${NC} ${MUTED}-- persistent memory for Claude Code${NC}"
 echo -e "${MUTED}  ----------------------------------------${NC}"
 echo ""
 
-# Step 1: Ensure bun is installed
-if ! command -v bun &>/dev/null; then
-  echo -e "  ${MUTED}bun not found -- installing...${NC}"
-  # bun.sh/install is the official install method — we trust it the same way
-  # the user trusted this script. See https://bun.sh/docs/installation
-  curl -fsSL https://bun.sh/install | bash
-  # Pick up bun from the default install path immediately
-  export PATH="$HOME/.bun/bin:$PATH"
-  if ! command -v bun &>/dev/null; then
-    echo -e "  ${RED}bun install failed. Please install bun manually: https://bun.sh${NC}"
-    exit 1
-  fi
-  echo -e "  ${GREEN}bun installed ($(bun --version))${NC}"
-else
-  echo -e "  ${GREEN}bun found ($(bun --version))${NC}"
+CLAUDE_BIN="$(command -v claude || true)"
+[[ -z "$CLAUDE_BIN" && -x "$HOME/.local/bin/claude" ]] && CLAUDE_BIN="$HOME/.local/bin/claude"
+if [[ -z "$CLAUDE_BIN" ]]; then
+  echo -e "  ${RED}Claude Code CLI not found.${NC} Install it first: https://code.claude.com"
+  echo -e "  ${MUTED}(Using only the VS Code extension? Run these two commands inside Claude Code instead:)${NC}"
+  echo "    /plugin marketplace add prosperitypirate/codexfi"
+  echo "    /plugin install codexfi@codexfi"
+  exit 1
+fi
+echo -e "  ${GREEN}Claude Code found${NC} ${MUTED}($("$CLAUDE_BIN" --version 2>/dev/null | head -1))${NC}"
+
+if ! command -v bun &>/dev/null && ! command -v node &>/dev/null; then
+  echo -e "  ${RED}codexfi needs Bun or Node >= 22.5 on PATH.${NC} Install one: https://bun.sh"
+  exit 1
 fi
 
-echo ""
+"$CLAUDE_BIN" plugin marketplace add prosperitypirate/codexfi </dev/null || true
+"$CLAUDE_BIN" plugin install codexfi@codexfi </dev/null
 
-# Step 2: Run codexfi install
-bunx codexfi install
+echo ""
+echo -e "  ${GREEN}Done.${NC} Start a new Claude Code session — memory works automatically."
+echo -e "  ${MUTED}No API keys needed: extraction uses your Claude Code login, embeddings run locally.${NC}"
+echo ""

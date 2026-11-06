@@ -4,8 +4,8 @@
  * WHY A SEPARATE, NODE-SPAWNED TEST
  * ---------------------------------
  * The rest of the suite runs under Bun (`bun test`), which always exercises the
- * `bun:sqlite` driver. The desktop app, however, hosts the plugin under Node
- * (Electron `utilityProcess`), where the store uses `node:sqlite`. Issue #198's
+ * `bun:sqlite` driver. The plugin launcher (scripts/run.sh) falls back to Node
+ * >= 22.5 when Bun is not installed, where the store uses `node:sqlite`. Issue #198's
  * highest-risk item was whether the Float32 vector BLOB persists byte-identically
  * under `node:sqlite`. This test pins that behaviour permanently by:
  *
@@ -16,8 +16,10 @@
  *
  * If a future change reintroduces a Bun-only import, the bundle fails to load
  * under Node and this test fails — the same failure mode users hit in #198.
+ * The probe uses its own temp dirs; the child inherits the sandbox env.
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join, resolve } from "node:path";
@@ -64,7 +66,7 @@ store.add([{
   id: "m1", memory: "hello node", user_id: "u", vector: vec,
   metadata_json: JSON.stringify({ k: "v" }),
   created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
-  hash: "h1", chunk: "", superseded_by: "", type: "fact",
+  hash: "h1", chunk: "", superseded_by: "", type: "fact", embed_model: "local:test",
 }]);
 
 const got = store.getById("m1");
@@ -86,9 +88,10 @@ const main = async () => {
   await nameRegistry.init(dir);
   await nameRegistry.register("u", "Display Name");
   await ledger.init(dir);
-  await ledger.recordVoyage(1234);
+  await ledger.recordEmbedding("local", "local:jina-v2-base-code", 1234, 0);
+  await ledger.recordLlm("claude-cli", "claude-haiku-4-5", 600, 50, 0.001);
   await activityLog.init(dir);
-  activityLog.recordVoyage(1234, 0.0001);
+  activityLog.recordEmbedding("local", "local:jina-v2-base-code", 1234, 0);
   // Give the fire-and-forget activity save a tick to flush.
   await new Promise((r) => setTimeout(r, 50));
 
@@ -101,8 +104,9 @@ const main = async () => {
     vectorIdentical: identical,
     topId: top ? top.id : null,
     topDistance: top ? Number(top._distance.toFixed(6)) : null,
+    embedModel: got.embed_model,
     nameSaved: names.u === "Display Name",
-    costSaved: costs.voyage && costs.voyage.calls === 1,
+    costSaved: !!costs.backends && costs.backends.local.calls === 1 && costs.backends["claude-cli"].calls === 1,
   }));
 };
 main().catch((e) => { console.error("FAIL:", e && e.message ? e.message : String(e)); process.exit(1); });
@@ -148,7 +152,7 @@ describe("store + telemetry round-trip under Node runtime (node:sqlite + fsx)", 
 		const result = JSON.parse(line) as {
 			driver: string; count: number; vectorIdentical: boolean;
 			topId: string | null; topDistance: number | null;
-			nameSaved: boolean; costSaved: boolean;
+			nameSaved: boolean; costSaved: boolean; embedModel: string;
 		};
 
 		expect(result.driver).toBe("node:sqlite"); // confirms the Node path ran
@@ -158,5 +162,6 @@ describe("store + telemetry round-trip under Node runtime (node:sqlite + fsx)", 
 		expect(result.topDistance).toBe(0); // identical vector → zero cosine distance
 		expect(result.nameSaved).toBe(true); // NameRegistry.save() works under Node (no Bun.write)
 		expect(result.costSaved).toBe(true); // CostLedger.save() works under Node (no Bun.write)
+		expect(result.embedModel).toBe("local:test"); // embed_model column round-trips under node:sqlite
 	}, 30_000);
 });

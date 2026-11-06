@@ -5,7 +5,7 @@
  *   - Total memory count and database size
  *   - Per-project memory breakdown
  *   - Memory type distribution
- *   - Cumulative API costs by provider
+ *   - Cumulative LLM / embedding usage and cost per backend
  *
  * Flags:
  *   --json   Output raw JSON instead of formatted display
@@ -125,68 +125,56 @@ export async function run(args: ParsedArgs): Promise<void> {
 		);
 	}
 
-	// Cost breakdown
-	if (costs.total_cost_usd > 0) {
-		fmt.header("API Costs");
+	// Usage / cost breakdown — one row per backend in the ledger
+	const backends = Object.entries(costs.backends).filter(([, b]) => b.calls > 0);
+	fmt.header("Usage & Costs");
+	if (backends.length === 0) {
+		fmt.info("No LLM or embedding usage recorded yet.");
+	} else {
 		fmt.kv("Total", `$${costs.total_cost_usd.toFixed(4)}`);
 		fmt.kv("Last updated", costs.last_updated ? costs.last_updated.slice(0, 19) : "-");
 		fmt.blank();
 
-		const costRows: string[][] = [];
+		const costRows = backends
+			.sort((a, b) => b[1].cost_usd - a[1].cost_usd || b[1].calls - a[1].calls)
+			.map(([name, b]) => {
+				const meta = backendMeta(name);
+				const tokens = b.prompt_tokens + b.completion_tokens + b.tokens;
+				const cost = meta.free ? "free" : `$${b.cost_usd.toFixed(4)}${meta.notional ? "*" : ""}`;
+				return [meta.label, b.model ?? "-", String(b.calls), formatTokens(tokens), cost];
+			});
 
-		if (costs.anthropic?.calls > 0) {
-			costRows.push([
-				"Anthropic",
-				String(costs.anthropic.calls),
-				formatTokens(costs.anthropic.prompt_tokens + costs.anthropic.completion_tokens),
-				`$${costs.anthropic.cost_usd.toFixed(4)}`,
-			]);
-		}
-		if (costs.xai?.calls > 0) {
-			costRows.push([
-				"xAI",
-				String(costs.xai.calls),
-				formatTokens(costs.xai.prompt_tokens + costs.xai.completion_tokens),
-				`$${costs.xai.cost_usd.toFixed(4)}`,
-			]);
-		}
-		if (costs.google?.calls > 0) {
-			costRows.push([
-				"Google",
-				String(costs.google.calls),
-				formatTokens(costs.google.prompt_tokens + costs.google.completion_tokens),
-				`$${costs.google.cost_usd.toFixed(4)}`,
-			]);
-		}
-		if (costs.voyage?.calls > 0) {
-			costRows.push([
-				"Voyage AI",
-				String(costs.voyage.calls),
-				formatTokens(costs.voyage.tokens),
-				`$${costs.voyage.cost_usd.toFixed(4)}`,
-			]);
-		}
+		fmt.table(
+			[
+				{ label: "Backend", minWidth: 16 },
+				{ label: "Model", minWidth: 10 },
+				{ label: "Calls", minWidth: 6, align: "right" },
+				{ label: "Tokens", minWidth: 10, align: "right" },
+				{ label: "Cost", minWidth: 10, align: "right", color: fmt.green },
+			],
+			costRows,
+		);
 
-		if (costRows.length > 0) {
-			fmt.table(
-				[
-					{ label: "Provider", minWidth: 12 },
-					{ label: "Calls", minWidth: 6, align: "right" },
-					{ label: "Tokens", minWidth: 10, align: "right" },
-					{ label: "Cost", minWidth: 10, align: "right", color: fmt.green },
-				],
-				costRows,
-			);
+		if (backends.some(([name]) => backendMeta(name).notional)) {
+			fmt.blank();
+			console.log(`  ${fmt.dim("* notional - the cost Claude Code reports; subscription users are not billed per call")}`);
 		}
-	} else {
-		fmt.header("API Costs");
-		fmt.info("No API usage recorded yet.");
 	}
 
 	fmt.blank();
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
+
+/** Display metadata for a ledger backend key. Unknown keys show as-is. */
+function backendMeta(name: string): { label: string; notional?: boolean; free?: boolean } {
+	switch (name) {
+		case "claude-cli": return { label: "Claude Code (subscription)", notional: true };
+		case "anthropic-api": return { label: "Anthropic API" };
+		case "local": return { label: "Local embeddings", free: true };
+		default: return { label: name };
+	}
+}
 
 /** Get file size in bytes. Returns 0 if file doesn't exist. */
 function getFileSize(filePath: string): number {
