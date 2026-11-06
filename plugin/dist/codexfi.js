@@ -2873,7 +2873,7 @@ async function run5(args) {
     console.log(JSON.stringify({
       healthy: failed === 0,
       verdict,
-      apiKeys: { anthropic: set(ANTHROPIC_API_KEY), voyage: set(VOYAGE_API_KEY) },
+      apiKeys: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
       checks
     }, null, 2));
     return;
@@ -2888,7 +2888,7 @@ async function run5(args) {
     else
       error2(line);
   }
-  info2(`API keys ${dim2(`anthropic: ${set(ANTHROPIC_API_KEY)}, voyage: ${set(VOYAGE_API_KEY)} (optional)`)}`);
+  info2(`API keys ${dim2(`anthropic: ${label(HAS_ANTHROPIC_KEY)}, voyage: ${label(HAS_VOYAGE_KEY)} (optional)`)}`);
   blank2();
   const summary = `${okCount}/${checks.length} checks passed`;
   if (failed > 0) {
@@ -3049,13 +3049,15 @@ function checkPluginEnabled() {
   }
   return { name, status: "warn", detail: "not enabled in user settings - run 'codexfi install'" };
 }
-var set = (v) => v ? "set" : "unset";
+var HAS_ANTHROPIC_KEY, HAS_VOYAGE_KEY, label = (present) => present ? "set" : "unset";
 var init_status = __esm(() => {
   init_fmt();
   init_config();
   init_plugin_config();
   init_llm();
   init_memory_bank();
+  HAS_ANTHROPIC_KEY = ANTHROPIC_API_KEY.length > 0;
+  HAS_VOYAGE_KEY = VOYAGE_API_KEY.length > 0;
 });
 
 // src/cli/commands/export.ts
@@ -6346,10 +6348,10 @@ function jsonStringifyReplacer(_, value) {
   return value;
 }
 function cached(getter) {
-  const set2 = false;
+  const set = false;
   return {
     get value() {
-      if (!set2) {
+      if (!set) {
         const value = getter();
         Object.defineProperty(this, "value", { value });
         return value;
@@ -18562,7 +18564,7 @@ __export(exports_schemas2, {
   stringFormat: () => stringFormat,
   string: () => string2,
   strictObject: () => strictObject,
-  set: () => set2,
+  set: () => set,
   refine: () => refine,
   record: () => record,
   readonly: () => readonly,
@@ -19006,7 +19008,7 @@ function map(keyType, valueType, params) {
     ...exports_util.normalizeParams(params)
   });
 }
-function set2(valueType, params) {
+function set(valueType, params) {
   return new ZodSet({
     type: "set",
     valueType,
@@ -20571,7 +20573,7 @@ __export(exports_external, {
   slugify: () => _slugify,
   size: () => _size,
   setErrorMap: () => setErrorMap,
-  set: () => set2,
+  set: () => set,
   safeParseAsync: () => safeParseAsync2,
   safeParse: () => safeParse2,
   safeEncodeAsync: () => safeEncodeAsync2,

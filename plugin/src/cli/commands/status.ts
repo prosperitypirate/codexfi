@@ -42,7 +42,11 @@ interface CheckResult {
 	detail: string;
 }
 
-const set = (v: string): string => (v ? "set" : "unset");
+// Only presence flags ever leave this module — never key material (not even
+// derived strings), so nothing secret can reach stdout or --json output.
+const HAS_ANTHROPIC_KEY: boolean = ANTHROPIC_API_KEY.length > 0;
+const HAS_VOYAGE_KEY: boolean = VOYAGE_API_KEY.length > 0;
+const label = (present: boolean): "set" | "unset" => (present ? "set" : "unset");
 
 // ── Main ────────────────────────────────────────────────────────────────────────
 
@@ -70,7 +74,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		console.log(JSON.stringify({
 			healthy: failed === 0,
 			verdict,
-			apiKeys: { anthropic: set(ANTHROPIC_API_KEY), voyage: set(VOYAGE_API_KEY) },
+			apiKeys: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
 			checks,
 		}, null, 2));
 		return;
@@ -83,7 +87,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		else if (check.status === "warn") fmt.warn(line);
 		else fmt.error(line);
 	}
-	fmt.info(`API keys ${fmt.dim(`anthropic: ${set(ANTHROPIC_API_KEY)}, voyage: ${set(VOYAGE_API_KEY)} (optional)`)}`);
+	fmt.info(`API keys ${fmt.dim(`anthropic: ${label(HAS_ANTHROPIC_KEY)}, voyage: ${label(HAS_VOYAGE_KEY)} (optional)`)}`);
 
 	fmt.blank();
 	const summary = `${okCount}/${checks.length} checks passed`;
