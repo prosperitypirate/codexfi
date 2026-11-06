@@ -61,3 +61,6 @@ local/
 plugin/dist/*
 !plugin/dist/codexfi.js
 plugin/bun.lock
+
+# Private maintainer instructions for Claude Code (never committed)
+CLAUDE.md
