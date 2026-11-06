@@ -99,13 +99,11 @@ Same answer/judge model for both runs; the difference is within run-to-run noise
 {
   "llmBackend": "auto",            // "auto" | "claude-cli" | "anthropic-api"
   "llmModel": "haiku",             // any Claude Code model alias or id
-  "embeddingProvider": "local",    // "local" | "voyage"
   "localModel": "jina-v2-base-code", // or "all-MiniLM-L6-v2" (lighter, faster)
   "memoryBank": "auto",            // "auto" | "off"
   "autoInit": true,                // seed a new project from README/manifests/git log
   "excludePaths": ["/Users/me/clients/secret-co"],  // codexfi stays silent here
-  "anthropicApiKey": "",           // only for llmBackend "anthropic-api"
-  "voyageApiKey": ""               // only for embeddingProvider "voyage"
+  "anthropicApiKey": ""            // only for llmBackend "anthropic-api"
 }
 ```
 
@@ -122,7 +120,7 @@ Same answer/judge model for both runs; the difference is within run-to-run noise
 
 ## Upgrading from 0.7.x (OpenCode)
 
-codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run the worker re-embeds old Voyage vectors with the local model in the background (structured memories are usable immediately). The `opencode_*` container tags are preserved, so nothing is orphaned.
+codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run the worker re-embeds old 0.7.x vectors with the local model in the background (structured memories are usable immediately). The `opencode_*` container tags are preserved, so nothing is orphaned.
 
 ## More
 

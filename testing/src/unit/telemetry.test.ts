@@ -42,32 +42,31 @@ describe("CostLedger", () => {
 	});
 
 	test("recordEmbedding counts tokens, not prompt/completion", async () => {
-		await ledger.recordEmbedding("voyage", "voyage-code-3", 1_000_000, 0.18);
-		const b = ledger.snapshot().backends.voyage!;
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 1_000_000, 0);
+		const b = ledger.snapshot().backends.local!;
 		expect(b.calls).toBe(1);
 		expect(b.tokens).toBe(1_000_000);
 		expect(b.prompt_tokens).toBe(0);
-		expect(b.cost_usd).toBeCloseTo(0.18, 6);
+		expect(b.cost_usd).toBe(0);
 	});
 
 	test("total_cost_usd is the sum across backends", async () => {
 		await ledger.recordLlm("anthropic-api", "claude-haiku-4-5", 100_000, 10_000, 0.15);
 		await ledger.recordLlm("claude-cli", "haiku", 1, 1, 0.05);
-		await ledger.recordEmbedding("voyage", "voyage-code-3", 10, 0.01);
-		await ledger.recordEmbedding("local", "local:bge-small-en-v1.5", 10, 0);
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 10, 0);
 		const snap = ledger.snapshot();
-		expect(snap.total_cost_usd).toBeCloseTo(0.21, 8);
-		expect(Object.keys(snap.backends).sort()).toEqual(["anthropic-api", "claude-cli", "local", "voyage"]);
+		expect(snap.total_cost_usd).toBeCloseTo(0.2, 8);
+		expect(Object.keys(snap.backends).sort()).toEqual(["anthropic-api", "claude-cli", "local"]);
 		expect(snap.last_updated).not.toBe("");
 	});
 
 	test("persists to costs.json and survives re-init", async () => {
-		await ledger.recordEmbedding("voyage", "voyage-code-3", 5000, 0.0009);
+		await ledger.recordEmbedding("local", "local:jina-v2-base-code", 5000, 0);
 		const onDisk = JSON.parse(readFileSync(join(tempDir, "costs.json"), "utf8"));
-		expect(onDisk.backends.voyage.tokens).toBe(5000);
+		expect(onDisk.backends.local.tokens).toBe(5000);
 
 		await ledger.init(tempDir);
-		expect(ledger.snapshot().backends.voyage!.tokens).toBe(5000);
+		expect(ledger.snapshot().backends.local!.tokens).toBe(5000);
 	});
 
 	test("reset zeroes everything", async () => {
@@ -91,6 +90,7 @@ describe("CostLedger legacy costs.json (pre-1.0 shape)", () => {
 	const LEGACY = {
 		anthropic: { calls: 3, prompt_tokens: 3000, completion_tokens: 300, cost_usd: 0.0045, model: "claude-haiku-4-5" },
 		voyage: { calls: 7, tokens: 7000, cost_usd: 0.00126, model: "voyage-code-3" },
+		xai: { calls: 2, prompt_tokens: 200, completion_tokens: 20, cost_usd: 0.001 },
 		google: { calls: 0, prompt_tokens: 0, completion_tokens: 0, cost_usd: 0 },
 		total_cost_usd: 0.00576,
 		last_updated: "2026-03-01T00:00:00.000Z",
@@ -101,11 +101,10 @@ describe("CostLedger legacy costs.json (pre-1.0 shape)", () => {
 		await ledger.init(tempDir);
 		const snap = ledger.snapshot();
 
-		// anthropic → anthropic-api; zero-call buckets are dropped
-		expect(Object.keys(snap.backends).sort()).toEqual(["anthropic-api", "voyage"]);
+		// anthropic → anthropic-api; removed remote providers are dropped, total recomputed
+		expect(Object.keys(snap.backends)).toEqual(["anthropic-api"]);
 		expect(snap.backends["anthropic-api"]).toMatchObject({ calls: 3, prompt_tokens: 3000, completion_tokens: 300, tokens: 0 });
-		expect(snap.backends.voyage).toMatchObject({ calls: 7, tokens: 7000 });
-		expect(snap.total_cost_usd).toBeCloseTo(0.00576, 8);
+		expect(snap.total_cost_usd).toBeCloseTo(0.0045, 8);
 		expect(snap.last_updated).toBe(LEGACY.last_updated);
 	});
 
@@ -116,11 +115,25 @@ describe("CostLedger legacy costs.json (pre-1.0 shape)", () => {
 
 		const snap = ledger.snapshot();
 		expect(snap.backends["anthropic-api"]!.calls).toBe(4);
-		expect(snap.total_cost_usd).toBeCloseTo(0.0045 + 0.0015 + 0.00126, 8);
+		expect(snap.total_cost_usd).toBeCloseTo(0.0045 + 0.0015, 8);
 
 		const onDisk = JSON.parse(readFileSync(join(tempDir, "costs.json"), "utf8"));
 		expect(onDisk.backends["anthropic-api"].calls).toBe(4);
 		expect(onDisk.anthropic).toBeUndefined();
+		expect(Object.keys(onDisk.backends)).toEqual(["anthropic-api"]);
+	});
+
+	test("legacy remote-provider buckets in a backends-map ledger are dropped on load", async () => {
+		const bucket = { calls: 1, prompt_tokens: 0, completion_tokens: 0, tokens: 10, cost_usd: 0.5 };
+		writeFileSync(join(tempDir, "costs.json"), JSON.stringify({
+			backends: { "claude-cli": { ...bucket, cost_usd: 0.25 }, voyage: bucket, xai: bucket, google: bucket },
+			total_cost_usd: 1.75,
+			last_updated: "2026-10-01T00:00:00.000Z",
+		}));
+		await ledger.init(tempDir);
+		const snap = ledger.snapshot();
+		expect(Object.keys(snap.backends)).toEqual(["claude-cli"]);
+		expect(snap.total_cost_usd).toBeCloseTo(0.25, 8);
 	});
 
 	test("garbage costs.json falls back to an empty ledger", async () => {
@@ -149,9 +162,16 @@ describe("ActivityLog", () => {
 	});
 
 	test("recordEmbedding defaults the operation to embed", () => {
-		activityLog.recordEmbedding("voyage", "voyage-code-3", 100, 0.001);
+		activityLog.recordEmbedding("local", "local:jina-v2-base-code", 100, 0);
 		const [e] = activityLog.recent(1);
-		expect(e).toMatchObject({ api: "voyage", operation: "embed", tokens: 100, prompt_tokens: null });
+		expect(e).toMatchObject({ api: "local", operation: "embed", tokens: 100, prompt_tokens: null });
+	});
+
+	test("entries from removed remote providers in an old activity.json are dropped on load", async () => {
+		const entry = (api: string) => ({ ts: "2026-10-01T00:00:00.000Z", api, model: "m", operation: "embed", prompt_tokens: null, completion_tokens: null, tokens: 1, cost_usd: 0 });
+		writeFileSync(join(tempDir, "activity.json"), JSON.stringify([entry("voyage"), entry("local"), entry("xai"), entry("claude-cli")]));
+		await activityLog.init(tempDir);
+		expect(activityLog.recent(10).map((e) => e.api)).toEqual(["claude-cli", "local"]);
 	});
 
 	test("recent() is newest-first and respects the limit", () => {

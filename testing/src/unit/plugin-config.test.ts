@@ -55,10 +55,10 @@ describe("writeApiKeys", () => {
 	});
 
 	test("creates codexfi.jsonc (and the directory) with the given key", () => {
-		writeApiKeys({ voyageApiKey: "pa-unit-test-key-12345" });
+		writeApiKeys({ anthropicApiKey: "sk-ant-unit-test-key-12345" });
 		expect(existsSync(CODEXFI_JSONC)).toBe(true);
 		expect(existsSync(join(CONFIG_DIR, "memory.jsonc"))).toBe(false);
-		expect(readFileSync(CODEXFI_JSONC, "utf-8")).toContain("pa-unit-test-key-12345");
+		expect(readFileSync(CODEXFI_JSONC, "utf-8")).toContain("sk-ant-unit-test-key-12345");
 	});
 
 	test("generated file is valid JSON once comments are stripped", () => {
@@ -68,22 +68,23 @@ describe("writeApiKeys", () => {
 		expect(parsed.llmBackend).toBe("anthropic-api");
 	});
 
-	test("defaults: llmBackend auto, embeddingProvider local, empty optional keys", () => {
+	test("defaults: llmBackend auto, empty optional key", () => {
 		writeApiKeys({});
 		const parsed = parseGenerated(readFileSync(CODEXFI_JSONC, "utf-8"));
 		expect(parsed.llmBackend).toBe("auto");
-		expect(parsed.embeddingProvider).toBe("local");
 		expect(parsed.anthropicApiKey).toBe("");
-		expect(parsed.voyageApiKey).toBe("");
 	});
 
-	test("does not emit the removed extractionProvider setting", () => {
-		writeApiKeys({ voyageApiKey: "pa-x" });
-		expect(readFileSync(CODEXFI_JSONC, "utf-8")).not.toContain("extractionProvider");
+	test("does not emit removed settings (extractionProvider, embedding provider/remote key)", () => {
+		writeApiKeys({ anthropicApiKey: "sk-x" });
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).not.toContain("extractionProvider");
+		expect(content).not.toContain("embeddingProvider");
+		expect(content.toLowerCase()).not.toContain("voyage");
 	});
 
 	test("header references codexfi.jsonc", () => {
-		writeApiKeys({ voyageApiKey: "pa-header-check" });
+		writeApiKeys({ anthropicApiKey: "sk-header-check" });
 		const content = readFileSync(CODEXFI_JSONC, "utf-8");
 		expect(content).toContain("codexfi.jsonc");
 		expect(content).not.toContain("memory.jsonc");
@@ -93,16 +94,30 @@ describe("writeApiKeys", () => {
 		mkdirSync(CONFIG_DIR, { recursive: true });
 		writeFileSync(
 			CODEXFI_JSONC,
-			`// hand-written\n{\n  "voyageApiKey": "pa-initial",\n  "maxMemories": 7,\n  "memoryBank": "off",\n  "excludePaths": ["/secret"],\n  "llmModel": "sonnet"\n}\n`,
+			`// hand-written\n{\n  "anthropicApiKey": "sk-ant-initial",\n  "maxMemories": 7,\n  "memoryBank": "off",\n  "excludePaths": ["/secret"],\n  "llmModel": "sonnet"\n}\n`,
 		);
-		writeApiKeys({ anthropicApiKey: "sk-ant-updated" });
+		writeApiKeys({ llmBackend: "anthropic-api" });
 		const parsed = parseGenerated(readFileSync(CODEXFI_JSONC, "utf-8"));
-		expect(parsed.voyageApiKey).toBe("pa-initial");
-		expect(parsed.anthropicApiKey).toBe("sk-ant-updated");
+		expect(parsed.anthropicApiKey).toBe("sk-ant-initial");
+		expect(parsed.llmBackend).toBe("anthropic-api");
 		expect(parsed.maxMemories).toBe(7);
 		expect(parsed.memoryBank).toBe("off");
 		expect(parsed.excludePaths).toEqual(["/secret"]);
 		expect(parsed.llmModel).toBe("sonnet");
+	});
+
+	test("legacy remote-embedding keys in an existing file are dropped on rewrite", () => {
+		mkdirSync(CONFIG_DIR, { recursive: true });
+		writeFileSync(
+			CODEXFI_JSONC,
+			`{\n  "embeddingProvider": "voyage",\n  "voyageApiKey": "pa-legacy-placeholder",\n  "llmModel": "sonnet"\n}\n`,
+		);
+		writeApiKeys({});
+		const content = readFileSync(CODEXFI_JSONC, "utf-8");
+		expect(content).not.toContain("pa-legacy-placeholder");
+		expect(content).not.toContain("embeddingProvider");
+		expect(content.toLowerCase()).not.toContain("voyage");
+		expect(parseGenerated(content).llmModel).toBe("sonnet");
 	});
 
 	test("default-valued settings are omitted (minimal file)", () => {
@@ -114,7 +129,7 @@ describe("writeApiKeys", () => {
 	});
 
 	test("written file contains only ASCII characters", () => {
-		writeApiKeys({ voyageApiKey: "pa-ascii-test", anthropicApiKey: "sk-ant-ascii-test" });
+		writeApiKeys({ anthropicApiKey: "sk-ant-ascii-test" });
 		const content = readFileSync(CODEXFI_JSONC, "utf-8");
 		for (let i = 0; i < content.length; i++) {
 			const code = content.charCodeAt(i);

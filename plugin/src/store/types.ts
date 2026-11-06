@@ -16,7 +16,7 @@ export interface MemoryRecord {
 	chunk: string;
 	superseded_by: string;
 	type: string;
-	/** Id of the embedding model that produced `vector` (e.g. "local:bge-small-en-v1.5", "voyage-code-3"). */
+	/** Id of the embedding model that produced `vector` (e.g. "local:jina-v2-base-code"; pre-1.0 rows carry LEGACY_EMBED_MODEL until re-embedded). */
 	embed_model?: string;
 }
 

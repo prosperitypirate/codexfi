@@ -1,6 +1,6 @@
 # codexfi 1.0 — Claude Code Native (Design Document)
 
-**Feature**: Rebuild codexfi as a Claude Code–exclusive plugin with zero extra setup — no OpenCode, no xAI/Google, no required API keys
+**Feature**: Rebuild codexfi as a Claude Code–exclusive plugin with zero extra setup — no OpenCode, no xAI/Google/Voyage AI, no required API keys
 **Branch**: `feat/claude-code-native`
 **Status**: IMPLEMENTED (see §9 for benchmark evidence and §10 for open items)
 **Created**: November 6, 2026
@@ -27,7 +27,7 @@ A single Claude Code plugin (`/plugin marketplace add prosperitypirate/codexfi`)
 | Host integration | OpenCode `chat.message` / `system.transform` / `event` | Claude Code hooks: SessionStart, UserPromptSubmit, Stop, PreCompact, SessionEnd |
 | Explicit memory tool | OpenCode `tool.memory` | MCP stdio server: `memory_search`, `memory_add`, `memory_list`, `memory_forget` |
 | Extraction LLM | xAI / Anthropic / Google API keys | **The user's own `claude` CLI** (`claude -p --safe-mode …`) — subscription or whatever Claude Code uses; optional Anthropic API key |
-| Embeddings | Voyage AI `voyage-code-3` (key required) | **On-device ONNX model** via transformers.js; Voyage optional |
+| Embeddings | Voyage AI `voyage-code-3` (key required) | **On-device ONNX model** via transformers.js — local only (Voyage removed in 1.0) |
 | Extraction trigger | streaming buffer, "last 8 messages" | Stop hook → **job queue** → detached single worker; byte-offset transcript cursor (each turn extracted exactly once) |
 | Install | `curl … \| bash` + keys | `/plugin install codexfi@codexfi` — Claude Code installs npm deps itself |
 | Memory Bank | unaware (duplicated it) | **Memory-Bank-aware**: skips what the bank already covers |
@@ -49,7 +49,7 @@ Three research tracks fed this design (full reports were produced in the build s
    - Plugins: Claude Code auto-installs a plugin's npm dependencies (package.json + npm lockfile, `--ignore-scripts`, 60 s timeout).
    - **Mods** (v2.1.287+) can call `$.model.complete` on the user's plan — the most sanctioned subscription path — but they are ~5 weeks old, have no filesystem access (SQLite/ONNX would need a sidecar anyway), and some events are guarded on Team/Enterprise logins.
 2. **claude-mem teardown** — what to copy (fit under the 10k cap by dropping whole items, re-inject after compact, write-fast hooks, never invisible subscription burn) and what to avoid (a permanent daemon, a Python sidecar, one LLM turn per tool call, recency-only injection, writing into the user's repo, no accuracy numbers).
-3. **Local embeddings vs Voyage** — 30+ ONNX models evaluated on the benchmark memory corpus (§9.1).
+3. **Local embeddings vs the 0.7.x Voyage baseline** — 30+ ONNX models evaluated on the benchmark memory corpus (§9.1).
 
 ---
 
@@ -78,7 +78,7 @@ Claude Code session
                   read transcript from saved byte offset → windows of ≤12k chars
                   extract via `claude -p --safe-mode --model haiku` (or Anthropic API)
                   embed locally → dedup → contradiction/supersede → aging → SQLite
-                  re-embed rows from an older embedding model (Voyage → local) in batches
+                  re-embed rows from an older embedding model (0.7.x → local) in batches
 ```
 
 ### 3.1 Why hooks + worker + MCP (and not mods) for 1.0
@@ -98,14 +98,14 @@ Claude Code session
 
 ### 3.3 Embeddings (`plugin/src/embedder.ts`)
 
-- `local` (default): `@huggingface/transformers` ONNX pipeline, weights cached in `~/.codexfi/models` on first use. Model choice and thresholds: §9.1.
-- `voyage` (optional): unchanged behaviour for users who want the best retrieval and already have a key.
-- Every row records `embed_model`; vector search, dedup and contradiction detection only compare vectors from the **current** model. Rows from another model (e.g. 0.7.x Voyage vectors) stay fully usable for the structured SessionStart block (no vectors needed) and are migrated by the worker's background re-embed pass (`reembedStale`).
+- Local only: `@huggingface/transformers` ONNX pipeline, weights cached in `~/.codexfi/models` on first use. Model choice and thresholds: §9.1.
+- **Voyage AI: removed in 1.0 — local only.** There is no remote embedding provider, no `embeddingProvider` / `voyageApiKey` setting and no code path that can reach `api.voyageai.com`; memory text never leaves the machine for embedding. Legacy keys in an old `codexfi.jsonc` are ignored (and dropped when `codexfi install` rewrites the file); legacy Voyage/xAI/Google buckets in an old `costs.json` / `activity.json` are dropped on load. A test asserts the built bundle contains no reference to these providers.
+- Every row records `embed_model`; vector search, dedup and contradiction detection only compare vectors from the **current** model. Rows from another model (e.g. 0.7.x vectors) stay fully usable for the structured SessionStart block (no vectors needed) and are migrated by the worker's background re-embed pass (`reembedStale`).
 - Hybrid BM25 was evaluated and **rejected**: it lowered nDCG@10 for every dense model tested (§9.1).
 
 ### 3.4 Storage changes
 
-- New column `memories.embed_model` (forward-only migration on open; legacy rows labelled `voyage-code-3`).
+- New column `memories.embed_model` (forward-only migration on open; legacy rows labelled `voyage-code-3` — a data label marking pre-1.0 rows for local re-embedding, not a provider).
 - `crud.update` can now replace the vector; dedup refreshes now re-embed the updated text (previously the old vector was kept — a latent inconsistency).
 - New `store.addMemory()` stores an agent-written fact verbatim (no extraction call) — used by `memory_add`.
 
@@ -133,7 +133,7 @@ Built-in auto memory (`~/.claude/projects/<project>/memory/MEMORY.md`, first 200
 | Engine changes | `config.ts`, `plugin-config.ts`, `embedder.ts`, `extractor.ts`, `store.ts`, `store/{schema,sqlite,crud,search,types}.ts`, `telemetry.ts`, `prompts.ts` |
 | Shared services (new) | `services/{memory-bank,query-types}.ts` |
 | Plugin packaging (new) | `.claude-plugin/marketplace.json`, `plugin/.claude-plugin/plugin.json` (incl. MCP server), `plugin/hooks/hooks.json`, `plugin/scripts/run.sh`, committed bundle `plugin/dist/codexfi.js` |
-| Removed | `plugin/src/index.ts` (OpenCode entry), `services/{auto-save,compaction,disabled-warning,fresh-project-hint,directory-tree,logger}.ts`, `smoke-e2e.ts`, OpenCode E2E suite, `opencode-*` GitHub workflows, `@opencode-ai/*` deps, xAI/Google providers |
+| Removed | `plugin/src/index.ts` (OpenCode entry), `services/{auto-save,compaction,disabled-warning,fresh-project-hint,directory-tree,logger}.ts`, `smoke-e2e.ts`, OpenCode E2E suite, `opencode-*` GitHub workflows, `@opencode-ai/*` deps, xAI/Google extraction providers, Voyage AI embedding provider |
 | CLI | `install` (Claude Code plugin install), `status` (new health checks), `stats`/dashboard (generic backends) |
 | Benchmark | pluggable answer/judge backend (`claude-cli`), concurrency, `--dataset v1|v2`, `--mode memory-bank` |
 
@@ -160,7 +160,7 @@ Built-in auto memory (`~/.claude/projects/<project>/memory/MEMORY.md`, first 200
 
 ## 6. Rollback
 
-The branch is self-contained. To roll back: uninstall the plugin (`claude plugin uninstall codexfi@codexfi`). The store migration only *adds* a column; 0.7.x can still read the database (it ignores unknown columns), though rows re-embedded locally would no longer match its Voyage queries.
+The branch is self-contained. To roll back: uninstall the plugin (`claude plugin uninstall codexfi@codexfi`). The store migration only *adds* a column; 0.7.x can still read the database (it ignores unknown columns), though rows re-embedded locally would no longer match its (0.7.x, Voyage-based) queries.
 
 ---
 
@@ -178,9 +178,9 @@ The branch is self-contained. To roll back: uninstall the plugin (`claude plugin
 
 ## 9. Evidence
 
-### 9.1 Local embeddings vs Voyage (retrieval only)
+### 9.1 Local embeddings vs the 0.7.x Voyage baseline (retrieval only)
 
-Corpus: 522 memories produced by earlier benchmark runs; 175 answerable questions; pooled relevance labels (benchmark judge labels + blind top-10 pool completion). nDCG@10 (Δ vs Voyage, 95% CI):
+Historical comparison against the embedder 0.7.x used; Voyage is not an option in 1.0 (removed — local only). Corpus: 522 memories produced by earlier benchmark runs; 175 answerable questions; pooled relevance labels (benchmark judge labels + blind top-10 pool completion). nDCG@10 (Δ vs Voyage, 95% CI):
 
 | system | nDCG@10 | Δ vs voyage | Hit@20 |
 |---|---|---|---|

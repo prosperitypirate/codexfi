@@ -49,7 +49,7 @@ const COMMANDS: Record<string, {
 }> = {
 	install: {
 		description: "Install the codexfi plugin into Claude Code",
-		usage: "codexfi install [--dry-run] [--uninstall] [--source <repo|path>] [--llm-backend auto|claude-cli|anthropic-api] [--embedding-provider local|voyage] [--anthropic-key <k>] [--voyage-key <k>]",
+		usage: "codexfi install [--dry-run] [--uninstall] [--source <repo|path>] [--llm-backend auto|claude-cli|anthropic-api] [--anthropic-key <k>]",
 		load: () => import("./commands/install.js"),
 	},
 	list: {

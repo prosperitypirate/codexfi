@@ -34,7 +34,7 @@ We take the security of codexfi seriously. If you discover a security vulnerabil
 
 This project runs as a **local, embedded Bun plugin**. The primary security concerns are:
 
-- API key exposure (Anthropic, xAI, Voyage AI)
+- API key exposure (optional Anthropic API key)
 - Data injection via memory store query parameters
 - Unauthorized access to stored memories (~/.codexfi/)
 

@@ -51,7 +51,9 @@ Extraction cost for the 25 sessions: 110 Haiku calls via the Claude Code CLI (su
 
 ## Extraction Provider Comparison
 
-The benchmark can run with different extraction providers to compare memory quality and ingest speed. All runs use the same 25 sessions, 200 questions, and `claude-sonnet-4-6` judge.
+> **Historical (0.7.x).** These runs predate 1.0, which removed the xAI/Google extraction providers and Voyage AI embeddings — 1.0 extracts through Claude Code and embeds on-device only. Kept for the record; the provider settings below no longer exist.
+
+The 0.7.x benchmark could run with different extraction providers to compare memory quality and ingest speed. All runs use the same 25 sessions, 200 questions, and `claude-sonnet-4-6` judge.
 
 ### Per-Call Latency (extraction prompt, 3-call average)
 
@@ -80,14 +82,6 @@ google         3446ms    3681ms    3688ms   3605ms
 
 > **Decision: Haiku is the default extraction provider.** Across 3 runs, Haiku averaged 93.5% with only 3pp variance (92.0–95.0%) vs Grok's ~86.5% average with 16pp variance (78.5–94.5%). The cost increase (~$0.10/session) is negligible vs main model costs. The ~14s extraction latency is invisible to users — it runs in the background after each assistant turn. Retrieval uses Voyage AI embeddings, not the extraction provider, so there is zero impact on response time.
 
-To run with a specific provider:
-
-```bash
-# Edit .env to set EXTRACTION_PROVIDER=anthropic (or xai, google)
-# Then restart the backend and run the benchmark
-docker compose up -d
-bun run bench run -r haiku-run1
-```
 
 ---
 
@@ -828,8 +822,8 @@ error-solution 0% → 100% after source chunk injection into answer context.
 ### Prerequisites
 
 - [Bun](https://bun.sh) ≥ 1.2.19
-- `ANTHROPIC_API_KEY` — for extraction (Haiku 4.5) and judge/answering (Sonnet 4.6)
-- `VOYAGE_API_KEY` — for embeddings (voyage-code-3)
+- `ANTHROPIC_API_KEY` — for judge/answering (Sonnet 4.6) with `BENCH_LLM_BACKEND=api`; not needed with `BENCH_LLM_BACKEND=claude-cli`
+- No embedding key — embeddings run on-device (local ONNX model, downloaded once)
 
 > **No Docker required.** The benchmark uses the embedded vector store from `plugin/` directly.
 > The Docker backend is no longer needed.
@@ -845,7 +839,7 @@ cd benchmark && bun install && cd ..
 
 # 3. Configure environment
 cp benchmark/.env.example benchmark/.env.local
-# Edit benchmark/.env.local: set ANTHROPIC_API_KEY, VOYAGE_API_KEY, JUDGE_MODEL, ANSWERING_MODEL
+# Edit benchmark/.env.local: set ANTHROPIC_API_KEY, JUDGE_MODEL, ANSWERING_MODEL
 ```
 
 ### Running the benchmark
@@ -856,8 +850,8 @@ bun run benchmark/src/index.ts run
 ```
 
 > **Important:** Always run from the project root, not from `benchmark/`. The `.env.local` loader
-> in `benchmark/src/index.ts` resolves the file relative to `import.meta.url`, so CWD doesn't
-> matter. But root `.env` provides `VOYAGE_API_KEY` which Bun auto-loads from CWD.
+> in `benchmark/src/env-preload.ts` resolves the file relative to `import.meta.url`, so CWD doesn't
+> matter.
 
 Every run automatically:
 1. Opens the live dashboard at `http://localhost:4242`
@@ -883,7 +877,7 @@ bun run bench list                  # list all past runs with scores
 ### Pipeline
 
 ```
-ingest    → extract memories via LLM + embed via Voyage AI + store in embedded vector store (isolated by runTag)
+ingest    → extract memories via LLM + embed locally (on-device) + store in embedded vector store (isolated by runTag)
 search    → semantic vector search per question, saves top-20 results
 answer    → LLM generates answer from retrieved context only
 evaluate  → LLM-as-judge: correct (1) or incorrect (0) + retrieval relevance scoring
@@ -899,12 +893,9 @@ Set these in `benchmark/.env.local` (loaded automatically with override semantic
 
 | Variable | Default | Description |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | — | Required (Claude judge + answerer + extraction) |
-| `VOYAGE_API_KEY` | — | Required (voyage-code-3 embeddings) |
+| `ANTHROPIC_API_KEY` | — | Required with `BENCH_LLM_BACKEND=api` (Claude judge + answerer) |
 | `JUDGE_MODEL` | `claude-sonnet-4-6` | Override judge model |
 | `ANSWERING_MODEL` | `claude-sonnet-4-6` | Override answering model |
-| `EXTRACTION_PROVIDER` | `anthropic` | Extraction LLM provider (`anthropic`, `xai`, `google`) |
-| `XAI_API_KEY` | — | Required if `EXTRACTION_PROVIDER=xai` |
 
 > **Startup verification:** Every benchmark run prints a table showing what was loaded from
 > `benchmark/.env.local`, which keys overrode root `.env`, and warns if the file is missing.

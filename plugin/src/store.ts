@@ -715,8 +715,8 @@ export function countStaleEmbeddings(): number {
 }
 
 /**
- * Re-embed up to `max` rows whose vectors came from another model (e.g. the
- * pre-1.0 Voyage vectors) with the current embedder, `batchSize` at a time.
+ * Re-embed up to `max` rows whose vectors came from another model (e.g.
+ * pre-1.0 rows tagged LEGACY_EMBED_MODEL) with the current embedder, `batchSize` at a time.
  * Returns how many rows were migrated. Safe to interrupt and resume.
  */
 export async function reembedStale(max = 500, batchSize = 32): Promise<number> {

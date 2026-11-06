@@ -40,15 +40,14 @@ export function validateId(value: string, fieldName = "id"): string {
 
 // ── API credentials ─────────────────────────────────────────────────────────────
 // codexfi needs NO API keys by default: LLM work runs through the user's own
-// Claude Code login (`claude -p`) and embeddings run locally. Keys are optional:
+// Claude Code login (`claude -p`) and embeddings run locally (on-device only —
+// there is no remote embedding provider). One key is optional:
 //   anthropicApiKey — use the Anthropic Messages API directly instead of the CLI
-//   voyageApiKey    — use Voyage AI `voyage-code-3` embeddings instead of local
-// Keys come from ~/.codexfi/codexfi.jsonc first, then the standard env vars.
+// It comes from ~/.codexfi/codexfi.jsonc first, then the standard env var.
 
 import { PLUGIN_CONFIG } from "./plugin-config.js";
 
 export const ANTHROPIC_API_KEY = PLUGIN_CONFIG.anthropicApiKey || process.env.ANTHROPIC_API_KEY || "";
-export const VOYAGE_API_KEY = PLUGIN_CONFIG.voyageApiKey || process.env.VOYAGE_API_KEY || "";
 
 /** Data directory — default follows XDG convention outside project directory. */
 export const DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEMORY_DIR ?? `${homedir()}/.codexfi`;
@@ -81,19 +80,6 @@ export const LLM_BACKEND: LlmBackend = pickBackend();
 export const LLM_MODEL: string = process.env.CODEXFI_LLM_MODEL ?? PLUGIN_CONFIG.llmModel ?? "haiku";
 
 export const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
-
-// ── Embeddings ──────────────────────────────────────────────────────────────────
-
-export type EmbeddingProvider = "local" | "voyage";
-
-export const EMBEDDING_PROVIDER: EmbeddingProvider =
-	(process.env.CODEXFI_EMBEDDING_PROVIDER as EmbeddingProvider | undefined) === "voyage" ||
-	(PLUGIN_CONFIG.embeddingProvider === "voyage" && process.env.CODEXFI_EMBEDDING_PROVIDER !== "local")
-		? "voyage"
-		: "local";
-
-export const VOYAGE_EMBEDDING_MODEL = "voyage-code-3";
-export const VOYAGE_EMBEDDING_DIMS = 1024;
 
 // ── Deduplication thresholds ────────────────────────────────────────────────────
 
@@ -176,10 +162,8 @@ export const RECENCY_DECAY = 0.1;
 export const ACTIVITY_MAX = 200;
 
 // ── Pricing (USD per million tokens) ────────────────────────────────────────────
-// Only used to show a notional cost for anthropic-api / voyage calls. claude-cli
+// Only used to show a notional cost for anthropic-api calls. claude-cli
 // calls report Claude Code's own notional cost (subscription users are not billed).
 
 export const ANTHROPIC_PRICE_INPUT_PER_M = 1.00;
 export const ANTHROPIC_PRICE_OUTPUT_PER_M = 5.00;
-
-export const VOYAGE_PRICE_PER_M = 0.18;

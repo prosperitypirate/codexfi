@@ -21,16 +21,12 @@ interface MemoryConfig {
 	// ── Optional API keys (codexfi needs none by default) ────────────────────────
 	/** Anthropic API key — only used when llmBackend is "anthropic-api" (or "auto" without Claude Code). */
 	anthropicApiKey?: string;
-	/** Voyage AI key — only used when embeddingProvider is "voyage". */
-	voyageApiKey?: string;
 
 	// ── Backends ─────────────────────────────────────────────────────────────────
 	/** "auto" (default) | "claude-cli" | "anthropic-api". */
 	llmBackend?: "auto" | "claude-cli" | "anthropic-api";
 	/** Model for background extraction. Default "haiku" (CLI alias → newest Haiku). */
 	llmModel?: string;
-	/** "local" (default, on-device, no key) | "voyage". */
-	embeddingProvider?: "local" | "voyage";
 	/** Local embedding model: "jina-v2-base-code" (default) | "all-MiniLM-L6-v2" (lightweight). */
 	localModel?: string;
 
@@ -146,14 +142,13 @@ function loadConfig(): MemoryConfig {
 const fileConfig = loadConfig();
 
 export const PLUGIN_CONFIG = {
-	// Optional keys (env fallbacks are resolved in config.ts)
-	voyageApiKey: fileConfig.voyageApiKey ?? "",
+	// Optional key (env fallback is resolved in config.ts). Unknown/legacy keys in
+	// the file (e.g. pre-1.0 remote-embedding settings) are never read.
 	anthropicApiKey: fileConfig.anthropicApiKey ?? "",
 
 	// Backends
 	llmBackend: fileConfig.llmBackend,
 	llmModel: fileConfig.llmModel,
-	embeddingProvider: fileConfig.embeddingProvider,
 	localModel: fileConfig.localModel,
 
 	// Behaviour
@@ -191,10 +186,8 @@ export function isConfigured(): boolean {
 
 /** Fields that `writeApiKeys()` can set in the config file. */
 export interface ApiKeyUpdate {
-	voyageApiKey?: string;
 	anthropicApiKey?: string;
 	llmBackend?: "auto" | "claude-cli" | "anthropic-api";
-	embeddingProvider?: "local" | "voyage";
 }
 
 /**
@@ -242,12 +235,9 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("\t// login (claude -p) and embeddings run on-device.");
 	lines.push("\t// llmBackend: \"auto\" | \"claude-cli\" | \"anthropic-api\"");
 	lines.push(`\t"llmBackend": ${jsonValue(config.llmBackend ?? "auto")},`);
-	lines.push("\t// embeddingProvider: \"local\" | \"voyage\"");
-	lines.push(`\t"embeddingProvider": ${jsonValue(config.embeddingProvider ?? "local")},`);
 	lines.push("");
-	lines.push("\t// Optional: only needed for llmBackend \"anthropic-api\" / embeddingProvider \"voyage\"");
-	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
-	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)}`);
+	lines.push("\t// Optional: only needed for llmBackend \"anthropic-api\"");
+	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)}`);
 
 	// ── Plugin settings (only include non-defaults) ─────────────────────────────
 	const overrides = collectNonDefaults(config);

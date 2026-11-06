@@ -16,13 +16,11 @@ Settings live in `~/.codexfi/codexfi.jsonc`. The file doesn't exist until you cr
 {
   "llmBackend": "auto",              // "auto" | "claude-cli" | "anthropic-api"
   "llmModel": "haiku",               // any Claude Code model alias or id
-  "embeddingProvider": "local",      // "local" | "voyage"
   "localModel": "jina-v2-base-code", // or "all-MiniLM-L6-v2" (lighter, faster)
   "memoryBank": "auto",              // "auto" | "off"
   "autoInit": true,                  // seed a new project from README/manifests/git log
   "excludePaths": ["/Users/me/clients/secret-co"],  // codexfi stays silent here
-  "anthropicApiKey": "",             // only for llmBackend "anthropic-api"
-  "voyageApiKey": ""                 // only for embeddingProvider "voyage"
+  "anthropicApiKey": ""              // only for llmBackend "anthropic-api"
 }
 ```
 
@@ -56,14 +54,7 @@ Only used when `llmBackend` is `"anthropic-api"` (or `"auto"` without Claude Cod
 
 ## Embeddings
 
-### `embeddingProvider`
-
-- **Default:** `"local"`
-
-| Value | Behavior |
-|-------|----------|
-| `local` (default) | On-device ONNX model via transformers.js. No key, no network after the one-time download. Weights are cached in `~/.codexfi/models`. |
-| `voyage` | Voyage AI `voyage-code-3`. Requires `voyageApiKey` (or `VOYAGE_API_KEY`). |
+Embeddings are **local-only**: an on-device ONNX model via transformers.js. No key, and no network after the one-time model download (weights are cached in `~/.codexfi/models`). Memory text is never sent to a third-party embedding API. (Remote embedding providers were removed in 1.0; legacy `embeddingProvider` / `voyageApiKey` entries in an old config file are ignored.)
 
 ### `localModel`
 
@@ -74,11 +65,7 @@ Only used when `llmBackend` is `"anthropic-api"` (or `"auto"` without Claude Cod
 | `jina-v2-base-code` (default) | 768 | ~160 MB | Best local model for code-assistant memories |
 | `all-MiniLM-L6-v2` | 384 | ~23 MB | Lightweight option for slower machines |
 
-Every memory records which embedding model produced its vector, and only vectors from the current model are ever compared. If you switch models (or upgrade from 0.7.x Voyage vectors), the background worker re-embeds older rows in batches; structured memories stay usable in the meantime.
-
-### `voyageApiKey`
-
-Only used when `embeddingProvider` is `"voyage"`.
+Every memory records which embedding model produced its vector, and only vectors from the current model are ever compared. If you switch models (or upgrade from 0.7.x), the background worker re-embeds older rows in batches; structured memories stay usable in the meantime.
 
 ## Behavior
 
@@ -179,7 +166,6 @@ These override the config file — mostly for development and CI:
 | `CODEXFI_DATA_DIR` | Data directory (default `~/.codexfi`) |
 | `CODEXFI_LLM_BACKEND` | `llmBackend` |
 | `CODEXFI_LLM_MODEL` | `llmModel` |
-| `CODEXFI_EMBEDDING_PROVIDER` | `embeddingProvider` |
 | `CODEXFI_LOCAL_MODEL` | `localModel` |
 | `CODEXFI_MODEL_DIR` | Where local model weights are cached |
 | `CODEXFI_CLAUDE_BIN` | Path to the `claude` binary |

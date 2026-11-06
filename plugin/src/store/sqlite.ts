@@ -78,8 +78,8 @@ function migrate(conn: DatabaseLike): void {
 	try {
 		if (!hasColumn()) {
 			conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
-			// Every pre-1.0 row was embedded with Voyage — label them so the local
-			// re-embed pass can find and migrate them.
+			// Label every pre-1.0 row with the legacy marker so the local re-embed
+			// pass can find and migrate them (see LEGACY_EMBED_MODEL).
 			conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
 		}
 		conn.run("COMMIT");

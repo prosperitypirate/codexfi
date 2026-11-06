@@ -1,27 +1,11 @@
 /**
  * Fetch mock utilities for tests that need to intercept HTTP calls
- * to external APIs (Voyage AI, Anthropic Messages API).
+ * to external APIs (Anthropic Messages API).
  *
  * Uses Bun's native mock() to replace global fetch.
  */
 
 import { mock } from "bun:test";
-
-const VOYAGE_DIMS = 1024;
-
-/**
- * Create a mock Voyage AI embedding response.
- */
-export function voyageEmbedResponse(vector?: number[]): Response {
-	const v = vector ?? new Array(VOYAGE_DIMS).fill(0.1);
-	return new Response(JSON.stringify({
-		data: [{ embedding: v }],
-		usage: { total_tokens: 10 },
-	}), {
-		status: 200,
-		headers: { "Content-Type": "application/json" },
-	});
-}
 
 /**
  * Create a mock Anthropic extraction response.
@@ -49,7 +33,6 @@ export function anthropicExtractionResponse(memories: Array<{ memory: string; ty
  * @example
  * ```ts
  * const fetchMock = installFetchMock({
- *   "api.voyageai.com": voyageEmbedResponse(),
  *   "api.anthropic.com": anthropicExtractionResponse([...]),
  * });
  * ```

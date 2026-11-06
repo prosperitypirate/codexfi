@@ -76,9 +76,8 @@ codexfi install --dry-run                         # print the plan, change nothi
 codexfi install --source /path/to/codexfi         # use a local checkout as the marketplace
 codexfi install --uninstall                       # print the uninstall commands
 
-# Optional backends — written to ~/.codexfi/codexfi.jsonc (key values are never printed)
+# Optional LLM backend — written to ~/.codexfi/codexfi.jsonc (key values are never printed)
 codexfi install --llm-backend anthropic-api --anthropic-key sk-ant-...
-codexfi install --embedding-provider voyage --voyage-key pa-...
 ```
 
 To uninstall:
@@ -111,7 +110,7 @@ Status
   [ok] Background worker idle, 0 queued job(s)
   [ok] Memory Bank none for this directory
   [ok] Claude Code plugin enabled (codexfi@codexfi)
-  * API keys anthropic: unset, voyage: unset (optional)
+  * API keys anthropic: unset (optional)
 
   9/9 checks passed - system healthy.
 ```
@@ -132,7 +131,7 @@ $ codexfi list --limit 5
 
 Memories
 ────────────
-  - Scope: project (/Users/neo/my-project)
+  - Scope: project (/Users/you/my-project)
   - Showing 5 of 5 max
 
   ID       │ Type           │ Memory                                        │    Updated
@@ -155,7 +154,7 @@ codexfi list --json              # raw JSON output
 
 ### `search` — Semantic search
 
-Vector search over memories using the same embedding pipeline as the plugin (local by default, Voyage AI when configured).
+Vector search over memories using the same embedding pipeline as the plugin (local, on-device embeddings).
 
 ```
 $ codexfi search "how is authentication handled"
@@ -165,7 +164,7 @@ $ codexfi search "how is authentication handled"
 Search Results
 ──────────────────
   - Query: "how is authentication handled"
-  - Scope: /Users/neo/my-project
+  - Scope: /Users/you/my-project
   - Found 3 results
 
   1. 87% █████████████████░░░ architecture 2026-02-20

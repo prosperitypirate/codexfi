@@ -1,10 +1,9 @@
 /**
- * Embeddings — local on-device by default, Voyage AI optional.
+ * Embeddings — local and on-device only.
  *
- *   local  (default) — ONNX model via @huggingface/transformers, run in-process.
- *                      No key, no network after the one-time model download
- *                      (cached in ~/.codexfi/models).
- *   voyage           — voyage-code-3 over HTTPS (needs voyageApiKey).
+ * An ONNX model runs in-process via @huggingface/transformers. No key, and no
+ * network after the one-time model download (cached in ~/.codexfi/models).
+ * Memory text is never sent to a third-party embedding API.
  *
  * Every stored vector is tagged with `currentEmbedModelId()` so vectors from
  * different models are never compared; rows from an older model are migrated
@@ -15,17 +14,8 @@ import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
-import {
-	DATA_DIR,
-	EMBEDDING_PROVIDER,
-	VOYAGE_API_KEY,
-	VOYAGE_EMBEDDING_DIMS,
-	VOYAGE_EMBEDDING_MODEL,
-	VOYAGE_PRICE_PER_M,
-} from "./config.js";
+import { DATA_DIR } from "./config.js";
 import { PLUGIN_CONFIG } from "./plugin-config.js";
-import { withRetry, EMBED_RETRY } from "./retry.js";
-import { ledger, activityLog } from "./telemetry.js";
 
 export type InputType = "document" | "query";
 
@@ -33,8 +23,8 @@ export type InputType = "document" | "query";
 
 /**
  * Similarity cut-offs are model-specific (each model has its own cosine scale).
- * Values for local models were derived by matching Voyage's decisions on the
- * benchmark memory corpus (recall-matched for retrieval, F1-matched for
+ * Values were calibrated on the benchmark memory corpus against the 0.7.x
+ * baseline's decisions (recall-matched for retrieval, F1-matched for
  * memory↔memory dedup / contradiction pairs). See .github/designs/012.
  */
 export interface Thresholds {
@@ -57,18 +47,6 @@ export interface Thresholds {
 	enumBase: number;
 }
 
-const VOYAGE_THRESHOLDS: Thresholds = {
-	dedupDistance: 0.12,
-	structuralDedupDistance: 0.25,
-	contradictionDistance: 0.5,
-	structuralContradictionDistance: 0.75,
-	similarity: 0.45,
-	display: 0.6,
-	snippet: 0.55,
-	floor: 0.2,
-	enumBase: 0.25,
-};
-
 export interface LocalModelSpec {
 	/** Hugging Face repo id (ONNX weights). */
 	repo: string;
@@ -84,7 +62,7 @@ export interface LocalModelSpec {
 
 export const LOCAL_MODELS: Record<string, LocalModelSpec> = {
 	// Default: best local model for code-assistant memories at an acceptable
-	// footprint (~160 MB q8, ~240 ms process-start→first-vector, Hit@20 = Voyage's).
+	// footprint (~160 MB q8, ~240 ms process-start→first-vector, Hit@20 = the 0.7.x baseline's).
 	"jina-v2-base-code": {
 		repo: "jinaai/jina-embeddings-v2-base-code",
 		dims: 768,
@@ -97,7 +75,7 @@ export const LOCAL_MODELS: Record<string, LocalModelSpec> = {
 			contradictionDistance: 0.83,
 			structuralContradictionDistance: 1.18,
 			similarity: 0.38,
-			// Voyage shows ≥0.60; jina's scale is compressed — 0.50 keeps ~97% precision
+			// The 0.7.x baseline showed ≥0.60; jina's scale is compressed — 0.50 keeps ~97% precision
 			// on the benchmark corpus while not hiding clear hits (0.53–0.69 observed).
 			display: 0.5,
 			snippet: 0.54,
@@ -138,7 +116,7 @@ function localModelName(): string {
  * (similarityThreshold / displaySimilarityThreshold) win.
  */
 export function activeThresholds(): Thresholds {
-	const base = EMBEDDING_PROVIDER === "voyage" ? VOYAGE_THRESHOLDS : LOCAL_MODELS[localModelName()]!.thresholds;
+	const base = LOCAL_MODELS[localModelName()]!.thresholds;
 	return {
 		...base,
 		...(PLUGIN_CONFIG.similarityThreshold !== undefined ? { similarity: PLUGIN_CONFIG.similarityThreshold } : {}),
@@ -149,19 +127,16 @@ export function activeThresholds(): Thresholds {
 // ── Info ────────────────────────────────────────────────────────────────────────
 
 export interface EmbedderInfo {
-	provider: "local" | "voyage";
+	provider: "local";
 	model: string;
 	/** Value stored in memories.embed_model. */
 	id: string;
 	dims: number;
-	/** Local only: directory holding downloaded model weights. */
-	cacheDir?: string;
+	/** Directory holding downloaded model weights. */
+	cacheDir: string;
 }
 
 export function embedderInfo(): EmbedderInfo {
-	if (EMBEDDING_PROVIDER === "voyage") {
-		return { provider: "voyage", model: VOYAGE_EMBEDDING_MODEL, id: VOYAGE_EMBEDDING_MODEL, dims: VOYAGE_EMBEDDING_DIMS };
-	}
 	const name = localModelName();
 	return { provider: "local", model: name, id: `local:${name}`, dims: LOCAL_MODELS[name]!.dims, cacheDir: modelCacheDir() };
 }
@@ -172,12 +147,10 @@ export function currentEmbedModelId(): string {
 }
 
 /**
- * True when the active local model's weights are already on disk (or when the
- * provider needs no download). Hooks use this to avoid downloading ~160 MB
+ * True when the active local model's weights are already on disk. Hooks use this to avoid downloading ~160 MB
  * inside a latency-sensitive UserPromptSubmit — the worker prefetches instead.
  */
 export function isEmbedderReady(): boolean {
-	if (EMBEDDING_PROVIDER === "voyage") return true;
 	const spec = LOCAL_MODELS[localModelName()]!;
 	const file = spec.dtype === "q8" ? "model_quantized.onnx" : spec.dtype === "fp32" ? "model.onnx" : `model_${spec.dtype}.onnx`;
 	return existsSync(join(modelCacheDir(), spec.repo, "onnx", file));
@@ -243,42 +216,12 @@ async function embedLocal(texts: string[], inputType: InputType): Promise<number
 	return out.tolist();
 }
 
-// ── Voyage backend ──────────────────────────────────────────────────────────────
-
-const VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings";
-
-async function embedVoyage(texts: string[], inputType: InputType): Promise<number[][]> {
-	if (!VOYAGE_API_KEY) throw new Error("embeddingProvider is \"voyage\" but no voyageApiKey is configured");
-	const result = await withRetry(
-		async () => {
-			const response = await fetch(VOYAGE_API_URL, {
-				method: "POST",
-				headers: { Authorization: `Bearer ${VOYAGE_API_KEY}`, "Content-Type": "application/json" },
-				body: JSON.stringify({ model: VOYAGE_EMBEDDING_MODEL, input: texts, input_type: inputType }),
-			});
-			if (!response.ok) throw new Error(`Voyage AI API error ${response.status}: ${(await response.text()).slice(0, 200)}`);
-			return (await response.json()) as { data: Array<{ embedding: number[] }>; usage?: { total_tokens?: number } };
-		},
-		"Voyage AI embed",
-		EMBED_RETRY,
-	);
-	try {
-		const tokens = result.usage?.total_tokens ?? 0;
-		const cost = (tokens * VOYAGE_PRICE_PER_M) / 1_000_000;
-		await ledger.recordEmbedding("voyage", VOYAGE_EMBEDDING_MODEL, tokens, cost);
-		activityLog.recordEmbedding("voyage", VOYAGE_EMBEDDING_MODEL, tokens, cost);
-	} catch {
-		// telemetry never blocks
-	}
-	return result.data.map((d) => d.embedding);
-}
-
 // ── Public API ──────────────────────────────────────────────────────────────────
 
-/** Embed a batch of texts with the active provider. */
+/** Embed a batch of texts with the active local model. */
 export async function embedBatch(texts: string[], inputType: InputType = "document"): Promise<number[][]> {
 	if (texts.length === 0) return [];
-	return EMBEDDING_PROVIDER === "voyage" ? embedVoyage(texts, inputType) : embedLocal(texts, inputType);
+	return embedLocal(texts, inputType);
 }
 
 /**

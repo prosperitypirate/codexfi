@@ -208,12 +208,9 @@ function generateConfigJsonc(config) {
   lines.push("\t// login (claude -p) and embeddings run on-device.");
   lines.push('\t// llmBackend: "auto" | "claude-cli" | "anthropic-api"');
   lines.push(`	"llmBackend": ${jsonValue(config.llmBackend ?? "auto")},`);
-  lines.push('\t// embeddingProvider: "local" | "voyage"');
-  lines.push(`	"embeddingProvider": ${jsonValue(config.embeddingProvider ?? "local")},`);
   lines.push("");
-  lines.push('\t// Optional: only needed for llmBackend "anthropic-api" / embeddingProvider "voyage"');
-  lines.push(`	"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
-  lines.push(`	"voyageApiKey": ${jsonValue(config.voyageApiKey)}`);
+  lines.push('\t// Optional: only needed for llmBackend "anthropic-api"');
+  lines.push(`	"anthropicApiKey": ${jsonValue(config.anthropicApiKey)}`);
   const overrides = collectNonDefaults(config);
   if (overrides.length > 0) {
     const lastIdx = lines.length - 1;
@@ -318,11 +315,9 @@ var init_plugin_config = __esm(() => {
   };
   fileConfig = loadConfig();
   PLUGIN_CONFIG = {
-    voyageApiKey: fileConfig.voyageApiKey ?? "",
     anthropicApiKey: fileConfig.anthropicApiKey ?? "",
     llmBackend: fileConfig.llmBackend,
     llmModel: fileConfig.llmModel,
-    embeddingProvider: fileConfig.embeddingProvider,
     localModel: fileConfig.localModel,
     memoryBank: fileConfig.memoryBank === "off" ? "off" : DEFAULTS.memoryBank,
     autoInit: fileConfig.autoInit ?? DEFAULTS.autoInit,
@@ -361,17 +356,15 @@ function pickBackend() {
     return cfg;
   return "auto";
 }
-var SAFE_ID_RE, ANTHROPIC_API_KEY, VOYAGE_API_KEY, DATA_DIR, VALID_BACKENDS, LLM_BACKEND, LLM_MODEL, ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1", EMBEDDING_PROVIDER, VOYAGE_EMBEDDING_MODEL = "voyage-code-3", VOYAGE_EMBEDDING_DIMS = 1024, STRUCTURAL_TYPES, CONTRADICTION_CANDIDATE_LIMIT = 25, VERSIONING_SKIP_TYPES, MAX_SESSION_SUMMARIES = 3, MIN_EXCHANGE_CHARS = 100, CHUNK_TRUNCATION = 8000, MAX_CONTENT_CHARS = 12000, MAX_SUMMARY_CHARS = 4000, LLM_MAX_TOKENS = 2000, LLM_TEMPERATURE = 0, LLM_TIMEOUT_MS = 60000, RECENCY_DECAY = 0.1, ACTIVITY_MAX = 200, ANTHROPIC_PRICE_INPUT_PER_M = 1, ANTHROPIC_PRICE_OUTPUT_PER_M = 5, VOYAGE_PRICE_PER_M = 0.18;
+var SAFE_ID_RE, ANTHROPIC_API_KEY, DATA_DIR, VALID_BACKENDS, LLM_BACKEND, LLM_MODEL, ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1", STRUCTURAL_TYPES, CONTRADICTION_CANDIDATE_LIMIT = 25, VERSIONING_SKIP_TYPES, MAX_SESSION_SUMMARIES = 3, MIN_EXCHANGE_CHARS = 100, CHUNK_TRUNCATION = 8000, MAX_CONTENT_CHARS = 12000, MAX_SUMMARY_CHARS = 4000, LLM_MAX_TOKENS = 2000, LLM_TEMPERATURE = 0, LLM_TIMEOUT_MS = 60000, RECENCY_DECAY = 0.1, ACTIVITY_MAX = 200, ANTHROPIC_PRICE_INPUT_PER_M = 1, ANTHROPIC_PRICE_OUTPUT_PER_M = 5;
 var init_config = __esm(() => {
   init_plugin_config();
   SAFE_ID_RE = /^[a-zA-Z0-9_:.\-]+$/;
   ANTHROPIC_API_KEY = PLUGIN_CONFIG.anthropicApiKey || process.env.ANTHROPIC_API_KEY || "";
-  VOYAGE_API_KEY = PLUGIN_CONFIG.voyageApiKey || process.env.VOYAGE_API_KEY || "";
   DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEMORY_DIR ?? `${homedir2()}/.codexfi`;
   VALID_BACKENDS = new Set(["auto", "claude-cli", "anthropic-api"]);
   LLM_BACKEND = pickBackend();
   LLM_MODEL = process.env.CODEXFI_LLM_MODEL ?? PLUGIN_CONFIG.llmModel ?? "haiku";
-  EMBEDDING_PROVIDER = process.env.CODEXFI_EMBEDDING_PROVIDER === "voyage" || PLUGIN_CONFIG.embeddingProvider === "voyage" && process.env.CODEXFI_EMBEDDING_PROVIDER !== "local" ? "voyage" : "local";
   STRUCTURAL_TYPES = new Set([
     "project-brief",
     "architecture",
@@ -437,7 +430,7 @@ async function withTimeout(promise, ms, label) {
     clearTimeout(timeoutId);
   }
 }
-var DB_RETRY, DB_SEARCH_RETRY, EMBED_RETRY, EXTRACT_RETRY;
+var DB_RETRY, DB_SEARCH_RETRY, EXTRACT_RETRY;
 var init_retry = __esm(() => {
   init_fsx();
   DB_RETRY = {
@@ -451,13 +444,6 @@ var init_retry = __esm(() => {
     baseDelayMs: 100,
     maxDelayMs: 5000,
     jitter: 0.25
-  };
-  EMBED_RETRY = {
-    maxRetries: 3,
-    baseDelayMs: 500,
-    maxDelayMs: 1e4,
-    jitter: 0.25,
-    timeoutMs: 1e4
   };
   EXTRACT_RETRY = {
     maxRetries: 3,
@@ -474,25 +460,28 @@ function freshLedger() {
 function emptyBucket() {
   return { calls: 0, prompt_tokens: 0, completion_tokens: 0, tokens: 0, cost_usd: 0 };
 }
+function sumCost(backends) {
+  return +Object.values(backends).reduce((sum, b) => sum + (b.cost_usd ?? 0), 0).toFixed(8);
+}
 function normalizeLedger(raw) {
   if (!raw || typeof raw !== "object")
     return freshLedger();
   const r = raw;
-  if (r.backends && typeof r.backends === "object")
-    return raw;
   const out = freshLedger();
-  for (const key of ["anthropic", "voyage", "xai", "google"]) {
-    const b = r[key];
-    if (!b || !b.calls)
-      continue;
-    out.backends[key === "anthropic" ? "anthropic-api" : key] = {
-      ...emptyBucket(),
-      ...b,
-      tokens: b.tokens ?? 0
-    };
-  }
-  out.total_cost_usd = Number(r.total_cost_usd ?? 0);
   out.last_updated = String(r.last_updated ?? "");
+  if (r.backends && typeof r.backends === "object") {
+    for (const [key, b2] of Object.entries(r.backends)) {
+      if (KNOWN_BACKENDS.has(key))
+        out.backends[key] = b2;
+    }
+    out.total_cost_usd = sumCost(out.backends);
+    return out;
+  }
+  const b = r.anthropic;
+  if (b && b.calls) {
+    out.backends["anthropic-api"] = { ...emptyBucket(), ...b, tokens: b.tokens ?? 0 };
+  }
+  out.total_cost_usd = sumCost(out.backends);
   return out;
 }
 
@@ -520,7 +509,7 @@ class CostLedger {
     return this.data.backends[name] ??= emptyBucket();
   }
   touch() {
-    this.data.total_cost_usd = +Object.values(this.data.backends).reduce((sum, b) => sum + (b.cost_usd ?? 0), 0).toFixed(8);
+    this.data.total_cost_usd = sumCost(this.data.backends);
     this.data.last_updated = new Date().toISOString();
   }
   async recordLlm(backend, model, promptTokens, completionTokens, costUsd) {
@@ -562,6 +551,9 @@ class CostLedger {
     await this.save();
   }
 }
+function dropLegacy(entries) {
+  return entries.filter((e) => KNOWN_BACKENDS.has(e.api));
+}
 
 class ActivityLog {
   entries = [];
@@ -569,7 +561,7 @@ class ActivityLog {
   async init(dataDir = DATA_DIR) {
     this.path = `${dataDir}/activity.json`;
     try {
-      this.entries = await readJsonFile(this.path) ?? [];
+      this.entries = dropLegacy(await readJsonFile(this.path) ?? []);
     } catch {
       this.entries = [];
     }
@@ -587,7 +579,7 @@ class ActivityLog {
     try {
       const loaded = await readJsonFile(this.path);
       if (loaded)
-        this.entries = loaded;
+        this.entries = dropLegacy(loaded);
     } catch {}
   }
   append(entry) {
@@ -624,10 +616,11 @@ class ActivityLog {
     return [...this.entries.slice(-limit)].reverse();
   }
 }
-var ledger, activityLog;
+var KNOWN_BACKENDS, ledger, activityLog;
 var init_telemetry = __esm(() => {
   init_config();
   init_fsx();
+  KNOWN_BACKENDS = new Set(["claude-cli", "anthropic-api", "local"]);
   ledger = new CostLedger;
   activityLog = new ActivityLog;
 });
@@ -874,13 +867,9 @@ function printOutput(out) {
 function configFromFlags(args) {
   const update = {};
   const anthropic = getFlag(args, "anthropic-key");
-  const voyage = getFlag(args, "voyage-key");
   const backend = getFlag(args, "llm-backend");
-  const provider = getFlag(args, "embedding-provider");
   if (anthropic)
     update.anthropicApiKey = anthropic;
-  if (voyage)
-    update.voyageApiKey = voyage;
   if (backend !== undefined) {
     if (!LLM_BACKENDS.includes(backend)) {
       error2(`Invalid --llm-backend "${backend}" - expected one of: ${LLM_BACKENDS.join(", ")}`);
@@ -888,25 +877,14 @@ function configFromFlags(args) {
     }
     update.llmBackend = backend;
   }
-  if (provider !== undefined) {
-    if (!EMBEDDING_PROVIDERS.includes(provider)) {
-      error2(`Invalid --embedding-provider "${provider}" - expected one of: ${EMBEDDING_PROVIDERS.join(", ")}`);
-      process.exit(1);
-    }
-    update.embeddingProvider = provider;
-  }
   return update;
 }
 function describeUpdate(u) {
   const out = [];
   if (u.anthropicApiKey)
     out.push("anthropicApiKey = (set)");
-  if (u.voyageApiKey)
-    out.push("voyageApiKey = (set)");
   if (u.llmBackend)
     out.push(`llmBackend = ${u.llmBackend}`);
-  if (u.embeddingProvider)
-    out.push(`embeddingProvider = ${u.embeddingProvider}`);
   return out;
 }
 function printUninstall() {
@@ -994,13 +972,12 @@ async function run(args) {
   info2(`Verify with ${cyan2("codexfi status")}; uninstall help: ${cyan2("codexfi install --uninstall")}`);
   blank2();
 }
-var DEFAULT_SOURCE = "prosperitypirate/codexfi", MARKETPLACE = "codexfi", PLUGIN_ID = "codexfi@codexfi", LLM_BACKENDS, EMBEDDING_PROVIDERS;
+var DEFAULT_SOURCE = "prosperitypirate/codexfi", MARKETPLACE = "codexfi", PLUGIN_ID = "codexfi@codexfi", LLM_BACKENDS;
 var init_install = __esm(() => {
   init_fmt();
   init_llm();
   init_plugin_config();
   LLM_BACKENDS = ["auto", "claude-cli", "anthropic-api"];
-  EMBEDDING_PROVIDERS = ["local", "voyage"];
 });
 
 // src/store/schema.ts
@@ -1502,7 +1479,7 @@ function localModelName() {
   return configured && LOCAL_MODELS[configured] ? configured : DEFAULT_LOCAL_MODEL;
 }
 function activeThresholds() {
-  const base = EMBEDDING_PROVIDER === "voyage" ? VOYAGE_THRESHOLDS : LOCAL_MODELS[localModelName()].thresholds;
+  const base = LOCAL_MODELS[localModelName()].thresholds;
   return {
     ...base,
     ...PLUGIN_CONFIG.similarityThreshold !== undefined ? { similarity: PLUGIN_CONFIG.similarityThreshold } : {},
@@ -1510,9 +1487,6 @@ function activeThresholds() {
   };
 }
 function embedderInfo() {
-  if (EMBEDDING_PROVIDER === "voyage") {
-    return { provider: "voyage", model: VOYAGE_EMBEDDING_MODEL, id: VOYAGE_EMBEDDING_MODEL, dims: VOYAGE_EMBEDDING_DIMS };
-  }
   const name = localModelName();
   return { provider: "local", model: name, id: `local:${name}`, dims: LOCAL_MODELS[name].dims, cacheDir: modelCacheDir() };
 }
@@ -1520,8 +1494,6 @@ function currentEmbedModelId() {
   return embedderInfo().id;
 }
 function isEmbedderReady() {
-  if (EMBEDDING_PROVIDER === "voyage")
-    return true;
   const spec = LOCAL_MODELS[localModelName()];
   const file = spec.dtype === "q8" ? "model_quantized.onnx" : spec.dtype === "fp32" ? "model.onnx" : `model_${spec.dtype}.onnx`;
   return existsSync2(join5(modelCacheDir(), spec.repo, "onnx", file));
@@ -1572,31 +1544,10 @@ async function embedLocal(texts, inputType) {
   const out = await extractor(inputs, { pooling: spec.pooling, normalize: true });
   return out.tolist();
 }
-async function embedVoyage(texts, inputType) {
-  if (!VOYAGE_API_KEY)
-    throw new Error('embeddingProvider is "voyage" but no voyageApiKey is configured');
-  const result = await withRetry(async () => {
-    const response = await fetch(VOYAGE_API_URL, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${VOYAGE_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: VOYAGE_EMBEDDING_MODEL, input: texts, input_type: inputType })
-    });
-    if (!response.ok)
-      throw new Error(`Voyage AI API error ${response.status}: ${(await response.text()).slice(0, 200)}`);
-    return await response.json();
-  }, "Voyage AI embed", EMBED_RETRY);
-  try {
-    const tokens = result.usage?.total_tokens ?? 0;
-    const cost = tokens * VOYAGE_PRICE_PER_M / 1e6;
-    await ledger.recordEmbedding("voyage", VOYAGE_EMBEDDING_MODEL, tokens, cost);
-    activityLog.recordEmbedding("voyage", VOYAGE_EMBEDDING_MODEL, tokens, cost);
-  } catch {}
-  return result.data.map((d) => d.embedding);
-}
 async function embedBatch(texts, inputType = "document") {
   if (texts.length === 0)
     return [];
-  return EMBEDDING_PROVIDER === "voyage" ? embedVoyage(texts, inputType) : embedLocal(texts, inputType);
+  return embedLocal(texts, inputType);
 }
 async function embed(text, inputType = "document") {
   if (inputType === "query") {
@@ -1618,23 +1569,10 @@ function _resetEmbedderForTests() {
   extractorPromise = null;
   queryCache.clear();
 }
-var VOYAGE_THRESHOLDS, LOCAL_MODELS, DEFAULT_LOCAL_MODEL = "jina-v2-base-code", extractorPromise = null, VOYAGE_API_URL = "https://api.voyageai.com/v1/embeddings", queryCache;
+var LOCAL_MODELS, DEFAULT_LOCAL_MODEL = "jina-v2-base-code", extractorPromise = null, queryCache;
 var init_embedder = __esm(() => {
   init_config();
   init_plugin_config();
-  init_retry();
-  init_telemetry();
-  VOYAGE_THRESHOLDS = {
-    dedupDistance: 0.12,
-    structuralDedupDistance: 0.25,
-    contradictionDistance: 0.5,
-    structuralContradictionDistance: 0.75,
-    similarity: 0.45,
-    display: 0.6,
-    snippet: 0.55,
-    floor: 0.2,
-    enumBase: 0.25
-  };
   LOCAL_MODELS = {
     "jina-v2-base-code": {
       repo: "jinaai/jina-embeddings-v2-base-code",
@@ -2766,8 +2704,6 @@ function backendMeta(name) {
       return { label: "Claude Code (subscription)", notional: true };
     case "anthropic-api":
       return { label: "Anthropic API" };
-    case "voyage":
-      return { label: "Voyage AI" };
     case "local":
       return { label: "Local embeddings", free: true };
     default:
@@ -2873,7 +2809,7 @@ async function run5(args) {
     console.log(JSON.stringify({
       healthy: failed === 0,
       verdict,
-      keysConfigured: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
+      keysConfigured: { anthropic: HAS_ANTHROPIC_KEY },
       checks
     }, null, 2));
     return;
@@ -2888,7 +2824,7 @@ async function run5(args) {
     else
       error2(line);
   }
-  info2(`API keys ${dim2(`anthropic: ${label(HAS_ANTHROPIC_KEY)}, voyage: ${label(HAS_VOYAGE_KEY)} (optional)`)}`);
+  info2(`API keys ${dim2(`anthropic: ${label(HAS_ANTHROPIC_KEY)} (optional)`)}`);
   blank2();
   const summary = `${okCount}/${checks.length} checks passed`;
   if (failed > 0) {
@@ -2946,16 +2882,12 @@ function isModelCached(cacheDir, model) {
 }
 async function checkEmbeddings() {
   const name = "Embeddings";
-  if (EMBEDDING_PROVIDER === "voyage" && !VOYAGE_API_KEY) {
-    return { name, status: "fail", detail: "provider voyage but no Voyage API key set - set voyageApiKey or use local" };
-  }
   const info3 = await loadEmbedderInfo();
   if (!info3) {
-    const model = EMBEDDING_PROVIDER === "voyage" ? VOYAGE_EMBEDDING_MODEL : "model unknown";
-    return { name, status: "warn", detail: `${EMBEDDING_PROVIDER} (${model}; embedder info unavailable)` };
+    return { name, status: "warn", detail: "local (model unknown; embedder info unavailable)" };
   }
   let detail = `${info3.provider} - ${info3.model} (${info3.dims} dims)`;
-  if (info3.provider === "local" && info3.cacheDir) {
+  if (info3.cacheDir) {
     detail += isModelCached(info3.cacheDir, info3.model) ? `, model cached in ${info3.cacheDir}` : ", model not downloaded yet (fetched on first use)";
   }
   return { name, status: "ok", detail };
@@ -3049,7 +2981,7 @@ function checkPluginEnabled() {
   }
   return { name, status: "warn", detail: "not enabled in user settings - run 'codexfi install'" };
 }
-var HAS_ANTHROPIC_KEY, HAS_VOYAGE_KEY, label = (present) => present ? "set" : "unset";
+var HAS_ANTHROPIC_KEY, label = (present) => present ? "set" : "unset";
 var init_status = __esm(() => {
   init_fmt();
   init_config();
@@ -3057,7 +2989,6 @@ var init_status = __esm(() => {
   init_llm();
   init_memory_bank();
   HAS_ANTHROPIC_KEY = ANTHROPIC_API_KEY.length > 0;
-  HAS_VOYAGE_KEY = VOYAGE_API_KEY.length > 0;
 });
 
 // src/cli/commands/export.ts
@@ -3931,13 +3862,11 @@ body {
 /* Backend cost colors */
 .cost-claude-cli    { color: var(--amber-400); }
 .cost-anthropic-api { color: var(--violet-400); }
-.cost-voyage        { color: var(--sky-400); }
 .cost-local         { color: var(--green-400); }
 
 /* Backend label colors in activity */
 .api-claude-cli    { color: var(--amber-400);  font-weight: 600; }
 .api-anthropic-api { color: var(--violet-400); font-weight: 600; }
-.api-voyage        { color: var(--sky-400);    font-weight: 600; }
 .api-local         { color: var(--green-400);  font-weight: 600; }
 
 /* Loading state */
@@ -3996,21 +3925,19 @@ const ALL_TYPES = [
 	"learned-pattern", "project-config", "active-context",
 ];
 
-// Ledger backend keys -> display metadata. Unknown keys (legacy ledgers) render as-is.
+// Ledger backend keys -> display metadata. Unknown keys render as-is.
 const API_LABELS = {
 	"claude-cli": "Claude Code (subscription)",
 	"anthropic-api": "Anthropic API",
-	voyage: "Voyage AI",
 	local: "Local embeddings",
 };
-const API_SHORT = { "claude-cli": "Claude Code", "anthropic-api": "Anthropic", voyage: "Voyage", local: "Local" };
+const API_SHORT = { "claude-cli": "Claude Code", "anthropic-api": "Anthropic", local: "Local" };
 const API_PRICING = {
 	"claude-cli": "notional cost reported by Claude Code \\u00b7 not billed on a subscription",
 	"anthropic-api": "$1.00 / $5.00 per M",
-	voyage: "$0.18 per M tokens",
 	local: "free \\u00b7 runs on-device",
 };
-const EMBED_BACKENDS = { voyage: true, local: true };
+const EMBED_BACKENDS = { local: true };
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 
@@ -4771,9 +4698,6 @@ async function handleSearch(url) {
   if (!query.trim()) {
     return json({ error: "Missing ?q= parameter" }, 400);
   }
-  if (EMBEDDING_PROVIDER === "voyage" && !VOYAGE_API_KEY) {
-    return json({ error: "embeddingProvider is voyage but no Voyage API key is set — semantic search unavailable" }, 503);
-  }
   const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);
   const safeLimit = Math.min(Math.max(1, limit), 50);
   if (exports_store.countRows() === 0)
@@ -4848,7 +4772,6 @@ function startDashboard(options = {}) {
 }
 var CORS_HEADERS;
 var init_server = __esm(() => {
-  init_config();
   init_db();
   init_telemetry();
   init_names();
@@ -21227,7 +21150,7 @@ var VERSION = package_default.version;
 var COMMANDS = {
   install: {
     description: "Install the codexfi plugin into Claude Code",
-    usage: "codexfi install [--dry-run] [--uninstall] [--source <repo|path>] [--llm-backend auto|claude-cli|anthropic-api] [--embedding-provider local|voyage] [--anthropic-key <k>] [--voyage-key <k>]",
+    usage: "codexfi install [--dry-run] [--uninstall] [--source <repo|path>] [--llm-backend auto|claude-cli|anthropic-api] [--anthropic-key <k>]",
     load: () => Promise.resolve().then(() => (init_install(), exports_install))
   },
   list: {

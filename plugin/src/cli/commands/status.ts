@@ -4,7 +4,7 @@
  * Verifies (read-only — never creates files, never prints key values):
  *   - Claude Code CLI found (path + version)
  *   - LLM backend resolution (claude-cli / anthropic-api)
- *   - Embedding provider + model (and local model cache, when the embedder reports it)
+ *   - Local embedding model (and its model cache)
  *   - Data directory, config file, vector store + memory count
  *   - Background worker (worker.lock pid alive?) and queue length
  *   - Memory Bank detection for the current directory
@@ -21,15 +21,7 @@ import { join } from "node:path";
 
 import type { ParsedArgs } from "../args.js";
 import * as fmt from "../fmt.js";
-import {
-	ANTHROPIC_API_KEY,
-	DATA_DIR,
-	EMBEDDING_PROVIDER,
-	LLM_BACKEND,
-	LLM_MODEL,
-	VOYAGE_API_KEY,
-	VOYAGE_EMBEDDING_MODEL,
-} from "../../config.js";
+import { ANTHROPIC_API_KEY, DATA_DIR, LLM_BACKEND, LLM_MODEL } from "../../config.js";
 import { getConfigPath, PLUGIN_CONFIG } from "../../plugin-config.js";
 import { findClaudeBinary, resolveBackend } from "../../llm.js";
 import { detectMemoryBank } from "../../services/memory-bank.js";
@@ -45,7 +37,6 @@ interface CheckResult {
 // Only presence flags ever leave this module — never key material (not even
 // derived strings), so nothing secret can reach stdout or --json output.
 const HAS_ANTHROPIC_KEY: boolean = ANTHROPIC_API_KEY.length > 0;
-const HAS_VOYAGE_KEY: boolean = VOYAGE_API_KEY.length > 0;
 const label = (present: boolean): "set" | "unset" => (present ? "set" : "unset");
 
 // ── Main ────────────────────────────────────────────────────────────────────────
@@ -74,7 +65,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		console.log(JSON.stringify({
 			healthy: failed === 0,
 			verdict,
-			keysConfigured: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
+			keysConfigured: { anthropic: HAS_ANTHROPIC_KEY },
 			checks,
 		}, null, 2));
 		return;
@@ -87,7 +78,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		else if (check.status === "warn") fmt.warn(line);
 		else fmt.error(line);
 	}
-	fmt.info(`API keys ${fmt.dim(`anthropic: ${label(HAS_ANTHROPIC_KEY)}, voyage: ${label(HAS_VOYAGE_KEY)} (optional)`)}`);
+	fmt.info(`API keys ${fmt.dim(`anthropic: ${label(HAS_ANTHROPIC_KEY)} (optional)`)}`);
 
 	fmt.blank();
 	const summary = `${okCount}/${checks.length} checks passed`;
@@ -159,16 +150,12 @@ function isModelCached(cacheDir: string, model: string): boolean {
 
 async function checkEmbeddings(): Promise<CheckResult> {
 	const name = "Embeddings";
-	if (EMBEDDING_PROVIDER === "voyage" && !VOYAGE_API_KEY) {
-		return { name, status: "fail", detail: "provider voyage but no Voyage API key set - set voyageApiKey or use local" };
-	}
 	const info = await loadEmbedderInfo();
 	if (!info) {
-		const model = EMBEDDING_PROVIDER === "voyage" ? VOYAGE_EMBEDDING_MODEL : "model unknown";
-		return { name, status: "warn", detail: `${EMBEDDING_PROVIDER} (${model}; embedder info unavailable)` };
+		return { name, status: "warn", detail: "local (model unknown; embedder info unavailable)" };
 	}
 	let detail = `${info.provider} - ${info.model} (${info.dims} dims)`;
-	if (info.provider === "local" && info.cacheDir) {
+	if (info.cacheDir) {
 		detail += isModelCached(info.cacheDir, info.model)
 			? `, model cached in ${info.cacheDir}`
 			: ", model not downloaded yet (fetched on first use)";

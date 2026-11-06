@@ -1,7 +1,7 @@
 /**
  * `codexfi search <query>` — semantic search over stored memories.
  *
- * Uses the same vector search pipeline as the plugin: embedding (local or Voyage) →
+ * Uses the same vector search pipeline as the plugin: local embedding →
  * cosine similarity → recency blending → threshold filtering.
  *
  * Flags:

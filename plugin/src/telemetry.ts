@@ -4,7 +4,7 @@
  *   CostLedger   — persistent cumulative usage per backend (costs.json)
  *   ActivityLog  — ring buffer of recent calls for the dashboard feed (activity.json)
  *
- * Backends are keyed by name ("claude-cli", "anthropic-api", "voyage", "local").
+ * Backends are keyed by name ("claude-cli", "anthropic-api", "local").
  * claude-cli costs are the notional figure Claude Code reports — subscription
  * users are not billed per call; it is shown so usage stays visible.
  */
@@ -38,24 +38,41 @@ function emptyBucket(): UsageBucket {
 	return { calls: 0, prompt_tokens: 0, completion_tokens: 0, tokens: 0, cost_usd: 0 };
 }
 
-/** Accept pre-1.0 ledgers ({xai, google, anthropic, voyage}) without crashing. */
+/**
+ * The only backends codexfi has. Anything else in an old costs.json /
+ * activity.json (buckets from removed pre-1.0 remote providers) is dropped on
+ * load so it is never displayed.
+ */
+const KNOWN_BACKENDS = new Set(["claude-cli", "anthropic-api", "local"]);
+
+function sumCost(backends: Record<string, UsageBucket>): number {
+	return +Object.values(backends).reduce((sum, b) => sum + (b.cost_usd ?? 0), 0).toFixed(8);
+}
+
+/**
+ * Accept older ledgers without crashing: the pre-1.0 flat shape (one top-level
+ * bucket per provider; only `anthropic` is kept) and `backends` maps. Unknown
+ * backend buckets are dropped and the total is recomputed from what remains.
+ */
 function normalizeLedger(raw: unknown): LedgerData {
 	if (!raw || typeof raw !== "object") return freshLedger();
 	const r = raw as Record<string, unknown>;
-	if (r.backends && typeof r.backends === "object") return raw as LedgerData;
 
 	const out = freshLedger();
-	for (const key of ["anthropic", "voyage", "xai", "google"]) {
-		const b = r[key] as Partial<UsageBucket> | undefined;
-		if (!b || !b.calls) continue;
-		out.backends[key === "anthropic" ? "anthropic-api" : key] = {
-			...emptyBucket(),
-			...b,
-			tokens: (b as { tokens?: number }).tokens ?? 0,
-		};
-	}
-	out.total_cost_usd = Number(r.total_cost_usd ?? 0);
 	out.last_updated = String(r.last_updated ?? "");
+	if (r.backends && typeof r.backends === "object") {
+		for (const [key, b] of Object.entries(r.backends as Record<string, UsageBucket>)) {
+			if (KNOWN_BACKENDS.has(key)) out.backends[key] = b;
+		}
+		out.total_cost_usd = sumCost(out.backends);
+		return out;
+	}
+
+	const b = r.anthropic as Partial<UsageBucket> | undefined;
+	if (b && b.calls) {
+		out.backends["anthropic-api"] = { ...emptyBucket(), ...b, tokens: b.tokens ?? 0 };
+	}
+	out.total_cost_usd = sumCost(out.backends);
 	return out;
 }
 
@@ -86,9 +103,7 @@ class CostLedger {
 	}
 
 	private touch(): void {
-		this.data.total_cost_usd = +Object.values(this.data.backends)
-			.reduce((sum, b) => sum + (b.cost_usd ?? 0), 0)
-			.toFixed(8);
+		this.data.total_cost_usd = sumCost(this.data.backends);
 		this.data.last_updated = new Date().toISOString();
 	}
 
@@ -105,7 +120,7 @@ class CostLedger {
 		await this.save();
 	}
 
-	/** Record one embedding call (voyage or local). */
+	/** Record one embedding call (embedding-only backends count total tokens). */
 	async recordEmbedding(backend: string, model: string, tokens: number, costUsd: number): Promise<void> {
 		await this.load();
 		const b = this.bucket(backend);
@@ -152,6 +167,11 @@ export interface ActivityEntry {
 	cost_usd: number;
 }
 
+/** Drop entries from unknown (removed pre-1.0) backends so they are never displayed. */
+function dropLegacy(entries: ActivityEntry[]): ActivityEntry[] {
+	return entries.filter((e) => KNOWN_BACKENDS.has(e.api));
+}
+
 class ActivityLog {
 	private entries: ActivityEntry[] = [];
 	private path = "";
@@ -159,7 +179,7 @@ class ActivityLog {
 	async init(dataDir: string = DATA_DIR): Promise<void> {
 		this.path = `${dataDir}/activity.json`;
 		try {
-			this.entries = (await readJsonFile<ActivityEntry[]>(this.path)) ?? [];
+			this.entries = dropLegacy((await readJsonFile<ActivityEntry[]>(this.path)) ?? []);
 		} catch {
 			this.entries = [];
 		}
@@ -178,7 +198,7 @@ class ActivityLog {
 		if (!this.path) return;
 		try {
 			const loaded = await readJsonFile<ActivityEntry[]>(this.path);
-			if (loaded) this.entries = loaded;
+			if (loaded) this.entries = dropLegacy(loaded);
 		} catch {
 			// keep existing entries
 		}

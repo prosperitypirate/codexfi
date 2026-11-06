@@ -44,7 +44,7 @@ from another directory.
 | LLM | `plugin/src/llm.ts` is mocked: `callLlm` / `callLlmStrict` → [`helpers/fake-llm.ts`](src/helpers/fake-llm.ts) (`setLlmHandler`, `llmCalls`). All other llm.ts exports stay real |
 | `claude` binary | `CODEXFI_CLAUDE_BIN` → a shell stub that logs argv/stdin and prints canned JSON. Even an un-mocked call can't reach the real CLI |
 | Embeddings | `@huggingface/transformers` is mocked with a deterministic bag-of-words model ([`helpers/mock-embedder.ts`](src/helpers/mock-embedder.ts)): shared words → similar, unrelated → ~0, identical → 1 |
-| Keys / Claude env | `ANTHROPIC_API_KEY`, `VOYAGE_API_KEY`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_PROJECT_DIR`, `CODEXFI_DISABLE` are unset |
+| Keys / Claude env | `ANTHROPIC_API_KEY`, `CLAUDE_CODE_EXECPATH`, `CLAUDE_PROJECT_DIR`, `CODEXFI_DISABLE` are unset |
 
 `bun test` emits no exit event, so a run can't delete its own sandbox
 (`$TMPDIR/codexfi-test-*`). Each run removes sandboxes older than one hour instead.
@@ -58,7 +58,7 @@ from another directory.
 | `helpers/temp-db.ts` | `setupTempDb` / `teardownTempDb`: a fresh SQLite store per suite |
 | `helpers/fake-llm.ts` | Controllable LLM fake + `realLlm` (the real exports, used against the stub binary) |
 | `helpers/mock-embedder.ts` | `bowVector`, `deterministicVector`, `cosine`, `MOCK_DIMS`, the fake transformers module |
-| `helpers/mock-fetch.ts` | Route-based `fetch` mock (Voyage / Anthropic response builders) |
+| `helpers/mock-fetch.ts` | Route-based `fetch` mock (Anthropic response builders) |
 
 Writing a new test:
 
@@ -148,6 +148,7 @@ Run `bun test --todo` to execute them (they fail until fixed):
 The OpenCode-era E2E harness (`src/e2e/`, `opencode run` / `opencode serve`
 scenarios) was deleted with the OpenCode plugin entry, along with the tests for
 removed modules (`disabled-warning`, `directory-tree`, `fresh-project-hint`,
-`checkConfigFile`, xAI/Google providers, `extractionProvider`, the old
+`checkConfigFile`, xAI/Google providers, the Voyage AI embedding provider
+(`embeddingProvider` / `voyageApiKey`), `extractionProvider`, the old
 `record{Xai,Google,Anthropic,Voyage}` ledger API). Old E2E run outputs remain in
 `results/` and `src/results/` for history.

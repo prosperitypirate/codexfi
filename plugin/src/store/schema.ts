@@ -33,6 +33,8 @@ export const CREATE_INDEXES = [
 
 /**
  * Embedding model of every row written before the embed_model column existed
- * (codexfi ≤ 0.7.x only ever used Voyage voyage-code-3).
+ * (codexfi ≤ 0.7.x vectors). This is a DATA LABEL only — it marks pre-1.0 rows
+ * as stale so the worker re-embeds them locally. It is not a provider: codexfi
+ * 1.0+ has no remote embedding backend and never calls any embedding API.
  */
 export const LEGACY_EMBED_MODEL = "voyage-code-3";

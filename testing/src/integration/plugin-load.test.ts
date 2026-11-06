@@ -78,6 +78,15 @@ describe("bundle contents", () => {
 		expect(src()).toContain('import("@huggingface/transformers")');
 		expect(src()).not.toContain("onnxruntime-web");
 	});
+
+	// Hard guarantee: memory text is never sent to a third-party embedding/LLM
+	// provider. The only remote API the engine may know about is Anthropic's.
+	test("never references a removed remote provider (Voyage AI, xAI, Google)", () => {
+		const lower = src().toLowerCase();
+		for (const needle of ["voyageai", "voyage_api_key", "voyageapikey", "embeddingprovider", "api.x.ai", "xai_api_key", "generativelanguage", "google_api_key"]) {
+			expect(lower.includes(needle), `bundle contains "${needle}"`).toBe(false);
+		}
+	});
 });
 
 // ── Runtime checks (both runtimes) ──────────────────────────────────────────────

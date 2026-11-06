@@ -166,12 +166,11 @@ export async function run(args: ParsedArgs): Promise<void> {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────────
 
-/** Display metadata for a ledger backend key. Unknown keys (legacy ledgers) show as-is. */
+/** Display metadata for a ledger backend key. Unknown keys show as-is. */
 function backendMeta(name: string): { label: string; notional?: boolean; free?: boolean } {
 	switch (name) {
 		case "claude-cli": return { label: "Claude Code (subscription)", notional: true };
 		case "anthropic-api": return { label: "Anthropic API" };
-		case "voyage": return { label: "Voyage AI" };
 		case "local": return { label: "Local embeddings", free: true };
 		default: return { label: name };
 	}

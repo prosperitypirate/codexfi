@@ -77,7 +77,7 @@ The plugin ships a stdio MCP server with four tools — `memory_search`, `memory
 |-----------|-----------|
 | Host integration | Claude Code plugin — hooks, MCP stdio server, skill |
 | Extraction LLM | Your Claude Code login via `claude -p --safe-mode` (Haiku by default); Anthropic API optional |
-| Embeddings | On-device ONNX via transformers.js — `jina-embeddings-v2-base-code`, 768 dimensions; Voyage AI optional |
+| Embeddings | On-device ONNX via transformers.js — `jina-embeddings-v2-base-code`, 768 dimensions; local-only |
 | Storage | SQLite with WAL mode — built in to the runtime (`bun:sqlite` on Bun, `node:sqlite` on Node), no native npm dependencies |
 | Search | Exact nearest-neighbor cosine similarity over Float32Array BLOBs, blended with recency |
 | Runtime | Bun, or Node ≥ 22.5 — picked automatically by the launcher |
@@ -108,7 +108,7 @@ plugin/
     │   ├── mcp.ts          stdio MCP server: memory_search / memory_add / memory_list / memory_forget
     │   └── runtime.ts      init, tags, disable switches, 10k-cap fitting
     ├── llm.ts        Claude via `claude -p --safe-mode` (default) or Anthropic API
-    ├── embedder.ts   local ONNX embeddings (default) or Voyage; model-specific thresholds
+    ├── embedder.ts   local, on-device ONNX embeddings only; model-specific thresholds
     ├── extractor.ts  extraction / summary / contradiction / condensation prompts → JSON
     ├── store.ts      ingest, addMemory, dedup, supersede, aging, search, re-embed migration
     ├── store/        SQLite (bun:sqlite | node:sqlite) vector store, WAL, migrations

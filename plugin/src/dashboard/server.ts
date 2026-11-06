@@ -13,10 +13,9 @@
  *   GET /api/memories?limit=N           — Recent memories across all projects
  *   GET /api/memories?user_id=X&limit=N — Memories for a specific project/scope
  *   DELETE /api/memories/:id            — Delete a single memory by ID
- *   GET /api/search?q=...               — Semantic search (local embeddings, or Voyage when configured)
+ *   GET /api/search?q=...               — Semantic search (local embeddings)
  */
 
-import { EMBEDDING_PROVIDER, VOYAGE_API_KEY } from "../config.js";
 import { store, refresh as refreshDb } from "../db.js";
 import { ledger, activityLog } from "../telemetry.js";
 import { nameRegistry } from "../names.js";
@@ -191,10 +190,6 @@ async function handleSearch(url: URL): Promise<Response> {
 	const query = url.searchParams.get("q") ?? "";
 	if (!query.trim()) {
 		return json({ error: "Missing ?q= parameter" }, 400);
-	}
-
-	if (EMBEDDING_PROVIDER === "voyage" && !VOYAGE_API_KEY) {
-		return json({ error: "embeddingProvider is voyage but no Voyage API key is set — semantic search unavailable" }, 503);
 	}
 
 	const limit = parseInt(url.searchParams.get("limit") ?? "10", 10);

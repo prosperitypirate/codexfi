@@ -7,8 +7,8 @@
  * embedder logic around the model — model selection, prefixes, input caps,
  * query memoisation, cache dir, readiness and thresholds.
  *
- * The Voyage provider is chosen at import time (EMBEDDING_PROVIDER), so it is
- * not exercised in this process; its request shape is unchanged from 0.7.x.
+ * Embeddings are local-only: there is no remote provider, and embedding must
+ * never touch the network (asserted below with a fetch that always rejects).
  */
 
 import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
@@ -114,6 +114,23 @@ describe("local embedding", () => {
 		expect(transformersState.inputs).toEqual([texts]);
 		expect(await embedBatch([])).toEqual([]);
 		expect(transformersState.inputs).toHaveLength(1);
+	});
+
+	test("embedding never touches the network", async () => {
+		const realFetch = globalThis.fetch;
+		let calls = 0;
+		globalThis.fetch = (() => {
+			calls++;
+			return Promise.reject(new Error("network disabled in test"));
+		}) as unknown as typeof fetch;
+		try {
+			await embed("no network for documents");
+			await embed("no network for queries", "query");
+			await embedBatch(["a batch", "of texts"]);
+		} finally {
+			globalThis.fetch = realFetch;
+		}
+		expect(calls).toBe(0);
 	});
 
 	test("the local runtime is reported available", async () => {

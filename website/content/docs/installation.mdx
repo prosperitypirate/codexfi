@@ -67,7 +67,7 @@ It checks:
 |---|-------|-------------|
 | 1 | Claude Code CLI | a `claude` binary is found (PATH, VS Code extension, or known install dirs) |
 | 2 | LLM backend | `claude-cli` is available, or an Anthropic API key is set for `anthropic-api` |
-| 3 | Embeddings | the local model is ready (or Voyage is configured) |
+| 3 | Embeddings | the local embedding model is ready |
 | 4 | Data directory | `~/.codexfi/` exists and is writable |
 | 5 | Config file | `~/.codexfi/codexfi.jsonc` is valid — or absent, which is fine (defaults) |
 | 6 | Vector store | the store opens; shows active / total memories |
@@ -98,7 +98,7 @@ Start a new session afterwards so the new version is loaded.
 
 ## Upgrading from 0.7.x (OpenCode)
 
-codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run, the worker re-embeds old Voyage vectors with the local model in the background, and structured memories are usable immediately. Existing project and user scopes are preserved, so nothing is orphaned.
+codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run, the worker re-embeds old 0.7.x vectors with the local model in the background, and structured memories are usable immediately. Existing project and user scopes are preserved, so nothing is orphaned.
 
 ## Uninstalling
 

@@ -19,7 +19,7 @@ plugin/
     │   ├── mcp.ts          stdio MCP server: memory_search / memory_add / memory_list / memory_forget
     │   └── runtime.ts      init, tags, disable switches, 10k-cap fitting
     ├── llm.ts        Claude via `claude -p --safe-mode` (default) or Anthropic API
-    ├── embedder.ts   local ONNX embeddings (default) or Voyage; model-specific thresholds
+    ├── embedder.ts   local, on-device ONNX embeddings only; model-specific thresholds
     ├── extractor.ts  extraction / summary / contradiction / condensation prompts → JSON
     ├── store.ts      ingest, addMemory, dedup, supersede, aging, search, re-embed migration
     ├── store/        SQLite (bun:sqlite | node:sqlite) vector store, WAL, migrations

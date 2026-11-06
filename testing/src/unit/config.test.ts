@@ -15,14 +15,13 @@ import {
 	validateId,
 	DATA_DIR,
 	DEDUP_DISTANCE,
-	EMBEDDING_PROVIDER,
 	LLM_BACKEND,
 	LLM_MODEL,
 	STRUCTURAL_TYPES,
 	VERSIONING_SKIP_TYPES,
-	VOYAGE_EMBEDDING_DIMS,
-	VOYAGE_EMBEDDING_MODEL,
 } from "../../../plugin/src/config.js";
+import * as configModule from "../../../plugin/src/config.js";
+import { embedderInfo } from "../../../plugin/src/embedder.js";
 import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
@@ -83,9 +82,9 @@ describe("validateId", () => {
 // ── Constants ───────────────────────────────────────────────────────────────────
 
 describe("constants", () => {
-	test("Voyage model constants describe voyage-code-3 (legacy + optional provider)", () => {
-		expect(VOYAGE_EMBEDDING_MODEL).toBe("voyage-code-3");
-		expect(VOYAGE_EMBEDDING_DIMS).toBe(1024);
+	test("no remote embedding provider config is exported (local-only)", () => {
+		const names = Object.keys(configModule);
+		expect(names.filter((n) => /voyage|embedding_provider|xai|google|gemini/i.test(n))).toEqual([]);
 	});
 
 	test("DEDUP_DISTANCE is reasonable (0 < x < 1)", () => {
@@ -181,8 +180,8 @@ describe("runtime configuration (sandbox)", () => {
 		expect(LLM_MODEL).toBe("haiku");
 	});
 
-	test("EMBEDDING_PROVIDER is local (no key needed)", () => {
-		expect(EMBEDDING_PROVIDER).toBe("local");
+	test("embedder provider is local (no key needed)", () => {
+		expect(embedderInfo().provider).toBe("local");
 	});
 });
 
@@ -200,9 +199,11 @@ async function probeConfig(fileConfig: Record<string, unknown> | null, env: Reco
 	}
 	const script = `
 		const c = await import(${JSON.stringify(join(PLUGIN_SRC, "config.ts"))});
+		const e = await import(${JSON.stringify(join(PLUGIN_SRC, "embedder.ts"))});
+		const info = e.embedderInfo();
 		console.log(JSON.stringify({
-			backend: c.LLM_BACKEND, model: c.LLM_MODEL, provider: c.EMBEDDING_PROVIDER,
-			hasAnthropicKey: c.ANTHROPIC_API_KEY.length > 0, hasVoyageKey: c.VOYAGE_API_KEY.length > 0,
+			backend: c.LLM_BACKEND, model: c.LLM_MODEL, provider: info.provider, embedModel: info.id,
+			hasAnthropicKey: c.ANTHROPIC_API_KEY.length > 0,
 			dataDir: c.DATA_DIR,
 		}));
 	`;
@@ -215,25 +216,35 @@ async function probeConfig(fileConfig: Record<string, unknown> | null, env: Reco
 	await proc.exited;
 	if (proc.exitCode !== 0) throw new Error(`config probe failed: ${err}`);
 	return JSON.parse(out.trim().split("\n").pop()!) as {
-		backend: string; model: string; provider: string; hasAnthropicKey: boolean; hasVoyageKey: boolean; dataDir: string;
+		backend: string; model: string; provider: string; embedModel: string; hasAnthropicKey: boolean; dataDir: string;
 	};
 }
 
 describe("config precedence (fresh process)", () => {
 	test("defaults with no config file: auto backend, haiku, local embeddings, no keys", async () => {
 		const r = await probeConfig(null, {});
-		expect(r).toMatchObject({ backend: "auto", model: "haiku", provider: "local", hasAnthropicKey: false, hasVoyageKey: false });
+		expect(r).toMatchObject({ backend: "auto", model: "haiku", provider: "local", hasAnthropicKey: false });
 	}, 15_000);
 
-	test("codexfi.jsonc llmBackend / llmModel / embeddingProvider are honoured", async () => {
-		const r = await probeConfig({ llmBackend: "anthropic-api", llmModel: "sonnet", embeddingProvider: "voyage" }, {});
-		expect(r).toMatchObject({ backend: "anthropic-api", model: "sonnet", provider: "voyage" });
+	test("codexfi.jsonc llmBackend / llmModel are honoured", async () => {
+		const r = await probeConfig({ llmBackend: "anthropic-api", llmModel: "sonnet" }, {});
+		expect(r).toMatchObject({ backend: "anthropic-api", model: "sonnet", provider: "local" });
+	}, 15_000);
+
+	// Pre-1.0 configs may still carry remote-embedding settings; they must be ignored.
+	test("legacy embeddingProvider / voyageApiKey (file or env) are ignored: embeddings stay local", async () => {
+		const r = await probeConfig(
+			{ embeddingProvider: "voyage", voyageApiKey: "test-legacy-placeholder" },
+			{ CODEXFI_EMBEDDING_PROVIDER: "voyage", VOYAGE_API_KEY: "test-legacy-placeholder" },
+		);
+		expect(r.provider).toBe("local");
+		expect(r.embedModel).toStartWith("local:");
 	}, 15_000);
 
 	test("env vars override the file; an invalid CODEXFI_LLM_BACKEND falls back to the file", async () => {
-		const file = { llmBackend: "anthropic-api", embeddingProvider: "voyage", llmModel: "sonnet" };
-		const r = await probeConfig(file, { CODEXFI_LLM_BACKEND: "claude-cli", CODEXFI_EMBEDDING_PROVIDER: "local", CODEXFI_LLM_MODEL: "opus" });
-		expect(r).toMatchObject({ backend: "claude-cli", provider: "local", model: "opus" });
+		const file = { llmBackend: "anthropic-api", llmModel: "sonnet" };
+		const r = await probeConfig(file, { CODEXFI_LLM_BACKEND: "claude-cli", CODEXFI_LLM_MODEL: "opus" });
+		expect(r).toMatchObject({ backend: "claude-cli", model: "opus" });
 		const bad = await probeConfig(file, { CODEXFI_LLM_BACKEND: "xyz" });
 		expect(bad.backend).toBe("anthropic-api");
 	}, 15_000);
@@ -244,16 +255,14 @@ describe("config precedence (fresh process)", () => {
 	}, 15_000);
 
 	test("API keys from codexfi.jsonc are picked up", async () => {
-		const r = await probeConfig({ anthropicApiKey: "test-anthropic-placeholder", voyageApiKey: "test-voyage-placeholder" }, {});
+		const r = await probeConfig({ anthropicApiKey: "test-anthropic-placeholder" }, {});
 		expect(r.hasAnthropicKey).toBe(true);
-		expect(r.hasVoyageKey).toBe(true);
 	}, 15_000);
 
 	// Regression: plugin-config.ts defaults missing keys to "", so config.ts must
 	// fall back with `||` (a `??` there silently ignored the env vars).
-	test("ANTHROPIC_API_KEY / VOYAGE_API_KEY env vars are used when the file has no keys", async () => {
-		const r = await probeConfig(null, { ANTHROPIC_API_KEY: "test-anthropic-placeholder", VOYAGE_API_KEY: "test-voyage-placeholder" });
+	test("ANTHROPIC_API_KEY env var is used when the file has no key", async () => {
+		const r = await probeConfig(null, { ANTHROPIC_API_KEY: "test-anthropic-placeholder" });
 		expect(r.hasAnthropicKey).toBe(true);
-		expect(r.hasVoyageKey).toBe(true);
 	}, 15_000);
 });

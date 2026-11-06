@@ -755,13 +755,11 @@ body {
 /* Backend cost colors */
 .cost-claude-cli    { color: var(--amber-400); }
 .cost-anthropic-api { color: var(--violet-400); }
-.cost-voyage        { color: var(--sky-400); }
 .cost-local         { color: var(--green-400); }
 
 /* Backend label colors in activity */
 .api-claude-cli    { color: var(--amber-400);  font-weight: 600; }
 .api-anthropic-api { color: var(--violet-400); font-weight: 600; }
-.api-voyage        { color: var(--sky-400);    font-weight: 600; }
 .api-local         { color: var(--green-400);  font-weight: 600; }
 
 /* Loading state */
@@ -820,21 +818,19 @@ const ALL_TYPES = [
 	"learned-pattern", "project-config", "active-context",
 ];
 
-// Ledger backend keys -> display metadata. Unknown keys (legacy ledgers) render as-is.
+// Ledger backend keys -> display metadata. Unknown keys render as-is.
 const API_LABELS = {
 	"claude-cli": "Claude Code (subscription)",
 	"anthropic-api": "Anthropic API",
-	voyage: "Voyage AI",
 	local: "Local embeddings",
 };
-const API_SHORT = { "claude-cli": "Claude Code", "anthropic-api": "Anthropic", voyage: "Voyage", local: "Local" };
+const API_SHORT = { "claude-cli": "Claude Code", "anthropic-api": "Anthropic", local: "Local" };
 const API_PRICING = {
 	"claude-cli": "notional cost reported by Claude Code \\u00b7 not billed on a subscription",
 	"anthropic-api": "$1.00 / $5.00 per M",
-	voyage: "$0.18 per M tokens",
 	local: "free \\u00b7 runs on-device",
 };
-const EMBED_BACKENDS = { voyage: true, local: true };
+const EMBED_BACKENDS = { local: true };
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 

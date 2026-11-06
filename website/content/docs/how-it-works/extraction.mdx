@@ -46,7 +46,7 @@ Each fact is an atomic, self-contained piece of knowledge with an assigned [memo
 
 ### 3. Embedding
 
-Each fact is embedded **on your machine** with an ONNX model (default `jina-embeddings-v2-base-code`, 768 dimensions), loaded through transformers.js. The weights are downloaded once into `~/.codexfi/models`; after that, embedding needs no network. Voyage AI `voyage-code-3` is available as an option if you prefer it and have a key.
+Each fact is embedded **on your machine** with an ONNX model (default `jina-embeddings-v2-base-code`, 768 dimensions), loaded through transformers.js. The weights are downloaded once into `~/.codexfi/models`; after that, embedding needs no network. There is no remote embedding provider — memory text never leaves your machine for embedding.
 
 Every memory records which model produced its vector, and only vectors from the same model are ever compared.
 

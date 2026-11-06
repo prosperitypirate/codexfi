@@ -12,9 +12,7 @@
  *   --uninstall                Print the uninstall commands (runs nothing)
  *   --source <repo|path>       Marketplace source (default: prosperitypirate/codexfi)
  *   --anthropic-key <key>      Optional — store an Anthropic API key in codexfi.jsonc
- *   --voyage-key <key>         Optional — store a Voyage AI key in codexfi.jsonc
  *   --llm-backend <b>          auto | claude-cli | anthropic-api
- *   --embedding-provider <p>   local | voyage
  *   --no-tui                   Accepted for agent-driven installs (install never prompts)
  */
 
@@ -31,7 +29,6 @@ const MARKETPLACE = "codexfi";
 const PLUGIN_ID = "codexfi@codexfi";
 
 const LLM_BACKENDS = ["auto", "claude-cli", "anthropic-api"] as const;
-const EMBEDDING_PROVIDERS = ["local", "voyage"] as const;
 
 // ── claude CLI helpers ──────────────────────────────────────────────────────────
 
@@ -65,25 +62,15 @@ function printOutput(out: string): void {
 function configFromFlags(args: ParsedArgs): ApiKeyUpdate {
 	const update: ApiKeyUpdate = {};
 	const anthropic = getFlag(args, "anthropic-key");
-	const voyage = getFlag(args, "voyage-key");
 	const backend = getFlag(args, "llm-backend");
-	const provider = getFlag(args, "embedding-provider");
 
 	if (anthropic) update.anthropicApiKey = anthropic;
-	if (voyage) update.voyageApiKey = voyage;
 	if (backend !== undefined) {
 		if (!(LLM_BACKENDS as readonly string[]).includes(backend)) {
 			fmt.error(`Invalid --llm-backend "${backend}" - expected one of: ${LLM_BACKENDS.join(", ")}`);
 			process.exit(1);
 		}
 		update.llmBackend = backend as ApiKeyUpdate["llmBackend"];
-	}
-	if (provider !== undefined) {
-		if (!(EMBEDDING_PROVIDERS as readonly string[]).includes(provider)) {
-			fmt.error(`Invalid --embedding-provider "${provider}" - expected one of: ${EMBEDDING_PROVIDERS.join(", ")}`);
-			process.exit(1);
-		}
-		update.embeddingProvider = provider as ApiKeyUpdate["embeddingProvider"];
 	}
 	return update;
 }
@@ -92,9 +79,7 @@ function configFromFlags(args: ParsedArgs): ApiKeyUpdate {
 function describeUpdate(u: ApiKeyUpdate): string[] {
 	const out: string[] = [];
 	if (u.anthropicApiKey) out.push("anthropicApiKey = (set)");
-	if (u.voyageApiKey) out.push("voyageApiKey = (set)");
 	if (u.llmBackend) out.push(`llmBackend = ${u.llmBackend}`);
-	if (u.embeddingProvider) out.push(`embeddingProvider = ${u.embeddingProvider}`);
 	return out;
 }
 

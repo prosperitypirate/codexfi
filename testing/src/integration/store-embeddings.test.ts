@@ -1,7 +1,7 @@
 /**
  * Integration tests for the embedding-model aware store (store.ts + store/):
  *
- *   - embed_model schema migration for pre-1.0 databases (all rows → voyage-code-3)
+ *   - embed_model schema migration for pre-1.0 databases (all rows → LEGACY_EMBED_MODEL)
  *   - vector search never compares vectors from different embedding models
  *   - addMemory(): insert, dedup-update (vector refreshed), contradiction pass
  *   - countStaleEmbeddings() / reembedStale() migration
@@ -51,7 +51,7 @@ function row(id: string, memory: string, userId: string, extra: Partial<vs.AddRe
 describe("embed_model migration", () => {
 	afterAll(() => vs._resetForTests());
 
-	test("a pre-1.0 database gains embed_model and existing rows are labelled voyage-code-3", () => {
+	test("a pre-1.0 database gains embed_model and existing rows get the legacy label", () => {
 		const dir = makeTempDir("legacy-db");
 		const legacy = new Database(join(dir, "store.db"));
 		// Schema exactly as shipped by codexfi <= 0.7.x (no embed_model column).
@@ -64,15 +64,16 @@ describe("embed_model migration", () => {
 		const vec = new Float32Array(1024).map((_, i) => Math.sin(i));
 		legacy.prepare(
 			"INSERT INTO memories (id, memory, user_id, vector, metadata_json, created_at, updated_at, hash, chunk, superseded_by, type) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-		).run("legacy-1", "Old voyage-era memory", "proj", Buffer.from(vec.buffer), '{"type":"tech-context"}', now(), now(), "h", "", "", "tech-context");
+		).run("legacy-1", "Old pre-1.0 memory", "proj", Buffer.from(vec.buffer), '{"type":"tech-context"}', now(), now(), "h", "", "", "tech-context");
 		legacy.close();
 
 		vs._setStorePathForTests(dir); // opens + migrates
 
 		const migrated = vs.getById("legacy-1")!;
 		expect(migrated.embed_model).toBe(LEGACY_EMBED_MODEL);
+		// Data label only (must match what pre-1.0 stores were migrated with) — not a provider.
 		expect(LEGACY_EMBED_MODEL).toBe("voyage-code-3");
-		expect(migrated.memory).toBe("Old voyage-era memory");
+		expect(migrated.memory).toBe("Old pre-1.0 memory");
 		expect(Array.from(migrated.vector)).toEqual(Array.from(vec)); // vector untouched
 
 		const check = new Database(join(dir, "store.db"));
@@ -118,7 +119,7 @@ describe("store with the mocked local embedder", () => {
 			const text = "Identical vector stored under two different embedding models";
 			vs.add([
 				row("iso-current", text, U),
-				row("iso-voyage", text, U, { embed_model: "voyage-code-3" }),
+				row("iso-legacy", text, U, { embed_model: LEGACY_EMBED_MODEL }),
 				row("iso-unlabelled", text, U, { embed_model: "" }),
 			]);
 			const hits = await searchByVector(bowVector(text), U, { threshold: 0 });
@@ -195,12 +196,12 @@ describe("store with the mocked local embedder", () => {
 	describe("stale embeddings", () => {
 		test("countStaleEmbeddings / reembedStale migrate rows from an older model", async () => {
 			const U = "stale_project";
-			const texts = ["Stale voyage memory one about payments", "Stale voyage memory two about invoices", "Stale voyage memory three about refunds"];
+			const texts = ["Stale legacy memory one about payments", "Stale legacy memory two about invoices", "Stale legacy memory three about refunds"];
 			const staleBefore = countStaleEmbeddings();
-			// Voyage-era rows: 1024-dim vectors from another model.
-			vs.add(texts.map((t, i) => row(`stale-${i}`, t, U, { vector: deterministicVector(t, 1024), embed_model: "voyage-code-3" })));
+			// Pre-1.0 rows: 1024-dim vectors from another model.
+			vs.add(texts.map((t, i) => row(`stale-${i}`, t, U, { vector: deterministicVector(t, 1024), embed_model: LEGACY_EMBED_MODEL })));
 			expect(countStaleEmbeddings()).toBe(staleBefore + 3);
-			expect(await search("Stale voyage memory two about invoices", U, { threshold: 0 })).toEqual([]);
+			expect(await search("Stale legacy memory two about invoices", U, { threshold: 0 })).toEqual([]);
 
 			const migrated = await reembedStale(500, 2);
 			expect(migrated).toBe(staleBefore + 3);
@@ -209,14 +210,14 @@ describe("store with the mocked local embedder", () => {
 			const r = vs.getById("stale-1")!;
 			expect(r.embed_model).toBe(currentEmbedModelId());
 			expect(r.vector.length).toBe(bowVector("x").length);
-			const hits = await search("Stale voyage memory two about invoices", U, { threshold: 0.5 });
+			const hits = await search("Stale legacy memory two about invoices", U, { threshold: 0.5 });
 			expect(hits[0]!.id).toBe("stale-1");
 		});
 
 		test("reembedStale honours max and is resumable", async () => {
 			const U = "stale_partial_project";
 			await reembedStale(); // start from a clean slate regardless of test order
-			vs.add([0, 1, 2, 3].map((i) => row(`partial-${i}`, `Partial stale memory ${i}`, U, { embed_model: "voyage-code-3" })));
+			vs.add([0, 1, 2, 3].map((i) => row(`partial-${i}`, `Partial stale memory ${i}`, U, { embed_model: LEGACY_EMBED_MODEL })));
 			expect(await reembedStale(3)).toBe(3);
 			expect(countStaleEmbeddings()).toBe(1);
 			expect(await reembedStale(3)).toBe(1);

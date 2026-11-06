@@ -88,10 +88,10 @@ const main = async () => {
   await nameRegistry.init(dir);
   await nameRegistry.register("u", "Display Name");
   await ledger.init(dir);
-  await ledger.recordEmbedding("voyage", "voyage-code-3", 1234, 0.0002);
+  await ledger.recordEmbedding("local", "local:jina-v2-base-code", 1234, 0);
   await ledger.recordLlm("claude-cli", "claude-haiku-4-5", 600, 50, 0.001);
   await activityLog.init(dir);
-  activityLog.recordEmbedding("voyage", "voyage-code-3", 1234, 0.0002);
+  activityLog.recordEmbedding("local", "local:jina-v2-base-code", 1234, 0);
   // Give the fire-and-forget activity save a tick to flush.
   await new Promise((r) => setTimeout(r, 50));
 
@@ -106,7 +106,7 @@ const main = async () => {
     topDistance: top ? Number(top._distance.toFixed(6)) : null,
     embedModel: got.embed_model,
     nameSaved: names.u === "Display Name",
-    costSaved: !!costs.backends && costs.backends.voyage.calls === 1 && costs.backends["claude-cli"].calls === 1,
+    costSaved: !!costs.backends && costs.backends.local.calls === 1 && costs.backends["claude-cli"].calls === 1,
   }));
 };
 main().catch((e) => { console.error("FAIL:", e && e.message ? e.message : String(e)); process.exit(1); });
