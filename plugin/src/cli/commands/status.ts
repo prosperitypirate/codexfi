@@ -74,7 +74,7 @@ export async function run(args: ParsedArgs): Promise<void> {
 		console.log(JSON.stringify({
 			healthy: failed === 0,
 			verdict,
-			apiKeys: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
+			keysConfigured: { anthropic: HAS_ANTHROPIC_KEY, voyage: HAS_VOYAGE_KEY },
 			checks,
 		}, null, 2));
 		return;
