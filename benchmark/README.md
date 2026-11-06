@@ -2,13 +2,12 @@
 
 <div align="center">
 
-[![Score: 94.5%](https://img.shields.io/badge/Score-94.5%25-22C55E?style=flat)](https://github.com/prosperitypirate/codexfi)
+[![codexfi 1.0: 92.0%](https://img.shields.io/badge/codexfi_1.0-92.0%25-22C55E?style=flat)](#codexfi-10--claude-code-native-no-api-keys)
 [![Questions: 200](https://img.shields.io/badge/Questions-200-3178C6?style=flat)](https://github.com/prosperitypirate/codexfi)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178C6?style=flat&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Bun](https://img.shields.io/badge/Bun-Runtime-FBF0DF?style=flat&logo=bun&logoColor=black)](https://bun.sh/)
 [![Claude Sonnet](https://img.shields.io/badge/Claude-Sonnet_4.6-D97706?style=flat)](https://anthropic.com)
-[![Voyage AI](https://img.shields.io/badge/Voyage_AI-Code_Embeddings-5B6BF5?style=flat)](https://www.voyageai.com/)
-[![xAI Grok](https://img.shields.io/badge/xAI-Grok-000000?style=flat&logo=x&logoColor=white)](https://x.ai/)
+[![Local embeddings](https://img.shields.io/badge/Embeddings-local_jina--v2--code-5B6BF5?style=flat)](#codexfi-10--claude-code-native-no-api-keys)
 
 </div>
 
@@ -17,6 +16,36 @@ A coding-assistant memory benchmark for [codexfi](../README.md). Evaluates recal
 Unlike general benchmarks (LongMemEval, LoCoMo), this dataset is designed around **coding assistant interactions**: architecture decisions, error fixes, tech stack, session continuity across days, and knowledge updates as a project evolves.
 
 ![DevMemBench live dashboard — abstention-fix-v2 run, 92.0%](../.github/assets/benchmark-dashboard.png)
+
+---
+
+## codexfi 1.0 — Claude Code native, no API keys
+
+Same 25 sessions / 200 questions as every historical run below. Answering + judging: `claude-sonnet-4-6` via the Claude Code CLI (`BENCH_LLM_BACKEND=claude-cli`) for **both** configurations, retrieval mode, K=20.
+
+| Configuration | Extraction | Embeddings | Keys needed | **Score** | Hit@20 | MRR | Search p50 |
+|---|---|---|---|---|---|---|---|
+| 0.7.x stack (`v1-legacy-voyage-haikuapi`) | Haiku 4.5 · Anthropic API | Voyage `voyage-code-3` | Voyage + Anthropic | **91.0%** (182/200) | 88.0% | 0.712 | 88 ms |
+| **1.0 defaults** (`v1-new-jina-clihaiku`) | `haiku` via `claude -p` (resolved to Haiku 5.5) | local `jina-embeddings-v2-base-code` | **none** | **92.0%** (184/200) | 88.0% | 0.714 | **6 ms** |
+
+```
+                 0.7.x (keys)   1.0 (no keys)
+tech             100%           100%
+arch              96%            92%
+continuity        96%            92%
+pref              96%            92%
+error             92%            92%
+update            88%            92%
+synthesis         68%            76%
+abstain           92%           100%
+Overall          91.0%          92.0%
+```
+
+**Reading:** removing both API keys costs nothing measurable — the 1-point difference is inside this benchmark's run-to-run noise (±2–3 pp historically). Search is 15× faster (no network). Caveat: the CLI's `haiku` alias resolved to Haiku 5.5 in the 1.0 run vs Haiku 4.5 in the 0.7.x run, so this compares *stacks*, not embedders in isolation; the embedder-only comparison is the retrieval study in [design 012 §9.1](../.github/designs/012-claude-code-native.md) (−0.048 nDCG@10, equal Hit@20).
+
+Extraction cost for the 25 sessions: 110 Haiku calls via the Claude Code CLI (subscription; ≈590 tokens fixed overhead per call) vs 97 Anthropic API calls ($0.30) + 298 Voyage calls for the 0.7.x stack.
+
+<!-- MEMORY-BANK-RESULTS -->
 
 ---
 

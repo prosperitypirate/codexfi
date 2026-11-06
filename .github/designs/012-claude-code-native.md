@@ -171,6 +171,8 @@ The branch is self-contained. To roll back: uninstall the plugin (`claude plugin
 3. `memory-bank` sync skill: draft activeContext/progress updates from codexfi session summaries.
 4. Subagent memory via SubagentStart `additionalContext`.
 5. Usage-limit awareness: back off background extraction near the 5-hour / weekly limits.
+6. Batch contradiction detection: today each new fact gets its own supersede check (85 of 110 LLM calls in the v1 ingest). One call per turn with all new facts and their candidates would cut background calls by roughly 70%. It needs a knowledge-update re-benchmark first.
+7. Optional warm embedding worker: a resident process would cut per-prompt latency from ~250 ms to ~15 ms, at a cost of ~500 MB RSS. It was not needed for 1.0.
 
 ---
 
@@ -194,7 +196,14 @@ _Model selection and cold-start latency: see §9.4._
 
 ### 9.2 End-to-end QA (DevMemBench v1, 200 questions)
 
-_Filled in from benchmark runs — see benchmark/README.md._
+Answer + judge: `claude-sonnet-4-6` via the Claude Code CLI for both runs; retrieval mode, K=20.
+
+| stack | extraction | embeddings | keys | score | Hit@20 | search p50 |
+|---|---|---|---|---|---|---|
+| 0.7.x | Haiku 4.5 (API) | Voyage | 2 | 91.0% | 88.0% | 88 ms |
+| **1.0** | `haiku` via `claude -p` (→ Haiku 5.5) | local jina-v2-code | **0** | **92.0%** | 88.0% | **6 ms** |
+
+Within noise (±2–3 pp): zero-key 1.0 matches the 0.7.x stack. Synthesis 68→76%, abstention 92→100%, architecture/continuity/preference −1 question each.
 
 ### 9.3 Memory Bank vs Memory Bank + codexfi
 

@@ -37,11 +37,11 @@ Some types receive special treatment during deduplication and contradiction dete
 - `product-context`
 - `project-config`
 
-Structural types use a deduplication distance of 0.25 (vs. 0.12 for general types), allowing the system to update existing structural memories more aggressively as understanding evolves.
+Structural types use a wider deduplication distance than general types (0.34 vs. 0.16 with the default local embedding model — thresholds are tuned per model), allowing the system to update existing structural memories more aggressively as understanding evolves.
 
 ## How types map to the [MEMORY] block
 
-The `[MEMORY]` block is organized into named sections, each populated by specific memory types:
+The session-start `[MEMORY]` block is organized into named sections, each populated by specific memory types. The per-prompt block adds **Relevant to Current Task**:
 
 | Section | Memory types |
 |---------|-------------|
@@ -101,16 +101,16 @@ User-scoped memories are tied to your identity (derived from git email). They fo
 
 User memories include: coding preferences, communication style, tool preferences, and workflow patterns.
 
-When the agent stores a memory with `scope: "user"`, it becomes available in every project you work on.
+When Claude stores a memory with `scope: "user"`, it becomes available in every project you work on.
 
 ## Explicit vs. automatic
 
-Most memories are created **automatically** by the extraction pipeline after each assistant turn. The LLM reads the conversation and identifies facts worth remembering, assigning appropriate types.
+Most memories are created **automatically** by the extraction pipeline after each turn. The LLM reads the new part of the transcript and identifies facts worth remembering, assigning appropriate types.
 
-You can also create memories **explicitly** by telling the agent:
+You can also create memories **explicitly** by telling Claude:
 
 - "Remember that we use JWT in httpOnly cookies"
 - "Save this: always run tests before committing"
 - "Note that the API rate limit is 100 req/min"
 
-These trigger the memory tool directly with `mode: "add"`. See the [Memory Tool API](/docs/api-reference/memory-tool-api) for details.
+codexfi notices these requests and points Claude at the `memory_add` MCP tool, which stores the fact verbatim. See the [Memory Tools reference](/docs/api-reference/memory-tool-api) for details.

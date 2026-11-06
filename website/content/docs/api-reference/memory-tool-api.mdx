@@ -1,168 +1,110 @@
 ---
-title: Memory Tool API
-description: Reference for the memory tool that agents use to interact with codexfi.
+title: Memory Tools (MCP)
+description: Reference for the memory_search, memory_add, memory_list, and memory_forget MCP tools Claude uses to work with codexfi.
 ---
 
-# Memory Tool API
+# Memory Tools (MCP)
 
-codexfi registers a `memory` tool with OpenCode that the AI agent can call to interact with the memory system. The tool supports five modes for reading and writing memories.
+Hooks cover the automatic path — inject at session start and per prompt, extract after every turn. For deliberate, agent-initiated memory work, the codexfi plugin also ships a stdio **MCP server** named `codexfi` with four tools. Claude Code starts it automatically when the plugin is enabled; there is nothing to configure.
 
-## Tool signature
+| Tool | Purpose |
+|------|---------|
+| [`memory_search`](#memory_search) | Semantic search over memories from past sessions |
+| [`memory_add`](#memory_add) | Store a fact verbatim |
+| [`memory_list`](#memory_list) | List the most recently updated memories |
+| [`memory_forget`](#memory_forget) | Delete a memory by id |
 
-The agent calls the memory tool with a JSON object:
+The server tells Claude when to reach for these: search when it needs history that isn't already in context (past decisions, earlier fixes, conventions, previous sessions), and add when you ask it to remember something or a durable fact is settled. Memories are notes from past sessions — Claude is told to verify against the code before relying on them for anything risky.
 
-```typescript
-memory({
-  mode: "add" | "search" | "list" | "profile" | "forget" | "help",
-  content?: string,     // required for "add"
-  query?: string,       // required for "search"
-  scope?: "user" | "project",  // default: "project"
-  type?: string,        // memory type for "add"
-  memoryId?: string,    // required for "forget"
-  limit?: number,       // for "search" and "list"
-})
-```
+## `memory_search`
 
-## Modes
-
-### `add`
-
-Store a new memory explicitly.
-
-```
-memory({
-  mode: "add",
-  content: "Auth uses JWT stored in httpOnly cookies, not localStorage",
-  scope: "project",
-  type: "architecture"
-})
-```
+Semantic search over memories (decisions, fixes, conventions, preferences).
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `content` | Yes | — | The memory text to store |
-| `scope` | No | `"project"` | `"project"` or `"user"` |
-| `type` | No | `"learned-pattern"` | One of the 13 [memory types](/docs/how-it-works/memory-types) |
+| `query` | Yes | — | What to look for, in natural language |
+| `scope` | No | `"all"` | `"project"`, `"user"`, or `"all"` |
+| `limit` | No | `10` | Maximum results (up to 50) |
 
-The memory goes through the same pipeline as automatically extracted facts: embedding, deduplication, and contradiction detection.
+```json
+{ "query": "how is authentication handled", "scope": "project", "limit": 5 }
+```
 
-**Returns**: Confirmation with the stored memory ID and any superseded memories.
-
-### `search`
-
-Semantic search over stored memories.
+**Returns** one line per match, sorted by score:
 
 ```
-memory({
-  mode: "search",
-  query: "how is authentication handled",
-  scope: "project",
-  limit: 10
-})
+- [a3f82b10 · project · architecture · 87% · 2026-02-20] Auth uses JWT stored in httpOnly cookies, refresh token rotation every 7 days.
 ```
+
+List-style queries ("every preference", "all the bugs we fixed") also match by memory type, so enumeration isn't limited to the closest semantic hits.
+
+## `memory_add`
+
+Store a durable fact verbatim — no extraction call. Write it as a self-contained statement, including the *why*.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `query` | Yes | — | Natural language search query |
-| `scope` | No | `"project"` | `"project"` or `"user"` |
-| `limit` | No | `20` | Maximum results to return |
+| `content` | Yes | — | The fact to remember |
+| `type` | No | `"learned-pattern"` | One of the [memory types](/docs/how-it-works/memory-types); `preference` for user habits |
+| `scope` | No | `"project"` | `"project"` (this repo) or `"user"` (cross-project) |
 
-Results include similarity scores, memory text, source chunks, metadata, and creation dates. Results are sorted by score (semantic similarity with optional recency blending).
-
-**Returns**: Array of matching memories with similarity percentages and dates.
-
-### `list`
-
-List stored memories ordered by most recently updated.
-
+```json
+{
+  "content": "Project uses PostgreSQL 16 with the pgvector extension for vector storage",
+  "type": "tech-context",
+  "scope": "project"
+}
 ```
-memory({
-  mode: "list",
-  scope: "project",
-  limit: 20
-})
-```
+
+The fact is embedded and deduplicated like any other memory — a near-duplicate updates the existing entry instead of adding a copy. `<private>…</private>` content is stripped first, and content that is entirely private is refused.
+
+**Returns**: `Stored project memory 7cd91e44 (tech-context).` — or `Updated existing …` when it matched an existing memory.
+
+## `memory_list`
+
+List the most recently updated memories, optionally filtered by type. No semantic matching.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `scope` | No | `"project"` | `"project"` or `"user"` |
-| `limit` | No | `20` | Maximum results to return |
+| `type` | No | — | Only memories of this type |
+| `limit` | No | `20` | Maximum results (up to 100) |
 
-Unlike `search`, this does not use semantic matching — it returns all memories sorted by recency.
-
-**Returns**: Array of memories with IDs, text, metadata, and timestamps.
-
-### `profile`
-
-View the user's memory profile — all stored memories (limited).
-
-```
-memory({
-  mode: "profile"
-})
+```json
+{ "type": "session-summary", "limit": 10 }
 ```
 
-No additional parameters. Returns up to 100 memories across both scopes with IDs, text, metadata, and creation dates.
+**Returns** one line per memory: `- [id · type · updated] memory`.
 
-**Returns**: Array of all stored memories for the current user.
+## `memory_forget`
 
-### `forget`
-
-Delete a specific memory by ID.
-
-```
-memory({
-  mode: "forget",
-  memoryId: "550e8400-e29b-41d4-a716-446655440000"
-})
-```
+Delete a memory permanently.
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `memoryId` | Yes | — | UUID of the memory to delete |
+| `id` | Yes | — | Full id, or a unique prefix of at least 8 characters |
 
-The memory is permanently removed from the database.
+Only memories in the current project or your user scope can be deleted. An ambiguous prefix is rejected with the number of matches.
 
-**Returns**: Confirmation of deletion.
-
-### `help`
-
-Show usage information for the memory tool.
-
+```json
+{ "id": "a3f82b10" }
 ```
-memory({
-  mode: "help"
-})
-```
-
-No parameters required. Returns a summary of available modes, parameters, and example usage.
 
 ## Scopes
 
-### `project` (default)
+### `project`
 
-Project-scoped memories are tied to the current working directory. The project tag is a deterministic hash, so the same directory always maps to the same memory namespace.
+Project-scoped memories are tied to the project directory. The project tag is a deterministic hash of the path, so the same directory always maps to the same memory namespace.
 
 Use project scope for: architecture decisions, tech stack, error solutions, progress, project-specific configuration.
 
 ### `user`
 
-User-scoped memories are tied to your identity (derived from git email). They persist across all projects.
+User-scoped memories are tied to your identity (derived from your git email) and follow you across all projects.
 
 Use user scope for: coding preferences, communication style, tool preferences, workflow patterns.
 
-```
-memory({
-  mode: "add",
-  content: "Prefers pnpm over npm for all projects",
-  scope: "user",
-  type: "preference"
-})
-```
-
-## Memory types for `add`
-
-When using `mode: "add"`, set the `type` parameter to categorize the memory:
+## Memory types for `memory_add`
 
 | Type | When to use |
 |------|------------|
@@ -172,45 +114,46 @@ When using `mode: "add"`, set the `type` parameter to categorize the memory:
 | `tech-context` | Stack, languages, frameworks, key dependencies — not specific commands or tool paths (use `project-config`) |
 | `product-context` | Features, goals, product decisions |
 | `progress` | Current state, what's done, what's blocked |
-| `active-context` | What is being worked on right now in this session (singleton — only latest survives) |
+| `active-context` | What is being worked on right now (singleton — only latest survives) |
 | `project-config` | Config preferences, run commands, env setup |
 | `error-solution` | Bug fixes, workarounds discovered |
 | `preference` | User coding preferences (typically user-scoped) |
 | `learned-pattern` | Patterns observed across sessions |
 
-If no type is specified, it defaults to `learned-pattern`.
+If no type is given, it defaults to `learned-pattern`.
 
 ## Triggering explicit saves
 
-Users can trigger the memory tool by using natural language:
+Just ask in natural language:
 
 - "Remember that we use JWT in httpOnly cookies"
 - "Save this: the API rate limit is 100 req/min"
 - "Don't forget that tests must pass before merging"
 - "Note this for future sessions"
 
-codexfi detects these keyword patterns and nudges the agent to use the memory tool with `mode: "add"`. The detection is configurable via [keywordPatterns](/docs/configuration#keywordpatterns) in the config file.
+When a prompt matches one of these patterns, codexfi adds a short note pointing Claude at `memory_add`. The patterns are configurable via [keywordPatterns](/docs/configuration#keywordpatterns). Every turn is also extracted automatically in the background, so nothing depends on the tool being called.
+
+## `excludePaths`
+
+In a directory covered by [`excludePaths`](/docs/configuration#excludepaths), every tool refuses with `codexfi is disabled for this directory (excludePaths).` — the privacy switch applies to explicit tool calls too.
 
 ## Example session
 
 ```
-User: "Remember that this project uses PostgreSQL 16 with pgvector"
+You: Remember that this project uses PostgreSQL 16 with pgvector.
 
-Agent uses memory tool:
-memory({
-  mode: "add",
-  content: "Project uses PostgreSQL 16 with pgvector extension for vector storage",
-  scope: "project",
-  type: "tech-context"
-})
+Claude calls memory_add:
+  { "content": "Project uses PostgreSQL 16 with the pgvector extension for vector storage",
+    "type": "tech-context" }
+  → Stored project memory 7cd91e44 (tech-context).
 
-→ Memory stored with ID abc-123
+— next week, new session —
 
-User: "What database are we using?"
+You: Which database are we on, and why did we pick it?
 
-Agent reads from [MEMORY] block:
-## Tech Context
-- Project uses PostgreSQL 16 with pgvector extension for vector storage
+[MEMORY] block (injected for this prompt):
+  ## Relevant to Current Task
+  - [87%] Project uses PostgreSQL 16 with the pgvector extension for vector storage
 
-Agent: "You're using PostgreSQL 16 with the pgvector extension."
+Claude: You're on PostgreSQL 16 with the pgvector extension …
 ```

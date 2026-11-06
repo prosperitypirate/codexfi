@@ -11,6 +11,12 @@ const config = {
           "https://raw.githubusercontent.com/prosperitypirate/codexfi/main/install",
         permanent: false, // 307 — raw GitHub URLs can shift; keep flexible
       },
+      {
+        // codexfi 1.0 is Claude Code–only; the OpenCode guide was replaced.
+        source: "/docs/guides/opencode-setup",
+        destination: "/docs/guides/claude-code-setup",
+        permanent: true,
+      },
     ];
   },
   async headers() {

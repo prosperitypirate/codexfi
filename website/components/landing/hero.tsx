@@ -6,7 +6,6 @@ import { ArrowRight, ExternalLink } from "lucide-react";
 import { fadeInUp, staggerContainer } from "@/lib/animations";
 import { MemoryFlowSVG } from "@/components/svg/memory-flow";
 import { InstallBlock } from "@/components/landing/install-block";
-import { OpenCodeWordmark } from "@/components/svg/opencode-wordmark";
 
 export function Hero() {
   return (
@@ -18,17 +17,17 @@ export function Hero() {
         variants={staggerContainer}
         className="flex max-w-4xl flex-col items-center"
       >
-        {/* OpenCode exclusive badge */}
+        {/* Claude Code plugin badge */}
         <motion.a
           variants={fadeInUp}
-          href="https://opencode.ai"
+          href="https://code.claude.com"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="Exclusively for OpenCode"
+          aria-label="A plugin for Claude Code"
           className="mb-8 inline-flex items-center gap-3 rounded-full border border-border bg-muted/60 px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
         >
-          <span aria-hidden="true" className="text-xs uppercase tracking-widest text-muted-foreground/70">Exclusively for</span>
-          <OpenCodeWordmark height={16} width={89} />
+          <span aria-hidden="true" className="text-xs uppercase tracking-widest text-muted-foreground/70">A plugin for</span>
+          <span className="font-semibold text-foreground">Claude Code</span>
         </motion.a>
 
         <motion.h1
@@ -36,20 +35,25 @@ export function Hero() {
           className="mb-6 text-4xl font-bold tracking-tight text-foreground sm:text-5xl md:text-6xl"
         >
           Persistent memory for{" "}
-          <span className="text-gradient-brand">AI coding agents</span>
+          <span className="text-gradient-brand">Claude Code</span>
         </motion.h1>
 
         <motion.p
           variants={fadeInUp}
           className="mb-10 max-w-2xl text-lg text-muted-foreground sm:text-xl"
         >
-          Your AI remembers everything — architecture, decisions, patterns,
-          progress — across every session, automatically. No prompts. No tool
-          calls. Zero tokens spent on memory management.
+          Claude remembers everything you worked out together — decisions,
+          fixes, conventions, progress — across every session, automatically.
+          No API keys: it runs on your Claude Code login, with embeddings on
+          your machine.
         </motion.p>
 
-        <motion.div variants={fadeInUp} className="mb-12">
+        <motion.div variants={fadeInUp} className="mb-12 flex flex-col items-center gap-3">
           <InstallBlock />
+          <p className="text-xs text-muted-foreground">
+            Run inside Claude Code — or from a shell:{" "}
+            <code className="font-mono text-foreground">curl -fsSL https://codexfi.com/install | bash</code>
+          </p>
         </motion.div>
 
         <motion.div variants={fadeInUp} className="flex flex-wrap justify-center gap-4">
@@ -72,7 +76,7 @@ export function Hero() {
         </motion.div>
       </motion.div>
 
-      {/* Placeholder SVG — will be replaced in Phase 4 with Gemini-designed animation */}
+      {/* Memory flow animation */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         whileInView={{ opacity: 1, y: 0 }}

@@ -1,0 +1,94 @@
+---
+title: Claude Code Setup Guide
+description: Get the most out of codexfi in Claude Code — terminal and VS Code, Memory Bank, privacy, and troubleshooting.
+---
+
+# Claude Code Setup Guide
+
+codexfi works the moment it's installed — there is no `CLAUDE.md` snippet to add and no slash command to run. The hooks inject memory, the background worker extracts it, and the MCP server describes its own tools to Claude. This guide covers the details worth knowing.
+
+## Terminal and VS Code
+
+codexfi works in both the Claude Code terminal CLI and the VS Code extension:
+
+- **Shared install.** Both surfaces read the same `~/.claude` settings, so a plugin installed in one is enabled in the other.
+- **Shared memory.** Both write to the same `~/.codexfi` store — a decision made in the terminal is remembered in VS Code, and vice versa.
+- **No `PATH` needed in VS Code.** The extension doesn't put `claude` on your `PATH`; codexfi uses the binary path Claude Code hands to its hooks, so background extraction still runs through your login.
+
+If you only use the extension, install by typing the two `/plugin` commands into the Claude Code panel (see [Installation](/docs/installation)).
+
+## How codexfi fits with Claude Code's own memory
+
+Claude Code's built-in **auto memory** (`~/.claude/projects/<project>/memory/MEMORY.md`) holds a handful of facts Claude chooses to keep. It stays on, and codexfi never writes to it. The two are complementary: auto memory is a short curated list; codexfi holds the long tail — every turn extracted, semantically searchable, with cross-project preferences and superseding of stale facts.
+
+Your `CLAUDE.md` files are untouched too. Keep project rules and instructions there; let codexfi remember what happened.
+
+## Memory Bank
+
+Many Claude Code users keep a **Memory Bank** — a `memory-bank/` directory with `projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, and `progress.md`, loaded at session start and updated on "save bank".
+
+codexfi's structured sections map one-to-one onto those files, so injecting both would duplicate tokens. When a `memory-bank/` is found (in the project or up to four parent directories), codexfi switches to supplement mode:
+
+- **Session start** injects only session summaries **newer than the bank's last save**, plus your cross-project preferences, labelled as supplementing the bank.
+- **Every prompt** is unchanged — per-prompt retrieval of *specific* facts is exactly what a curated, token-budgeted bank can't hold.
+
+The plugin also ships a **`memory-bank-sync`** skill. When you say "save bank" (or "update memory bank"), Claude can pull codexfi's session summaries, latest progress, and recent decisions with the MCP tools and fold what's genuinely new into the bank — including sessions that ended or were compacted without a save.
+
+Set `"memoryBank": "off"` in `~/.codexfi/codexfi.jsonc` to always inject the full project picture.
+
+## Asking Claude to remember
+
+You don't have to — every turn is extracted automatically. But when something matters, say so:
+
+- "Remember that staging deploys need the VPN"
+- "Note this: we chose Postgres over Mongo because of the reporting joins"
+
+codexfi notices the request and points Claude at the `memory_add` tool, which stores the fact verbatim. For preferences that should follow you to every project, ask for it to be saved as a user preference.
+
+## Privacy
+
+- **Local by default.** Everything lives in `~/.codexfi/`. The only outbound call is the extraction request, made by your own Claude Code.
+- **`<private>` tags.** Wrap anything in `<private>...</private>` to keep it out of memory. Secrets in code blocks are not treated specially — use private tags if you paste them into the conversation.
+- **`excludePaths`.** List directories where codexfi must stay completely silent — no injection, no extraction, and the MCP tools refuse. See [Configuration](/docs/configuration#excludepaths).
+- **Subagents are ignored.** Hook traffic from subagents is skipped, so exploration noise never becomes memory.
+- **Your repository is untouched.** codexfi never writes into the project.
+
+## Managing memory from the terminal
+
+The `codexfi` CLI works on the same store:
+
+```bash
+npx codexfi status                        # health check
+npx codexfi list --limit 10               # recent project memories
+npx codexfi search "how is auth handled"  # semantic search
+npx codexfi stats                         # counts, types, usage per backend
+npx codexfi forget a3f82b10               # delete by id or prefix
+npx codexfi export --output backup.json   # JSON or CSV export
+npx codexfi dashboard                     # local web dashboard
+```
+
+(`bunx codexfi …` works the same.)
+
+## Troubleshooting
+
+### Memory not appearing
+
+1. Run `npx codexfi status` — every check should pass.
+2. Make sure the plugin is enabled: `/plugin` in Claude Code, or `claude plugin list`.
+3. Start a **new** session after installing or updating — resumed sessions replay earlier context and don't get a fresh session-start block.
+4. Check that the directory isn't covered by `excludePaths`.
+5. Look at the logs: `tail -f ~/.codexfi/logs/hook.log ~/.codexfi/logs/worker.log`.
+
+On the very first run, the embedding model downloads in the background; per-prompt memories start appearing once it's ready.
+
+### Stale memories
+
+Contradiction detection supersedes outdated facts automatically. You can also just tell Claude: "Forget that the API uses REST — we switched to GraphQL." To remove a specific memory, ask Claude to use `memory_forget`, or run `npx codexfi forget <id>`.
+
+### Too many or too few memories in context
+
+Adjust `maxMemories`, `maxProjectMemories`, and `displaySimilarityThreshold` in your [config file](/docs/configuration). Lower values reduce token usage; higher values give Claude more context.
+
+### Usage
+
+Background extraction uses your Claude Code login — Haiku by default, about 600 tokens of overhead per call on top of the transcript window. `npx codexfi stats` shows calls and tokens per backend.

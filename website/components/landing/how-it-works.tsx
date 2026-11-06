@@ -8,15 +8,16 @@ const steps = [
     number: "1",
     icon: Terminal,
     title: "Install",
-    description: "One command. Works with OpenCode. No configuration needed.",
-    code: "curl -fsSL https://codexfi.com/install | bash",
+    description:
+      "Add the codexfi marketplace and install the plugin from inside Claude Code — terminal or VS Code. No API keys, no configuration.",
+    code: "/plugin install codexfi@codexfi",
   },
   {
     number: "2",
     icon: Code2,
     title: "Code",
     description:
-      "You code. After each turn, codexfi silently extracts what matters and refreshes the memory context — no prompts, no tool calls, nothing asked of you or your agent.",
+      "You code. After each turn, a background worker extracts what matters through your own Claude Code login — your session never waits, nothing is asked of you.",
     code: null,
   },
   {
@@ -24,7 +25,7 @@ const steps = [
     icon: Sparkles,
     title: "Remember",
     description:
-      "Next session, your AI has full context. Architecture, decisions, patterns — all injected automatically.",
+      "Next session, Claude starts with the project picture, and every prompt brings back the memories relevant to it — automatically.",
     code: null,
   },
 ] as const;
@@ -49,8 +50,8 @@ export function HowItWorks() {
           transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
           className="mx-auto mb-14 max-w-2xl text-center text-muted-foreground"
         >
-          Three steps. No ongoing maintenance. Your AI gets smarter with every
-          session.
+          Three steps. No API keys, no ongoing maintenance. Claude gets sharper
+          with every session.
         </motion.p>
 
         <div className="grid gap-8 sm:grid-cols-3">
@@ -82,7 +83,7 @@ export function HowItWorks() {
 
               {step.code && (
                 <div className="rounded-lg border border-border bg-secondary px-4 py-2 font-mono text-xs">
-                  <span className="text-terminal-green select-none">$ </span>
+                  <span className="text-terminal-green select-none">&gt; </span>
                   <span className="text-foreground">{step.code}</span>
                 </div>
               )}

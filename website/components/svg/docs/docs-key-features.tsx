@@ -110,13 +110,13 @@ export function DocsKeyFeatures() {
       icon: <IconSelfHosted />,
     },
     {
-      title: "Code-optimized embeddings",
-      desc: "Voyage voyage-code-3 (1024 dimensions), purpose-built for code.",
+      title: "On-device embeddings",
+      desc: "jina-embeddings-v2-base-code (768 dimensions) runs locally — no API key.",
       icon: <IconEmbeddings />,
     },
     {
-      title: "Multi-provider extraction",
-      desc: "Anthropic Claude Haiku (default), xAI Grok (fastest), Google Gemini.",
+      title: "Runs on your Claude Code login",
+      desc: "Extraction uses claude -p with Haiku. An Anthropic API key is optional.",
       icon: <IconProviders />,
     },
     {
@@ -136,7 +136,7 @@ export function DocsKeyFeatures() {
     },
     {
       title: "Compaction-proof",
-      desc: "Memory lives in the system prompt, surviving context window truncation.",
+      desc: "A summary is saved before compaction; the project picture is re-injected after.",
       icon: <IconCompaction />,
     },
     {

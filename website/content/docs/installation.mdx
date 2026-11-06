@@ -1,155 +1,109 @@
 ---
 title: Installation
-description: Install and configure codexfi for OpenCode in under 2 minutes.
+description: Install codexfi into Claude Code in under a minute — no API keys.
 ---
 
 # Installation
 
-codexfi installs as a single command. It registers itself with OpenCode, prompts for API keys, and creates helpful slash commands.
+codexfi installs through Claude Code's own plugin system. There are no API keys to enter and nothing to configure.
 
 <DocsInstallSteps />
 
 ## Prerequisites
 
-- [OpenCode](https://opencode.ai) installed and working
-- A [Voyage AI](https://dash.voyageai.com/api-keys) API key for embeddings
-- At least one extraction provider API key:
-  - [Anthropic](https://console.anthropic.com/) (default, most consistent)
-  - [xAI](https://console.x.ai/) (fastest, cheapest)
-  - [Google AI](https://aistudio.google.com/apikey) (native JSON mode)
+- [Claude Code](https://code.claude.com) ≥ 2.1 — the terminal CLI or the VS Code extension
+- [Bun](https://bun.sh) or Node ≥ 22.5 on your `PATH`
 
 ## Install
 
-Run the one-liner:
+In Claude Code, run:
+
+```
+/plugin marketplace add prosperitypirate/codexfi
+/plugin install codexfi@codexfi
+```
+
+Or, from a shell:
+
+```bash
+claude plugin marketplace add prosperitypirate/codexfi
+claude plugin install codexfi@codexfi
+```
+
+Or use the one-liner, which checks for Claude Code and Bun/Node and then runs the same two commands:
 
 ```bash
 curl -fsSL https://codexfi.com/install | bash
 ```
 
-This handles everything: installs [Bun](https://bun.sh) if it isn't already present, then runs the codexfi installer.
+Then **start a new Claude Code session**. Memory works automatically from there.
 
-If you already have Bun installed, you can run the installer directly:
+> **VS Code extension only?** The extension doesn't put `claude` on your `PATH`, so the shell commands won't find it. Type the two `/plugin` commands into the Claude Code panel instead — the plugin, settings, and memory are shared between the extension and the terminal.
 
-```bash
-bunx codexfi install
-```
+Claude Code installs the plugin's dependencies itself. The on-device embedding model (~160 MB) is downloaded once, in the background, on first use — your first prompts are never blocked by it.
 
-The installer performs three steps:
+## What gets installed
 
-### Step 1: Register with OpenCode
+| Piece | What it does |
+|-------|--------------|
+| Hooks | `SessionStart`, `UserPromptSubmit`, `Stop`, `PreCompact`, `SessionEnd` — inject memory and queue extraction |
+| MCP server | `memory_search`, `memory_add`, `memory_list`, `memory_forget` tools for Claude |
+| Skill | `memory-bank-sync` — folds codexfi's session notes into a `memory-bank/` on "save bank" |
+| Data directory | `~/.codexfi/` — SQLite store, job queue, logs, model weights (created on first run) |
 
-Adds `"codexfi"` to the `plugin` array in `~/.config/opencode/opencode.json`. If no config exists, it creates one.
-
-### Step 2: Create slash commands
-
-Creates the `/memory-init` slash command at `~/.config/opencode/command/memory-init.md`. This command guides the agent through a structured project memory initialization when you start working on a new codebase.
-
-### Step 3: Configure API keys
-
-The installer interactively prompts for:
-
-1. **Voyage AI key** (required) — used for all embedding operations
-2. **Extraction provider key** (required) — choose from Anthropic, xAI, or Google
-
-Keys are stored in `~/.codexfi/codexfi.jsonc`.
-
-## Non-interactive install
-
-For automated or agent-driven installs, pass keys directly:
-
-```bash
-bunx codexfi install --no-tui \
-  --voyage-key pa-... \
-  --anthropic-key sk-ant-... \
-  --provider anthropic
-```
-
-Available flags:
-
-| Flag | Description |
-|------|-------------|
-| `--no-tui` | Skip all interactive prompts |
-| `--voyage-key <key>` | Set Voyage AI API key |
-| `--anthropic-key <key>` | Set Anthropic API key |
-| `--xai-key <key>` | Set xAI API key |
-| `--google-key <key>` | Set Google API key |
-| `--provider <name>` | Set extraction provider: `anthropic`, `xai`, or `google` |
+codexfi never writes into your repository.
 
 ## Verify installation
 
-After installing, verify your configuration:
+Check health any time:
 
 ```bash
-bunx codexfi status
+npx codexfi status        # or: bunx codexfi status
 ```
 
-This runs 7 checks and reports the result of each:
+It checks:
 
 | # | Check | Passes when |
 |---|-------|-------------|
-| 1 | Data directory | `~/.codexfi/` exists and is readable/writable |
-| 2 | Vector store | store is initialized (warn if not yet — created on first session) |
-| 3 | Config file | `~/.codexfi/codexfi.jsonc` exists |
-| 4 | Voyage API key | `voyageApiKey` is set in `codexfi.jsonc` |
-| 5 | Extraction API key | at least one of `anthropicApiKey`, `xaiApiKey`, `googleApiKey` is set |
-| 6 | OpenCode plugin | `"codexfi"` is registered in `opencode.json` |
-| 7 | Log file | `~/.codexfi.log` exists (warn if not — appears after first session) |
+| 1 | Claude Code CLI | a `claude` binary is found (PATH, VS Code extension, or known install dirs) |
+| 2 | LLM backend | `claude-cli` is available, or an Anthropic API key is set for `anthropic-api` |
+| 3 | Embeddings | the local model is ready (or Voyage is configured) |
+| 4 | Data directory | `~/.codexfi/` exists and is writable |
+| 5 | Config file | `~/.codexfi/codexfi.jsonc` is valid — or absent, which is fine (defaults) |
+| 6 | Vector store | the store opens; shows active / total memories |
+| 7 | Background worker | worker state and queued jobs |
+| 8 | Memory Bank | whether this directory has a `memory-bank/` |
+| 9 | Claude Code plugin | `codexfi@codexfi` is enabled in Claude Code |
 
-A fresh install before the first OpenCode session will show checks 2 and 7 as warnings — this is normal. All others must pass.
+API keys are reported as set/unset only — never printed. Add `--json` for machine-readable output.
 
-> **Migrating from environment variables?** As of v0.4.6, the plugin reads API keys exclusively from `codexfi.jsonc`. `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `XAI_API_KEY`, and `GOOGLE_API_KEY` environment variables are no longer read by the plugin. Run `bunx codexfi install` to migrate your keys into the config file.
+## First session in a project
 
-## First session setup
+On the first session in a project with no memories yet, codexfi seeds memory in the background from the project's own files — 28 common files (`README.md`, `package.json`, `Dockerfile`, `tsconfig.json`, monorepo configs, agent instructions like `CLAUDE.md` and `AGENTS.md`, and more) plus the last 20 git commits. From then on, every turn adds to it. Set `"autoInit": false` to turn this off.
 
-On the first session in any project, codexfi automatically reads 28 common project files (`README.md`, `package.json`, `Dockerfile`, `tsconfig.json`, monorepo configs, agent instructions, and more) plus recent git history, and extracts initial memories. These memories are available immediately on Turn 1 — the agent has project context from its very first response. After the first response, background enrichment adds directory structure and additional context.
+## Using a Memory Bank?
 
-For empty directories with no project files, codexfi injects a `[MEMORY - NEW PROJECT]` hint into the system prompt so the agent knows to help you build from scratch.
-
-For a more thorough initial setup, use the `/memory-init` slash command in OpenCode. It guides the agent through:
-
-1. Checking existing memories
-2. Exploring the codebase (or asking founding questions for empty projects)
-3. Saving structured memories across all categories
-4. Confirming what was stored
-
-## AGENTS.md (recommended)
-
-Adding instructions to `~/.config/opencode/AGENTS.md` improves agent behavior with codexfi. The agent will understand the `[MEMORY]` block, use the memory tool correctly, and never announce memory operations to the user.
-
-See the [OpenCode setup guide](/docs/guides/opencode-setup) for the recommended AGENTS.md configuration.
+If your project has a `memory-bank/` directory, codexfi detects it automatically and stops duplicating it. See the [Claude Code setup guide](/docs/guides/claude-code-setup#memory-bank).
 
 ## Updating
 
-OpenCode installs plugins on first use and **pins the resolved version** in its cache (`~/.cache/opencode/packages/codexfi@latest/package.json` and `package-lock.json`). Once a version is cached, OpenCode keeps using it — **updates are not automatic**, even when the `plugin` array lists `codexfi` without a version. You stay on the pinned version until you explicitly update the cache.
-
-To update to the latest release, refresh the cached package and then restart OpenCode:
+Update the plugin through Claude Code's plugin manager (`/plugin`), or from a shell:
 
 ```bash
-# Update the version OpenCode has cached
-npm install codexfi@latest --prefix ~/.cache/opencode/packages/codexfi@latest
-
-# Then fully restart OpenCode (quit and reopen the desktop app,
-# or restart the CLI) so the new version is loaded.
+claude plugin marketplace update codexfi
+claude plugin update codexfi@codexfi
 ```
 
-> **Desktop app:** the cache is shared, but the app must be fully quit and reopened for the new version to take effect — reloading a session is not enough.
+Start a new session afterwards so the new version is loaded.
 
-You can confirm the active version at any time:
+## Upgrading from 0.7.x (OpenCode)
 
-```bash
-cat ~/.cache/opencode/packages/codexfi@latest/package.json | grep '"codexfi"'
-```
-
-To pin a specific release instead of the latest, replace `codexfi@latest` with `codexfi@<version>` (for example `codexfi@0.7.3`).
+codexfi 1.0 is Claude Code–only. Your existing `~/.codexfi` store is kept: on first run, the worker re-embeds old Voyage vectors with the local model in the background, and structured memories are usable immediately. Existing project and user scopes are preserved, so nothing is orphaned.
 
 ## Uninstalling
 
-Remove `"codexfi"` from the `plugin` array in `~/.config/opencode/opencode.json`:
-
-```json
-{
-  "plugin": []
-}
+```bash
+claude plugin uninstall codexfi@codexfi
+claude plugin marketplace remove codexfi
+rm -rf ~/.codexfi   # optional: deletes all memories and usage data
 ```
-
-Memory data is stored at `~/.codexfi/`. Delete this directory to remove all stored memories.

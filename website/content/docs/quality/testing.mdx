@@ -1,149 +1,69 @@
 ---
 title: Test Suite
-description: What codexfi verifies automatically — unit, integration, and 15 autonomous E2E scenarios.
+description: What codexfi verifies automatically — unit, integration, and concurrent stress tests, fully offline with no API keys.
 ---
 
 # Test Suite
 
-codexfi ships with a three-tier test suite that verifies the memory system works end-to-end — from vector storage through to what the agent actually says in a conversation.
+codexfi ships with a three-tier test suite that verifies the memory system from vector math and storage through to the Claude Code hooks, the background worker, and the MCP tools.
 
 <DocsTestTiers />
 
 ## What is verified
 
-The 15 E2E scenarios test the behaviors you rely on as a user:
-
-| Scenario | What it guarantees for you |
+| Area | What it guarantees for you |
 |---|---|
-| Cross-Session Memory Continuity | Facts you mention in one session are available in the next |
-| README-Based Project Seeding | Opening a project with a README auto-populates memory without any action from you |
-| Transcript Noise Guard | Memory contains distilled facts, not raw conversation transcripts |
-| Project-Brief Always Present | Even without a README, the agent builds project context from conversation |
-| Memory Aging | Old "current status" entries are replaced — you always get the latest state, not history |
-| Existing Codebase Auto-Init | Opening an existing codebase populates memory from project files automatically |
-| Enumeration Hybrid Retrieval | "List all my preferences" queries return facts across all sessions, not just the recent ones |
-| Cross-Synthesis | Queries about multiple projects surface facts from both namespaces |
-| Memory Under Load | Early session facts are still recalled when many memories are stored |
-| Knowledge Update | After you change tools or approaches, the agent uses the new information, not the old |
-| System Prompt Injection | The `[MEMORY]` block is always present in the system prompt — never missed |
-| Multi-Turn Per-Turn Refresh | As you switch topics mid-session, relevant memories surface automatically |
-| Auto-Init Turn 1 Visibility | Auto-init memories are visible on Turn 1 and background enrichment fires after the first response |
-| Active-Context Singleton Aging | Only the most recent active-context memory survives; older ones are replaced, not stacked |
-| Recent Sessions Coverage | The Recent Sessions section reflects at least 3 distinct sessions of real work |
+| Vector store | Memories are stored, filtered, and searched correctly; cosine math and serialisation are exact |
+| Deduplication & supersede | Near-duplicates update in place; changed facts replace stale ones instead of contradicting them |
+| Aging | Only the latest `progress` / `active-context` survives; old session summaries condense into lasting patterns |
+| Transcript reading | Each turn is extracted exactly once; long turns are windowed, not truncated; codexfi's own `[MEMORY]` blocks are never re-extracted |
+| Context building | The `[MEMORY]` block renders every section in order, applies per-type caps and display thresholds, and doesn't repeat a fact across sections |
+| Hooks & MCP tools | Hook handlers inject and enqueue correctly; the MCP tools search, add, list, and forget memories |
+| Auto-init | A new project is seeded from its own files and git log |
+| LLM backend | The `claude -p --safe-mode` call is built correctly and parsed robustly; the Anthropic API backend works as a fallback |
+| Configuration | Every setting in `codexfi.jsonc` is read, validated, and defaulted correctly |
+| Multi-session safety | Many processes reading and writing the same SQLite store concurrently lose no data |
 
-## Latest results
+## Fully offline
 
-<DocsE2eScenarioMap />
+The suite needs **no API keys and no network**. A test preload isolates every run from your machine before any plugin code loads:
 
-> Results snapshot from `feat/pure-ts-vector-store` branch (2026-04-06) — **stale**. Counts updated to reflect current suite (PR #174).
-
-```
-Unit:        171 pass, 0 fail   (~1s)
-Integration:  34 pass, 0 fail   (~3s)
-Stress:        3 pass, 0 fail   (~1s)
-E2E:       15/15 pass           (~10min)
-```
-
----
+- a temporary `HOME` and `CODEXFI_DATA_DIR`, so your real `~/.codexfi` is never touched
+- a fake `claude` binary, so no test can reach your Claude Code login
+- a deterministic stand-in for the on-device embedding model (no weight download)
+- a mocked LLM for extraction, summaries, and contradiction checks
+- API keys and Claude Code environment variables removed
 
 ## For contributors
 
-The sections below cover the test architecture and how to run each tier locally.
-
 ### Test tiers
 
-| Tier | Tests | What runs | Speed |
-|---|---|---|---|
-| **Unit** | 171 | Cosine math, CRUD, filters, serialisation, dedup, aging, extraction parsing, IngestResult schema | ~1s |
-| **Integration** | 34 | Real SQLite store + real Voyage AI embedder against a test database | ~3s |
-| **Stress** | 3 | 20 real OS processes hitting the same SQLite file — concurrent writes, reads, and mixed | ~1s |
-| **E2E** | 15 | Real `opencode` agent sessions, real memory store, 15 autonomous scenarios | ~10 min |
+| Tier | What runs |
+|---|---|
+| **Unit** | Cosine math, CRUD, filters, serialisation, config, prompts, transcript reader, context builder, LLM backend, auto-init, telemetry |
+| **Integration** | Real SQLite store (under both `bun:sqlite` and `node:sqlite`), store pipeline, embeddings, hooks, MCP server, plugin loading, aging |
+| **Stress** | 20 real OS processes hitting the same SQLite file — concurrent writes, reads, and mixed |
 
-The stress tests validate multi-agent safety — the scenario where multiple OpenCode agents read and write the same `store.db` simultaneously. Each test spawns real child processes (not async within one process) to match the actual deployment pattern.
+The stress tests validate the scenario where several Claude Code sessions and the background worker use the same `store.db` at once. Each test spawns real child processes (not async work within one process) to match how codexfi actually runs.
 
-### Running unit and integration tests
-
-```bash
-# From the repo root
-bun run test                    # unit + integration together
-bun test src/unit/              # unit only
-bun test src/integration/       # integration only
-```
-
-### Running E2E tests
-
-```bash
-# From the repo root
-bun run test:e2e                     # all 15 scenarios
-bun run test:e2e:scenario 07         # single scenario
-bun run test:e2e:scenario 07,08,12   # subset
-```
-
-Or directly from the `testing/` directory:
+### Running the tests
 
 ```bash
 cd testing
-bun install       # first time only
-bun run test      # unit + integration tests
-bun run test:e2e  # all 15 scenarios
-bun run test:scenario 07
+bun install                 # first time only
+bun run test                # unit + integration
+bun test src/unit/          # unit only
+bun test src/integration/   # integration only
+bun test src/stress/        # concurrent stress tests
 ```
 
-### E2E prerequisites
+### Trying the plugin end to end
 
-The E2E suite spawns real `opencode run` and `opencode serve` processes. Four things must be in place:
-
-1. **Plugin built** — `cd plugin && bun run build`
-2. **OpenCode CLI installed** — `bun install -g opencode-ai` (v1.2.10+)
-3. **Plugin registered** in `~/.config/opencode/opencode.json`:
-   ```json
-   {
-     "plugin": ["file:///absolute/path/to/codexfi/plugin/dist/index.js"]
-   }
-   ```
-4. **API keys configured** in `~/.codexfi/codexfi.jsonc`:
-   ```jsonc
-   {
-     "voyageApiKey": "pa-...",
-     "anthropicApiKey": "sk-ant-..."
-   }
-   ```
-   The plugin reads keys exclusively from `codexfi.jsonc` — setting `VOYAGE_API_KEY` or `ANTHROPIC_API_KEY` as environment variables is not sufficient. Run `bunx codexfi install` to create this file interactively, or create it manually.
-   An AI provider key for the OpenCode agent sessions is also required — set this via `ANTHROPIC_API_KEY` (or equivalent) in your shell environment for OpenCode's own model calls.
-
-<DocsTestIsolation />
-
-### Full E2E scenario reference
-
-Each scenario runs in an isolated temporary directory. All memories it creates are deleted from the store automatically after it completes.
-
-| # | Name | What it tests internally |
-|---|---|---|
-| 01 | Cross-Session Memory Continuity | Auto-save fires after session end; session 2 recalls facts from session 1 |
-| 02 | README-Based Project-Brief Seeding | `triggerSilentAutoInit` reads README on first session; `project-brief` memory is created and recalled in session 2 |
-| 03 | Transcript Noise Guard | Saved memories contain no raw `[user]`/`[assistant]` transcript lines |
-| 04 | Project-Brief Always Present | Memories accumulate from conversation even without README; session 2 recalls project facts |
-| 05 | Memory Aging | Backend replaces older `progress` memories with newest; only 1 survives across 3 sessions |
-| 06 | Existing Codebase Auto-Init | `triggerSilentAutoInit` reads real project files (`package.json`, `tsconfig`, `src/`) on first open |
-| 07 | Enumeration Hybrid Retrieval | `types[]` param fires for "list all preferences" queries; answer covers preferences across all sessions |
-| 08 | Cross-Synthesis (`isWideSynthesis`) | "across both projects" heuristic fires; answer synthesises facts from two project namespaces |
-| 09 | `maxMemories=20` Under Load | With >10 memories stored, facts from early sessions still recalled — confirms K=20 retrieval depth |
-| 10 | Knowledge Update / Superseded | After ORM migration, agent answers with Tortoise (new), not SQLAlchemy (stale) |
-| 11 | System Prompt Memory Injection | `[MEMORY]` block injected via `system.transform` into the system prompt — not as a synthetic message part |
-| 12 | Multi-Turn Per-Turn Refresh | 6-turn conversation via `opencode serve`; per-turn semantic refresh surfaces topic-relevant memories on topic switches |
-| 13 | Auto-Init Turn 1 Visibility + Enrichment | Auto-init uses init mode with 28 project files + git log; re-fetches memories for Turn 1 visibility; background enrichment fires after first response |
-| 14 | Active-Context Singleton Aging | `ageActiveContext()` deletes prior `active-context` on new insertion; only 1 active-context survives across multiple extractions |
-| 15 | Recent Sessions Coverage | Three distinct session summaries accumulate; `## Recent Sessions` section in `[MEMORY]` block reflects all three |
-
-### Known issue: OpenCode Desktop app interference
-
-If the OpenCode Desktop app is running, it sets `OPENCODE_SERVER_PASSWORD`, `OPENCODE_SERVER_USERNAME`, and `OPENCODE_CLIENT` in your shell environment. The `opencode run` CLI inherits these and its internal server then requires Basic Auth — causing every CLI session to fail silently.
-
-The test harness handles this automatically via `cleanEnv()` in `testing/src/opencode.ts`. You do not need to close the Desktop app to run the E2E suite.
-
-If you run `opencode run` manually from a terminal where the Desktop app is active:
+To try a working-tree build in a real Claude Code session without installing it:
 
 ```bash
-env -u OPENCODE_SERVER_PASSWORD -u OPENCODE_SERVER_USERNAME -u OPENCODE_CLIENT \
-  opencode run "your message" --dir /path/to/project -m anthropic/claude-sonnet-4-6
+(cd plugin && npm install && npm run build)   # or: bun install && bun run build
+claude --plugin-dir ./plugin                  # loads the working tree for one session
 ```
+
+Point `CODEXFI_DATA_DIR` at a scratch directory first to keep your real memories out of it. Logs are written to `$CODEXFI_DATA_DIR/logs/{hook,worker}.log`.

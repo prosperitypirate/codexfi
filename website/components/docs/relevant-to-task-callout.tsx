@@ -2,7 +2,7 @@
  * RelevantToTaskCallout
  *
  * Highlights the "Relevant to Current Task" section of the [MEMORY] block —
- * the only section that re-runs semantic search on every single LLM turn.
+ * the only section that re-runs semantic search on every prompt.
  *
  * SSR-safe: no "use client", no React hooks. Pure Tailwind + inline CSS.
  */
@@ -32,16 +32,16 @@ export function RelevantToTaskCallout() {
 
         {/* Badge */}
         <span className="ml-auto text-[10px] font-semibold uppercase tracking-widest text-[#a855f7] border border-[#a855f7]/40 rounded-full px-2.5 py-0.5 bg-[#a855f7]/10 shrink-0">
-          Live per turn
+          Live per prompt
         </span>
       </div>
 
       {/* Description */}
       <p className="text-sm text-muted-foreground leading-relaxed mb-4">
         The only section in the <code className="text-xs font-mono text-[#c084fc] bg-[#a855f7]/10 rounded px-1 py-0.5">[MEMORY]</code> block
-        that re-runs on <em>every single turn</em>. All other sections — Project Brief, Architecture, Tech Context, etc. — are
-        loaded fresh from the database at session start, then cached for the session. This section runs a fresh semantic search
-        against your current message each time, so the right memories surface as topics shift mid-session.
+        that runs on <em>every prompt</em>. All other sections — Project Brief, Architecture, Tech Context, etc. — are
+        injected once at session start (and again after compaction). This section runs a fresh semantic search against your
+        current prompt each time, so the right memories surface as topics shift mid-session.
       </p>
 
       {/* Sub-bullets */}
@@ -49,8 +49,8 @@ export function RelevantToTaskCallout() {
         <li className="flex items-start gap-2.5 text-sm">
           <span className="mt-0.5 font-semibold text-[#a855f7] shrink-0">→</span>
           <span className="text-muted-foreground">
-            <span className="text-foreground font-medium">Per-turn re-search</span> — as topics shift mid-session,
-            different memories surface automatically without any action from you or your agent.
+            <span className="text-foreground font-medium">Per-prompt re-search, never repeated</span> — as topics shift,
+            different memories surface automatically, and anything already shown this session is skipped.
           </span>
         </li>
         <li className="flex items-start gap-2.5 text-sm">

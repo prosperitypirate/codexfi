@@ -100,8 +100,8 @@ export function DocsMemoryCycle() {
       <rect x="530" y="52" width="80" height="36" rx="18" className="fill-card stroke-[#4ade80]" strokeWidth="2" />
       <text x="570" y="74" fontSize="11" fontFamily="var(--font-mono, monospace)" fill="#4ade80" textAnchor="middle" alignmentBaseline="middle">[MEMORY]</text>
 
-      {/* System prompt text */}
-      <text x="320" y="132" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">injected into system prompt ◄</text>
+      {/* Injection text */}
+      <text x="320" y="132" fontSize="10" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">injected at session start + per prompt ◄</text>
     </svg>
   );
 }

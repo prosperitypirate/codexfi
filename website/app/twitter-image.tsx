@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "codexfi — Persistent memory for AI coding agents";
+export const alt = "codexfi — Persistent memory for Claude Code";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -77,7 +77,7 @@ export default function TwitterImage() {
             lineHeight: 1.4,
           }}
         >
-          Persistent memory for AI coding agents
+          Persistent memory for Claude Code
         </div>
 
         {/* Install hint */}

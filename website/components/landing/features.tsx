@@ -7,7 +7,7 @@ import {
   Search,
   Shield,
   Zap,
-  Gauge,
+  BookOpen,
   EyeOff,
   RefreshCw,
 } from "lucide-react";
@@ -17,49 +17,49 @@ const features = [
     icon: Brain,
     title: "Auto-Extraction",
     description:
-      "Automatically extracts architecture, decisions, and patterns from every conversation.",
+      "After every turn, a background worker extracts decisions, fixes, conventions, and progress from the transcript — each turn exactly once.",
+  },
+  {
+    icon: Search,
+    title: "Relevant per Prompt",
+    description:
+      "Each prompt is embedded on your machine and the matching memories are injected — once per session, never repeated.",
   },
   {
     icon: Tags,
     title: "Typed Memory",
     description:
-      "10+ memory types — architecture, tech-context, progress, preferences, and more.",
-  },
-  {
-    icon: Search,
-    title: "Semantic Search",
-    description:
-      "Voyage AI embeddings find relevant context for every new task.",
+      "10+ memory types — architecture, tech-context, error-solution, progress, preferences, and more.",
   },
   {
     icon: Shield,
     title: "Compaction Survival",
     description:
-      "Memory persists through context window compaction — nothing is lost.",
+      "A session summary is saved before compaction and the project picture is re-injected after it — nothing is lost.",
   },
   {
     icon: Zap,
-    title: "Zero Config",
+    title: "Zero Setup",
     description:
-      "One command install. No Docker, no external database. Bring your own LLM + Voyage AI keys.",
+      "Two commands in Claude Code. No API keys, no daemon, no Docker. Extraction runs on your own Claude Code login.",
   },
   {
-    icon: Gauge,
-    title: "Zero Overhead",
+    icon: BookOpen,
+    title: "Memory-Bank Aware",
     description:
-      "Memory fires through hooks — never a tool call, never a wasted turn. Your agent's full context budget stays free for code.",
+      "Keep a memory-bank/? codexfi stops duplicating it and adds only the specifics a curated bank can't hold.",
   },
   {
     icon: EyeOff,
     title: "Local & Private",
     description:
-      "Memory storage is fully local. No cloud sync, no external persistence layer.",
+      "Everything lives in ~/.codexfi on your machine. <private> tags and excludePaths keep sensitive work out of memory.",
   },
   {
     icon: RefreshCw,
     title: "Smart Aging",
     description:
-      "Old memories are automatically consolidated and evolved, never duplicated.",
+      "Stale facts are superseded when they change, and old session summaries condense into lasting patterns.",
   },
 ] as const;
 
@@ -74,7 +74,7 @@ export function Features() {
           transition={{ duration: 0.5, ease: "easeOut" }}
           className="mb-4 text-center text-3xl font-bold tracking-tight text-foreground sm:text-4xl"
         >
-          Everything your AI needs to remember
+          Everything Claude needs to remember
         </motion.h2>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
@@ -84,7 +84,7 @@ export function Features() {
           className="mx-auto mb-14 max-w-2xl text-center text-muted-foreground"
         >
           codexfi extracts, stores, and retrieves project knowledge
-          automatically — so your AI agent has full context from day one.
+          automatically — so Claude has full context from the first prompt.
         </motion.p>
 
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

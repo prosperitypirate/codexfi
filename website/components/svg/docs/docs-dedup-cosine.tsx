@@ -94,7 +94,7 @@ export function DocsDedupCosine() {
       <text x="165" y="94" fontSize="11" fontWeight="600" fontFamily="var(--font-mono, monospace)" fill="#a855f7" textAnchor="middle" className="high-state-dc">0.89</text>
       <text x="165" y="94" fontSize="11" fontWeight="600" fontFamily="var(--font-mono, monospace)" fill="#a855f7" textAnchor="middle" className="low-state-dc">0.04</text>
       
-      <text x="165" y="70" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">threshold: 0.12</text>
+      <text x="165" y="70" fontSize="9" fontFamily="var(--font-mono, monospace)" className="fill-muted-foreground" textAnchor="middle">threshold: 0.16</text>
 
       {/* UPDATE Path */}
       <g className="path-update-dc">
