@@ -164,6 +164,10 @@ export function buildClaudeArgs(system: string, model: string): string[] {
 
 function childEnv(): NodeJS.ProcessEnv {
 	const env: NodeJS.ProcessEnv = { ...process.env, CODEXFI_DISABLE: "1" };
+	// Don't let the child think it runs inside the parent's session/plugin.
+	for (const k of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "CLAUDE_CODE_ENTRYPOINT"]) {
+		delete env[k];
+	}
 	if (process.env.CODEXFI_CLI_STRIP_API_KEY === "1") delete env.ANTHROPIC_API_KEY;
 	return env;
 }
@@ -203,6 +207,8 @@ async function callClaudeCli(system: string, user: string, opts: LlmCallOptions)
 				clearTimeout(timer);
 				resolve({ stdout: out, stderr: err, code: c });
 			});
+			// The child may exit before reading stdin (bad flag, auth error): ignore EPIPE.
+			child.stdin.on("error", () => {});
 			child.stdin.end(user);
 		},
 	);

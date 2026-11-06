@@ -21,6 +21,7 @@
  * ingest-result-schema.test.ts — neither mocks the LLM call chain either).
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect } from "bun:test";
 import { SUMMARY_SYSTEM } from "../../../plugin/src/prompts.js";
 

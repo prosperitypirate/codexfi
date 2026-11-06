@@ -253,7 +253,6 @@ async function ageActiveContext(userId: string, newId: string): Promise<void> {
 	try {
 		const rows = await getMemoriesByType(userId, "active-context");
 		const toDelete = rows.filter(row => (row.id as string) !== newId);
-		console.log(`[codexfi:store] ageActiveContext | userId=${userId} | existing=${rows.length} | deleting=${toDelete.length} | newId=${newId}`);
 		for (const row of toDelete) {
 			store.deleteById(row.id as string);
 		}
@@ -712,8 +711,7 @@ export async function getProfile(
 /** Number of rows whose vector came from a different embedding model than the current one. */
 export function countStaleEmbeddings(): number {
 	if (store.countRows() === 0) return 0;
-	const current = currentEmbedModelId();
-	return store.scan({}, { limit: 1_000_000 }).filter((r) => (r.embed_model ?? "") !== current).length;
+	return store.staleEmbeddingRows(currentEmbedModelId(), 1_000_000).length;
 }
 
 /**
@@ -724,9 +722,7 @@ export function countStaleEmbeddings(): number {
 export async function reembedStale(max = 500, batchSize = 32): Promise<number> {
 	if (store.countRows() === 0) return 0;
 	const current = currentEmbedModelId();
-	const stale = store.scan({}, { limit: 1_000_000 })
-		.filter((r) => (r.embed_model ?? "") !== current)
-		.slice(0, max);
+	const stale = store.staleEmbeddingRows(current, max);
 	let done = 0;
 	for (let i = 0; i < stale.length; i += batchSize) {
 		const batch = stale.slice(i, i + batchSize);

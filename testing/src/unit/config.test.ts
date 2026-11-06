@@ -1,9 +1,28 @@
 /**
  * Unit tests for config.ts — validateId(), constants, and environment variable handling.
+ *
+ * In-process assertions see the preload sandbox (CODEXFI_LLM_BACKEND=claude-cli,
+ * local embeddings, temp data dir). Precedence rules between env vars and
+ * codexfi.jsonc are checked in fresh subprocesses (config is read at import time).
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect } from "bun:test";
-import { validateId, EMBEDDING_DIMS, DEDUP_DISTANCE, STRUCTURAL_TYPES, VERSIONING_SKIP_TYPES, VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../../plugin/src/config.js";
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { makeTempDir, PLUGIN_SRC, TEST_DATA_DIR } from "../helpers/test-env.js";
+import {
+	validateId,
+	DATA_DIR,
+	DEDUP_DISTANCE,
+	EMBEDDING_PROVIDER,
+	LLM_BACKEND,
+	LLM_MODEL,
+	STRUCTURAL_TYPES,
+	VERSIONING_SKIP_TYPES,
+	VOYAGE_EMBEDDING_DIMS,
+	VOYAGE_EMBEDDING_MODEL,
+} from "../../../plugin/src/config.js";
 import { EXTRACTION_SYSTEM, INIT_EXTRACTION_SYSTEM } from "../../../plugin/src/prompts.js";
 
 // ── validateId() ────────────────────────────────────────────────────────────────
@@ -64,8 +83,9 @@ describe("validateId", () => {
 // ── Constants ───────────────────────────────────────────────────────────────────
 
 describe("constants", () => {
-	test("EMBEDDING_DIMS is 1024 (voyage-code-3)", () => {
-		expect(EMBEDDING_DIMS).toBe(1024);
+	test("Voyage model constants describe voyage-code-3 (legacy + optional provider)", () => {
+		expect(VOYAGE_EMBEDDING_MODEL).toBe("voyage-code-3");
+		expect(VOYAGE_EMBEDDING_DIMS).toBe(1024);
 	});
 
 	test("DEDUP_DISTANCE is reasonable (0 < x < 1)", () => {
@@ -146,43 +166,94 @@ describe("extraction prompts", () => {
 	});
 });
 
-// ── VALID_PROVIDERS & EXTRACTION_PROVIDER ───────────────────────────────────────
+// ── Sandbox values (in-process) ─────────────────────────────────────────────────
 
-describe("VALID_PROVIDERS", () => {
-	test("contains all three provider names", () => {
-		expect(VALID_PROVIDERS.has("anthropic")).toBe(true);
-		expect(VALID_PROVIDERS.has("xai")).toBe(true);
-		expect(VALID_PROVIDERS.has("google")).toBe(true);
+describe("runtime configuration (sandbox)", () => {
+	test("DATA_DIR comes from CODEXFI_DATA_DIR", () => {
+		expect(DATA_DIR).toBe(TEST_DATA_DIR);
 	});
 
-	test("does not contain invalid providers", () => {
-		expect(VALID_PROVIDERS.has("openai")).toBe(false);
-		expect(VALID_PROVIDERS.has("")).toBe(false);
-		expect(VALID_PROVIDERS.has("mistral")).toBe(false);
+	test("LLM_BACKEND honours CODEXFI_LLM_BACKEND", () => {
+		expect(LLM_BACKEND).toBe("claude-cli");
 	});
 
-	test("has exactly 3 entries", () => {
-		expect(VALID_PROVIDERS.size).toBe(3);
-	});
-});
-
-describe("EXTRACTION_PROVIDER", () => {
-	test("is one of the valid providers", () => {
-		expect(VALID_PROVIDERS.has(EXTRACTION_PROVIDER)).toBe(true);
+	test("LLM_MODEL defaults to the haiku alias", () => {
+		expect(LLM_MODEL).toBe("haiku");
 	});
 
-	test("is a non-empty string", () => {
-		expect(typeof EXTRACTION_PROVIDER).toBe("string");
-		expect(EXTRACTION_PROVIDER.length).toBeGreaterThan(0);
+	test("EMBEDDING_PROVIDER is local (no key needed)", () => {
+		expect(EMBEDDING_PROVIDER).toBe("local");
 	});
 });
 
-describe("DEFAULT_EXTRACTION_PROVIDER", () => {
-	test("is 'anthropic'", () => {
-		expect(DEFAULT_EXTRACTION_PROVIDER).toBe("anthropic");
-	});
+// ── Env vs codexfi.jsonc precedence (subprocess) ────────────────────────────────
 
-	test("is a member of VALID_PROVIDERS", () => {
-		expect(VALID_PROVIDERS.has(DEFAULT_EXTRACTION_PROVIDER)).toBe(true);
-	});
+/**
+ * Import config.ts in a fresh Bun process with HOME pointing at a temp dir
+ * holding `fileConfig` as ~/.codexfi/codexfi.jsonc, and the given env.
+ */
+async function probeConfig(fileConfig: Record<string, unknown> | null, env: Record<string, string>) {
+	const home = makeTempDir("cfg-home");
+	if (fileConfig) {
+		mkdirSync(join(home, ".codexfi"), { recursive: true });
+		writeFileSync(join(home, ".codexfi", "codexfi.jsonc"), `// test config\n${JSON.stringify(fileConfig, null, 2)}\n`);
+	}
+	const script = `
+		const c = await import(${JSON.stringify(join(PLUGIN_SRC, "config.ts"))});
+		console.log(JSON.stringify({
+			backend: c.LLM_BACKEND, model: c.LLM_MODEL, provider: c.EMBEDDING_PROVIDER,
+			hasAnthropicKey: c.ANTHROPIC_API_KEY.length > 0, hasVoyageKey: c.VOYAGE_API_KEY.length > 0,
+			dataDir: c.DATA_DIR,
+		}));
+	`;
+	const baseEnv: Record<string, string> = { ...(process.env as Record<string, string>), HOME: home };
+	for (const k of ["CODEXFI_LLM_BACKEND", "CODEXFI_LLM_MODEL", "CODEXFI_EMBEDDING_PROVIDER", "ANTHROPIC_API_KEY", "VOYAGE_API_KEY"]) {
+		delete baseEnv[k];
+	}
+	const proc = Bun.spawn(["bun", "-e", script], { cwd: home, env: { ...baseEnv, ...env }, stdout: "pipe", stderr: "pipe" });
+	const [out, err] = await Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()]);
+	await proc.exited;
+	if (proc.exitCode !== 0) throw new Error(`config probe failed: ${err}`);
+	return JSON.parse(out.trim().split("\n").pop()!) as {
+		backend: string; model: string; provider: string; hasAnthropicKey: boolean; hasVoyageKey: boolean; dataDir: string;
+	};
+}
+
+describe("config precedence (fresh process)", () => {
+	test("defaults with no config file: auto backend, haiku, local embeddings, no keys", async () => {
+		const r = await probeConfig(null, {});
+		expect(r).toMatchObject({ backend: "auto", model: "haiku", provider: "local", hasAnthropicKey: false, hasVoyageKey: false });
+	}, 15_000);
+
+	test("codexfi.jsonc llmBackend / llmModel / embeddingProvider are honoured", async () => {
+		const r = await probeConfig({ llmBackend: "anthropic-api", llmModel: "sonnet", embeddingProvider: "voyage" }, {});
+		expect(r).toMatchObject({ backend: "anthropic-api", model: "sonnet", provider: "voyage" });
+	}, 15_000);
+
+	test("env vars override the file; an invalid CODEXFI_LLM_BACKEND falls back to the file", async () => {
+		const file = { llmBackend: "anthropic-api", embeddingProvider: "voyage", llmModel: "sonnet" };
+		const r = await probeConfig(file, { CODEXFI_LLM_BACKEND: "claude-cli", CODEXFI_EMBEDDING_PROVIDER: "local", CODEXFI_LLM_MODEL: "opus" });
+		expect(r).toMatchObject({ backend: "claude-cli", provider: "local", model: "opus" });
+		const bad = await probeConfig(file, { CODEXFI_LLM_BACKEND: "xyz" });
+		expect(bad.backend).toBe("anthropic-api");
+	}, 15_000);
+
+	test("an invalid llmBackend in the file falls back to auto", async () => {
+		const r = await probeConfig({ llmBackend: "something-else" }, {});
+		expect(r.backend).toBe("auto");
+	}, 15_000);
+
+	test("API keys from codexfi.jsonc are picked up", async () => {
+		const r = await probeConfig({ anthropicApiKey: "test-anthropic-placeholder", voyageApiKey: "test-voyage-placeholder" }, {});
+		expect(r.hasAnthropicKey).toBe(true);
+		expect(r.hasVoyageKey).toBe(true);
+	}, 15_000);
+
+	// Regression: plugin-config.ts defaults missing keys to "", so config.ts must
+	// fall back with `||` (a `??` there silently ignored the env vars).
+	test("ANTHROPIC_API_KEY / VOYAGE_API_KEY env vars are used when the file has no keys", async () => {
+		const r = await probeConfig(null, { ANTHROPIC_API_KEY: "test-anthropic-placeholder", VOYAGE_API_KEY: "test-voyage-placeholder" });
+		expect(r.hasAnthropicKey).toBe(true);
+		expect(r.hasVoyageKey).toBe(true);
+	}, 15_000);
 });

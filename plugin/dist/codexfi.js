@@ -524,6 +524,7 @@ class CostLedger {
     this.data.last_updated = new Date().toISOString();
   }
   async recordLlm(backend, model, promptTokens, completionTokens, costUsd) {
+    await this.load();
     const b = this.bucket(backend);
     b.calls++;
     b.prompt_tokens += promptTokens;
@@ -534,6 +535,7 @@ class CostLedger {
     await this.save();
   }
   async recordEmbedding(backend, model, tokens, costUsd) {
+    await this.load();
     const b = this.bucket(backend);
     b.calls++;
     b.tokens += tokens;
@@ -703,6 +705,9 @@ function buildClaudeArgs(system, model) {
 }
 function childEnv() {
   const env = { ...process.env, CODEXFI_DISABLE: "1" };
+  for (const k of ["CLAUDECODE", "CLAUDE_CODE_SESSION_ID", "CLAUDE_PROJECT_DIR", "CLAUDE_PLUGIN_ROOT", "CLAUDE_PLUGIN_DATA", "CLAUDE_CODE_ENTRYPOINT"]) {
+    delete env[k];
+  }
   if (process.env.CODEXFI_CLI_STRIP_API_KEY === "1")
     delete env.ANTHROPIC_API_KEY;
   return env;
@@ -737,6 +742,7 @@ async function callClaudeCli(system, user, opts) {
       clearTimeout(timer);
       resolve({ stdout: out, stderr: err, code: c });
     });
+    child.stdin.on("error", () => {});
     child.stdin.end(user);
   });
   let parsed;
@@ -1099,10 +1105,22 @@ function open(dbPath) {
   currentPath = dbPath;
 }
 function migrate(conn) {
-  const cols = conn.prepare("PRAGMA table_info(memories)").all();
-  if (!cols.some((c) => c.name === "embed_model")) {
-    conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
-    conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+  const hasColumn = () => conn.prepare("PRAGMA table_info(memories)").all().some((c) => c.name === "embed_model");
+  if (hasColumn())
+    return;
+  conn.run("BEGIN IMMEDIATE");
+  try {
+    if (!hasColumn()) {
+      conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
+      conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+    }
+    conn.run("COMMIT");
+  } catch (e) {
+    try {
+      conn.run("ROLLBACK");
+    } catch {}
+    if (!hasColumn())
+      throw e;
   }
 }
 function close() {
@@ -1230,6 +1248,9 @@ function getById(id) {
   const row = getDb().prepare("SELECT * FROM memories WHERE id = ?").get(id);
   return row ? rowToRecord(row) : undefined;
 }
+function staleEmbeddingRows(currentModel, limit) {
+  return getDb().prepare("SELECT id, memory FROM memories WHERE embed_model != ? LIMIT ?").all(currentModel, limit);
+}
 function countRows() {
   const row = getDb().prepare("SELECT COUNT(*) as cnt FROM memories").get();
   return row.cnt;
@@ -1318,6 +1339,7 @@ var init_search = __esm(() => {
 var exports_store = {};
 __export(exports_store, {
   update: () => update,
+  staleEmbeddingRows: () => staleEmbeddingRows,
   search: () => search,
   scan: () => scan,
   reload: () => reload,
@@ -1936,13 +1958,13 @@ async function extractMemories(messages, mode = "normal") {
   let raw;
   switch (mode) {
     case "init":
-      raw = await callLlm(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated), { operation: "init" });
+      raw = (await callLlmStrict(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated), { operation: "init" })).text;
       break;
     case "summary":
-      raw = await callLlm(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated), { operation: "summary" });
+      raw = (await callLlmStrict(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated), { operation: "summary" })).text;
       break;
     default:
-      raw = await callLlm(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated), { operation: "extraction" });
+      raw = (await callLlmStrict(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated), { operation: "extraction" })).text;
       break;
   }
   const facts = parseJsonArray(raw);
@@ -2123,7 +2145,6 @@ async function ageActiveContext(userId, newId) {
   try {
     const rows = await getMemoriesByType(userId, "active-context");
     const toDelete = rows.filter((row) => row.id !== newId);
-    console.log(`[codexfi:store] ageActiveContext | userId=${userId} | existing=${rows.length} | deleting=${toDelete.length} | newId=${newId}`);
     for (const row of toDelete) {
       exports_store.deleteById(row.id);
     }
@@ -2376,14 +2397,13 @@ async function getProfile(userId, limit = 100) {
 function countStaleEmbeddings() {
   if (exports_store.countRows() === 0)
     return 0;
-  const current = currentEmbedModelId();
-  return exports_store.scan({}, { limit: 1e6 }).filter((r) => (r.embed_model ?? "") !== current).length;
+  return exports_store.staleEmbeddingRows(currentEmbedModelId(), 1e6).length;
 }
 async function reembedStale(max = 500, batchSize = 32) {
   if (exports_store.countRows() === 0)
     return 0;
   const current = currentEmbedModelId();
-  const stale = exports_store.scan({}, { limit: 1e6 }).filter((r) => (r.embed_model ?? "") !== current).slice(0, max);
+  const stale = exports_store.staleEmbeddingRows(current, max);
   let done = 0;
   for (let i = 0;i < stale.length; i += batchSize) {
     const batch = stale.slice(i, i + batchSize);
@@ -4911,6 +4931,7 @@ var init_dashboard = __esm(() => {
 var exports_runtime = {};
 __export(exports_runtime, {
   tagsFor: () => tagsFor,
+  survivingIds: () => survivingIds,
   isDisabled: () => isDisabled,
   fitToLimit: () => fitToLimit,
   ensureInit: () => ensureInit,
@@ -4942,43 +4963,61 @@ function isDisabled(cwd) {
   }
   return false;
 }
+function toUnits(text) {
+  const units = [];
+  for (const line of text.split(`
+`)) {
+    if (line.startsWith("## ") || line.startsWith("[MEMORY]")) {
+      units.push({ kind: "header", lines: [line] });
+    } else if (line.startsWith("- ") || line.startsWith("> ")) {
+      units.push({ kind: "item", lines: [line] });
+    } else {
+      const cur = units[units.length - 1];
+      if (cur && cur.kind === "item")
+        cur.lines.push(line);
+      else
+        units.push({ kind: "other", lines: [line] });
+    }
+  }
+  return units;
+}
 function fitToLimit(text, limit = HOOK_OUTPUT_LIMIT) {
   if (text.length <= limit)
     return text;
-  const lines = text.split(`
-`);
-  while (lines.join(`
-`).length > limit && lines.length > 1) {
+  const units = toUnits(text);
+  while (render(units).length > limit) {
     let idx = -1;
-    for (let i = lines.length - 1;i >= 0; i--) {
-      const l = lines[i];
-      if (l.startsWith("- ") || l.startsWith("> ") || l.startsWith("  >")) {
+    for (let i = units.length - 1;i >= 0; i--) {
+      if (units[i].kind === "item") {
         idx = i;
         break;
       }
     }
-    if (idx === -1) {
-      lines.pop();
-      continue;
-    }
-    lines.splice(idx, 1);
-    while (idx < lines.length && lines[idx].startsWith("  >"))
-      lines.splice(idx, 1);
+    const items = units.filter((u) => u.kind === "item").length;
+    if (idx === -1 || items <= 1)
+      break;
+    units.splice(idx, 1);
   }
-  const out = [];
-  for (let i = 0;i < lines.length; i++) {
-    const l = lines[i];
-    if (l.startsWith("## ")) {
-      const next = lines.slice(i + 1).find((x) => x.trim() !== "");
-      if (!next || next.startsWith("## "))
-        continue;
-    }
-    out.push(l);
-  }
-  return out.join(`
-`);
+  const kept = units.filter((u, i) => {
+    if (u.kind !== "header" || u.lines[0].startsWith("[MEMORY]"))
+      return true;
+    const next = units.slice(i + 1).find((x) => x.kind !== "other" || x.lines.join("").trim() !== "");
+    return !!next && next.kind === "item";
+  });
+  const out = render(kept);
+  return out.length > limit ? out.slice(0, limit - 1) + "…" : out;
 }
-var inited = false, HOOK_OUTPUT_LIMIT = 9500;
+function survivingIds(fitted, items) {
+  const norm = (s) => s.replace(/\s+/g, " ").trim();
+  const hay = norm(fitted);
+  return items.filter((it) => {
+    const probe = norm(it.memory).slice(0, 80);
+    return probe.length > 0 && hay.includes(probe);
+  }).map((it) => it.id);
+}
+var inited = false, HOOK_OUTPUT_LIMIT = 9500, render = (units) => units.map((u) => u.lines.join(`
+`)).join(`
+`);
 var init_runtime = __esm(() => {
   init_db();
   init_names();
@@ -5066,13 +5105,18 @@ function listJobs() {
     return [];
   }
 }
-function readJob(name) {
-  return readJson(join9(dir("queue"), name));
-}
-function removeJob(name) {
+function claimJob(name) {
+  const claimed = join9(dir("queue-claimed"), `${process.pid}-${name}`);
   try {
-    unlinkSync(join9(dir("queue"), name));
+    renameSync(join9(dir("queue"), name), claimed);
+  } catch {
+    return null;
+  }
+  const job = readJson(claimed);
+  try {
+    unlinkSync(claimed);
   } catch {}
+  return job;
 }
 function lockPath() {
   return join9(dir("."), "worker.lock");
@@ -5085,27 +5129,54 @@ function isAlive2(pid) {
     return e.code === "EPERM";
   }
 }
+function lockIsLive(lock) {
+  if (!lock || lock.pid === process.pid)
+    return false;
+  if (typeof lock.at !== "number" || Date.now() - lock.at > LOCK_STALE_MS)
+    return false;
+  return isAlive2(lock.pid);
+}
 function workerRunning() {
-  const lock = readJson(lockPath());
-  return !!lock && lock.pid !== process.pid && isAlive2(lock.pid);
+  return lockIsLive(readJson(lockPath()));
 }
 function acquireWorkerLock() {
   const p = lockPath();
+  const mine = JSON.stringify({ pid: process.pid, at: Date.now() });
   try {
-    writeFileSync3(p, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx" });
+    writeFileSync3(p, mine, { flag: "wx" });
     return true;
   } catch {
-    const lock = readJson(p);
-    if (lock && isAlive2(lock.pid) && lock.pid !== process.pid)
+    if (lockIsLive(readJson(p)))
       return false;
+    const aside = `${p}.stale-${process.pid}-${randomBytes(3).toString("hex")}`;
     try {
-      unlinkSync(p);
-      writeFileSync3(p, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx" });
+      renameSync(p, aside);
+    } catch {
+      return false;
+    }
+    const moved = readJson(aside);
+    if (lockIsLive(moved)) {
+      try {
+        renameSync(aside, p);
+      } catch {}
+      return false;
+    }
+    try {
+      unlinkSync(aside);
+    } catch {}
+    try {
+      writeFileSync3(p, mine, { flag: "wx" });
       return true;
     } catch {
       return false;
     }
   }
+}
+function touchWorkerLock() {
+  const p = lockPath();
+  const lock = readJson(p);
+  if (lock?.pid === process.pid)
+    writeJsonAtomic(p, { pid: process.pid, at: Date.now() });
 }
 function releaseWorkerLock() {
   const lock = readJson(lockPath());
@@ -5125,10 +5196,11 @@ function logLine(name, message, data) {
 `);
   } catch {}
 }
-var SAFE_SEGMENT, LOG_CAP_BYTES;
+var SAFE_SEGMENT, LOCK_STALE_MS, LOG_CAP_BYTES;
 var init_state = __esm(() => {
   init_config();
   SAFE_SEGMENT = /^[A-Za-z0-9_.-]{1,128}$/;
+  LOCK_STALE_MS = 10 * 60 * 1000;
   LOG_CAP_BYTES = 2 * 1024 * 1024;
 });
 
@@ -5392,12 +5464,13 @@ async function buildSessionContext(projectTag, userTag, cwd) {
   if (text && bank) {
     text = text.replace("[MEMORY]", "[MEMORY] (codexfi — supplements this project's memory-bank/; the bank is the curated source, these are automatic notes)");
   }
-  const injectedIds = [
-    ...Object.values(byType).flat().map((m) => m.id),
-    ...profileRows.map((p) => p.id)
+  const injectedItems = [
+    ...Object.values(byType).flat().map((m) => ({ id: m.id, memory: m.memory ?? "" })),
+    ...profileRows.map((p) => ({ id: p.id, memory: p.memory }))
   ];
-  const projectMemoryCount = Object.values(full).reduce((n, items) => n + items.length, 0);
-  return { text, injectedIds, memoryBank: bank, projectMemoryCount };
+  const injectedIds = injectedItems.map((i) => i.id);
+  const projectMemoryCount = (await list(projectTag, { limit: 1e6 })).length;
+  return { text, injectedIds, injectedItems, memoryBank: bank, projectMemoryCount };
 }
 function toMinimal(rows) {
   return {
@@ -5441,7 +5514,7 @@ ${lines.join(`
 `)}`;
   }
   const shown = [...userFresh, ...semantic].filter((r) => r.score >= display).concat(extras);
-  return { text, injectedIds: shown.map((r) => r.id) };
+  return { text, injectedIds: shown.map((r) => r.id), injectedItems: shown.map((r) => ({ id: r.id, memory: r.memory })) };
 }
 var SESSION_TYPES, MAX_ENUMERATION_EXTRAS = 8, BANK_SLACK_MS;
 var init_context2 = __esm(() => {
@@ -5481,13 +5554,14 @@ function detectMemoryKeyword(text) {
 async function onSessionStart(input, cwd) {
   if (input.source === "resume")
     return;
-  const { ensureInit: ensureInit2, tagsFor: tagsFor2, fitToLimit: fitToLimit2 } = await Promise.resolve().then(() => (init_runtime(), exports_runtime));
+  const { ensureInit: ensureInit2, tagsFor: tagsFor2, fitToLimit: fitToLimit2, survivingIds: survivingIds2 } = await Promise.resolve().then(() => (init_runtime(), exports_runtime));
   const { buildSessionContext: buildSessionContext2 } = await Promise.resolve().then(() => (init_context2(), exports_context));
   await ensureInit2();
   const tags = tagsFor2(cwd);
   const ctx = await buildSessionContext2(tags.project, tags.user, cwd);
+  const fitted = fitToLimit2(ctx.text);
   const state = loadSession(input.session_id);
-  saveSession(input.session_id, { ...state, injected: ctx.injectedIds, cwd, transcriptPath: input.transcript_path });
+  saveSession(input.session_id, { ...state, injected: survivingIds2(fitted, ctx.injectedItems), cwd, transcriptPath: input.transcript_path });
   const { isEmbedderReady: isEmbedderReady2 } = await Promise.resolve().then(() => (init_embedder(), exports_embedder));
   if (!isEmbedderReady2()) {
     enqueue({ kind: "warmup", cwd, projectTag: tags.project, userTag: tags.user, sessionId: input.session_id });
@@ -5498,13 +5572,13 @@ async function onSessionStart(input, cwd) {
     spawnWorker();
   }
   pruneSessions();
-  emitContext("session-start", fitToLimit2(ctx.text));
+  emitContext("session-start", fitted);
 }
 async function onUserPromptSubmit(input) {
   const prompt = (input.prompt ?? "").trim();
   if (prompt.length < 3)
     return;
-  const cwd = input.cwd ?? process.cwd();
+  const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
   const { isEmbedderReady: isEmbedderReady2 } = await Promise.resolve().then(() => (init_embedder(), exports_embedder));
   if (!isEmbedderReady2()) {
     const tags2 = getTags(cwd);
@@ -5514,22 +5588,24 @@ async function onUserPromptSubmit(input) {
       emitContext("user-prompt-submit", REMEMBER_NOTE);
     return;
   }
-  const { ensureInit: ensureInit2, tagsFor: tagsFor2, fitToLimit: fitToLimit2 } = await Promise.resolve().then(() => (init_runtime(), exports_runtime));
+  const { ensureInit: ensureInit2, tagsFor: tagsFor2, fitToLimit: fitToLimit2, survivingIds: survivingIds2 } = await Promise.resolve().then(() => (init_runtime(), exports_runtime));
   const { buildPromptContext: buildPromptContext2 } = await Promise.resolve().then(() => (init_context2(), exports_context));
   await ensureInit2();
   const tags = tagsFor2(cwd);
   const state = loadSession(input.session_id);
   const ctx = await buildPromptContext2(prompt, tags.project, tags.user, new Set(state.injected));
-  if (ctx.injectedIds.length > 0) {
+  const fitted = fitToLimit2(ctx.text, HOOK_LIMIT_WITH_NOTE);
+  const shown = survivingIds2(fitted, ctx.injectedItems);
+  if (shown.length > 0) {
     const latest = loadSession(input.session_id);
-    saveSession(input.session_id, { ...latest, injected: [...latest.injected, ...ctx.injectedIds] });
+    saveSession(input.session_id, { ...latest, injected: [...latest.injected, ...shown] });
   }
-  let text = ctx.text;
+  let text = fitted;
   if (detectMemoryKeyword(prompt))
     text = text ? `${text}
 
 ${REMEMBER_NOTE}` : REMEMBER_NOTE;
-  emitContext("user-prompt-submit", fitToLimit2(text));
+  emitContext("user-prompt-submit", text);
 }
 function enqueueFromHook(kind, input, cwd, reason) {
   if (!input.transcript_path || !input.session_id)
@@ -5554,7 +5630,7 @@ async function runHook(event, rawInput) {
   } catch {
     input = {};
   }
-  const cwd = input.cwd ?? process.cwd();
+  const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
   if (isDisabled(cwd))
     return;
   if (input.agent_id)
@@ -5583,7 +5659,7 @@ async function runHook(event, rawInput) {
     logLine("hook", `${event}`, { ms: Date.now() - started, session: input.session_id, source: input.source });
   }
 }
-var EVENT_NAMES, MEMORY_KEYWORD_PATTERN, REMEMBER_NOTE;
+var EVENT_NAMES, MEMORY_KEYWORD_PATTERN, HOOK_LIMIT_WITH_NOTE = 9000, REMEMBER_NOTE;
 var init_hooks = __esm(() => {
   init_plugin_config();
   init_tags();
@@ -5606,6 +5682,12 @@ function stripPrivateContent(content) {
   let result = "";
   let cursor = 0;
   const lower = content.toLowerCase();
+  const firstClose = lower.indexOf(CLOSE_TAG);
+  const firstOpen = lower.indexOf(OPEN_TAG);
+  if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
+    result = "[REDACTED]";
+    cursor = firstClose + CLOSE_TAG.length;
+  }
   while (cursor < content.length) {
     const openIdx = lower.indexOf(OPEN_TAG, cursor);
     if (openIdx === -1) {
@@ -5614,7 +5696,7 @@ function stripPrivateContent(content) {
     }
     const closeIdx = lower.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length);
     if (closeIdx === -1) {
-      result += content.slice(cursor);
+      result += content.slice(cursor, openIdx) + "[REDACTED]";
       break;
     }
     result += content.slice(cursor, openIdx) + "[REDACTED]";
@@ -5763,11 +5845,13 @@ ${trimmed}`, MESSAGE_CAP);
     const r = raw;
     if (r.isSidechain === true || r.isMeta === true)
       continue;
+    if (r.isCompactSummary === true || r.isVisibleInTranscriptOnly === true)
+      continue;
     const ts = typeof r.timestamp === "string" ? r.timestamp : undefined;
     if (r.type === "attachment") {
       const a = r.attachment;
       if (a?.type === "queued_command") {
-        push("user", cleanUserText(textFromBlocks(a.prompt)), ts);
+        push("user", stripPrivateContent(cleanUserText(textFromBlocks(a.prompt))), ts);
       }
       continue;
     }
@@ -5776,30 +5860,33 @@ ${trimmed}`, MESSAGE_CAP);
       continue;
     if (r.type === "user" && msg.role === "user") {
       if (typeof msg.content === "string") {
-        push("user", cleanUserText(msg.content), ts);
+        push("user", stripPrivateContent(cleanUserText(msg.content)), ts);
         continue;
       }
       if (!Array.isArray(msg.content))
         continue;
-      for (const b of msg.content) {
-        if (b?.type === "text")
-          push("user", cleanUserText(String(b.text ?? "")), ts);
-        else if (b?.type === "tool_result" && b.is_error === true) {
-          push("user", `[tool-error] ${cap(toolResultText(b).trim(), TOOL_ERROR_CAP)}`, ts);
+      const blocks = msg.content;
+      const text = blocks.filter((b) => b?.type === "text").map((b) => String(b.text ?? "")).join(`
+`);
+      if (text)
+        push("user", stripPrivateContent(cleanUserText(text)), ts);
+      for (const b of blocks) {
+        if (b?.type === "tool_result" && b.is_error === true) {
+          push("user", `[tool-error] ${cap(stripPrivateContent(toolResultText(b).trim()), TOOL_ERROR_CAP)}`, ts);
         }
       }
       continue;
     }
     if (r.type === "assistant" && msg.role === "assistant") {
       if (typeof msg.content === "string") {
-        push("assistant", msg.content, ts);
+        push("assistant", stripPrivateContent(msg.content), ts);
         continue;
       }
       if (!Array.isArray(msg.content))
         continue;
       for (const b of msg.content) {
         if (b?.type === "text")
-          push("assistant", String(b.text ?? ""), ts);
+          push("assistant", stripPrivateContent(String(b.text ?? "")), ts);
         else if (b?.type === "tool_use")
           push("assistant", describeToolUse(b), ts);
       }
@@ -5881,30 +5968,51 @@ __export(exports_worker, {
 function sanitize(messages) {
   return messages.map((m) => ({ role: m.role, content: stripPrivateContent(m.content) }));
 }
-async function processTurn(job) {
+async function processTurn(job, opts = {}) {
   if (!job.transcriptPath || !job.sessionId)
     return 0;
-  const state = loadSession(job.sessionId);
+  const sessionId = job.sessionId;
+  const state = loadSession(sessionId);
   const chunk = readTranscriptFrom(job.transcriptPath, state.transcriptOffset);
   if (chunk.messages.length === 0) {
-    if (chunk.nextOffset !== state.transcriptOffset)
-      saveSession(job.sessionId, { ...state, transcriptOffset: chunk.nextOffset });
+    if (chunk.nextOffset !== state.transcriptOffset) {
+      saveSession(sessionId, { ...state, transcriptOffset: chunk.nextOffset, doneWindows: 0 });
+    }
     return 0;
   }
-  let stored = 0;
   const conversationChars = renderConversation(chunk.messages).length;
-  if (conversationChars >= MIN_EXCHANGE_CHARS) {
-    for (const window of windowMessages(chunk.messages, MAX_CONTENT_CHARS)) {
-      const results = await ingest(sanitize(window), job.projectTag, {
-        metadata: { source: "claude-code", session_id: job.sessionId, date: today() }
+  if (conversationChars < MIN_EXCHANGE_CHARS && !opts.flush)
+    return 0;
+  let stored = 0;
+  const windows = conversationChars >= MIN_EXCHANGE_CHARS ? windowMessages(chunk.messages, MAX_CONTENT_CHARS) : [];
+  const alreadyDone = chunk.reset ? 0 : state.doneWindows ?? 0;
+  for (let i = alreadyDone;i < windows.length; i++) {
+    try {
+      const results = await ingest(sanitize(windows[i]), job.projectTag, {
+        metadata: { source: "claude-code", session_id: sessionId, date: today() }
       });
       stored += results.length;
+      const progress = loadSession(sessionId);
+      saveSession(sessionId, { ...progress, doneWindows: i + 1 });
+    } catch (e) {
+      const latest2 = loadSession(sessionId);
+      const failures = (latest2.failures ?? 0) + 1;
+      const giveUp = failures >= MAX_CONSECUTIVE_FAILURES;
+      logLine("worker", giveUp ? "extraction failed repeatedly — skipping this span" : "extraction failed — will retry next turn", {
+        session: sessionId,
+        failures,
+        error: e instanceof Error ? e.message : String(e)
+      });
+      saveSession(sessionId, giveUp ? { ...latest2, transcriptOffset: chunk.nextOffset, doneWindows: 0, failures: 0 } : { ...latest2, failures });
+      return stored;
     }
   }
-  const latest = loadSession(job.sessionId);
-  saveSession(job.sessionId, {
+  const latest = loadSession(sessionId);
+  saveSession(sessionId, {
     ...latest,
     transcriptOffset: chunk.nextOffset,
+    doneWindows: 0,
+    failures: 0,
     turns: latest.turns + 1,
     cwd: job.cwd,
     transcriptPath: job.transcriptPath
@@ -5956,7 +6064,7 @@ async function processJob(job) {
       return processTurn(job);
     case "summary":
       await settle(job);
-      await processTurn(job);
+      await processTurn(job, { flush: true });
       return processSummary(job);
     case "warmup":
       await embedBatch(["codexfi warmup"], "query");
@@ -5986,10 +6094,10 @@ async function runWorker() {
       if (jobs.length === 0)
         break;
       for (const name of jobs) {
-        const job = readJob(name);
-        removeJob(name);
+        const job = claimJob(name);
         if (!job)
           continue;
+        touchWorkerLock();
         const t0 = Date.now();
         try {
           const n = await processJob(job);
@@ -6005,7 +6113,7 @@ async function runWorker() {
   if (listJobs().length > 0 && !workerRunning())
     await runWorker();
 }
-var today = () => new Date().toISOString().slice(0, 10), TRANSCRIPT_SETTLE_MS = 1500;
+var today = () => new Date().toISOString().slice(0, 10), MAX_CONSECUTIVE_FAILURES = 5, TRANSCRIPT_SETTLE_MS = 1500;
 var init_worker = __esm(() => {
   init_config();
   init_store2();

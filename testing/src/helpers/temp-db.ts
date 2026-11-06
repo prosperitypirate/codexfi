@@ -2,15 +2,15 @@
  * Temporary SQLite store helper for isolated test runs.
  *
  * Creates a fresh store in a temp directory for each test suite,
- * ensuring tests never touch the real ~/.codexfi/ store.
+ * ensuring tests never touch the real ~/.codexfi/ store (the preload
+ * sandbox already redirects CODEXFI_DATA_DIR; this gives each suite its own DB).
  * Cleans up on teardown.
  */
 
-import { mkdtempSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { rmSync } from "node:fs";
 import * as db from "../../../plugin/src/db.js";
 import * as vs from "../../../plugin/src/store/index.js";
+import { makeTempDir } from "./test-env.js";
 
 let tempDir: string;
 
@@ -22,10 +22,12 @@ let tempDir: string;
  * write to the real ~/.codexfi/store.db.
  */
 export async function setupTempDb(): Promise<string> {
-	tempDir = mkdtempSync(join(tmpdir(), "oc-test-db-"));
-	// Redirect store path BEFORE init so any writes go to tempDir
+	tempDir = makeTempDir("db");
+	// Redirect store path BEFORE init so any writes go to tempDir. db.init() is
+	// then a no-op; it is called WITHOUT a path on purpose — db.init(path)
+	// rewrites process.env.CODEXFI_DATA_DIR, which would leak into subprocesses.
 	vs._setStorePathForTests(tempDir);
-	await db.init(tempDir);
+	await db.init();
 	return tempDir;
 }
 

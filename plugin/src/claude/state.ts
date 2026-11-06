@@ -59,6 +59,10 @@ export interface SessionState {
 	turns: number;
 	/** `turns` value when the last session summary was written. */
 	summarizedTurns?: number;
+	/** Extraction windows already stored for the span starting at transcriptOffset. */
+	doneWindows?: number;
+	/** Consecutive failed extraction attempts (reset on success). */
+	failures?: number;
 	cwd?: string;
 	transcriptPath?: string;
 	updatedAt?: string;
@@ -139,6 +143,26 @@ export function readJob(name: string): Job | null {
 	return readJson<Job>(join(dir("queue"), name));
 }
 
+/**
+ * Atomically claim a queued job: rename it out of queue/ so no other worker can
+ * see it. Returns the job, or null when another worker claimed it first.
+ */
+export function claimJob(name: string): Job | null {
+	const claimed = join(dir("queue-claimed"), `${process.pid}-${name}`);
+	try {
+		renameSync(join(dir("queue"), name), claimed);
+	} catch {
+		return null;
+	}
+	const job = readJson<Job>(claimed);
+	try {
+		unlinkSync(claimed);
+	} catch {
+		// ignore
+	}
+	return job;
+}
+
 export function removeJob(name: string): void {
 	try {
 		unlinkSync(join(dir("queue"), name));
@@ -162,27 +186,63 @@ function isAlive(pid: number): boolean {
 	}
 }
 
+/** A lock not refreshed for this long is stale even if its pid exists (pid reuse). */
+const LOCK_STALE_MS = 10 * 60 * 1000;
+
+interface LockInfo {
+	pid: number;
+	at: number;
+}
+
+function lockIsLive(lock: LockInfo | null): boolean {
+	if (!lock || lock.pid === process.pid) return false;
+	if (typeof lock.at !== "number" || Date.now() - lock.at > LOCK_STALE_MS) return false;
+	return isAlive(lock.pid);
+}
+
 /** True when another live worker holds the lock. */
 export function workerRunning(): boolean {
-	const lock = readJson<{ pid: number }>(lockPath());
-	return !!lock && lock.pid !== process.pid && isAlive(lock.pid);
+	return lockIsLive(readJson<LockInfo>(lockPath()));
 }
 
 /**
- * Try to become the worker. Uses an exclusive create so two workers started at
- * the same instant can't both win; a stale lock (dead pid) is taken over.
+ * Try to become the worker. Exclusive create (`wx`) means two workers starting
+ * at once can't both win. A stale lock (dead pid, or not refreshed for 10 min)
+ * is taken over by renaming it aside first — only one contender's rename can
+ * succeed, so a takeover never deletes a lock another worker just created.
  */
 export function acquireWorkerLock(): boolean {
 	const p = lockPath();
+	const mine = JSON.stringify({ pid: process.pid, at: Date.now() });
 	try {
-		writeFileSync(p, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx" });
+		writeFileSync(p, mine, { flag: "wx" });
 		return true;
 	} catch {
-		const lock = readJson<{ pid: number }>(p);
-		if (lock && isAlive(lock.pid) && lock.pid !== process.pid) return false;
+		if (lockIsLive(readJson<LockInfo>(p))) return false;
+		const aside = `${p}.stale-${process.pid}-${randomBytes(3).toString("hex")}`;
 		try {
-			unlinkSync(p);
-			writeFileSync(p, JSON.stringify({ pid: process.pid, at: Date.now() }), { flag: "wx" });
+			renameSync(p, aside);
+		} catch {
+			return false; // someone else is taking it over
+		}
+		// Re-check what we moved: if it turned out to be live (it was replaced
+		// between our read and the rename), put it back and yield.
+		const moved = readJson<LockInfo>(aside);
+		if (lockIsLive(moved)) {
+			try {
+				renameSync(aside, p);
+			} catch {
+				// ignore
+			}
+			return false;
+		}
+		try {
+			unlinkSync(aside);
+		} catch {
+			// ignore
+		}
+		try {
+			writeFileSync(p, mine, { flag: "wx" });
 			return true;
 		} catch {
 			return false;
@@ -190,8 +250,15 @@ export function acquireWorkerLock(): boolean {
 	}
 }
 
+/** Refresh the lock's heartbeat (call between jobs). */
+export function touchWorkerLock(): void {
+	const p = lockPath();
+	const lock = readJson<LockInfo>(p);
+	if (lock?.pid === process.pid) writeJsonAtomic(p, { pid: process.pid, at: Date.now() });
+}
+
 export function releaseWorkerLock(): void {
-	const lock = readJson<{ pid: number }>(lockPath());
+	const lock = readJson<LockInfo>(lockPath());
 	if (lock?.pid === process.pid) {
 		try {
 			unlinkSync(lockPath());

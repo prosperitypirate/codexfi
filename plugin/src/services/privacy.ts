@@ -23,6 +23,15 @@ export function stripPrivateContent(content: string): string {
 	let cursor = 0;
 	const lower = content.toLowerCase();
 
+	// Orphan closing tag before any opening tag: the <private> was opened in an
+	// earlier message/block — redact everything up to it.
+	const firstClose = lower.indexOf(CLOSE_TAG);
+	const firstOpen = lower.indexOf(OPEN_TAG);
+	if (firstClose !== -1 && (firstOpen === -1 || firstClose < firstOpen)) {
+		result = "[REDACTED]";
+		cursor = firstClose + CLOSE_TAG.length;
+	}
+
 	while (cursor < content.length) {
 		const openIdx = lower.indexOf(OPEN_TAG, cursor);
 		if (openIdx === -1) {
@@ -31,8 +40,9 @@ export function stripPrivateContent(content: string): string {
 		}
 		const closeIdx = lower.indexOf(CLOSE_TAG, openIdx + OPEN_TAG.length);
 		if (closeIdx === -1) {
-			// Unclosed tag — keep remaining content as-is
-			result += content.slice(cursor);
+			// Unclosed tag — fail closed: redact everything after it (the closing
+			// tag may have been cut off by truncation or live in another message).
+			result += content.slice(cursor, openIdx) + "[REDACTED]";
 			break;
 		}
 		// Append content before the tag, then the redaction marker

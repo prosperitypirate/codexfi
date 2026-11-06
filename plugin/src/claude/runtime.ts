@@ -54,41 +54,72 @@ export function isDisabled(cwd?: string): boolean {
 /** Claude Code replaces hook output above 10,000 chars with a stub — stay under it. */
 export const HOOK_OUTPUT_LIMIT = 9_500;
 
+interface Unit {
+	kind: "header" | "item" | "other";
+	lines: string[];
+}
+
+/** Split a [MEMORY] block into headers and memory items (bullet + its continuation lines). */
+function toUnits(text: string): Unit[] {
+	const units: Unit[] = [];
+	for (const line of text.split("\n")) {
+		if (line.startsWith("## ") || line.startsWith("[MEMORY]")) {
+			units.push({ kind: "header", lines: [line] });
+		} else if (line.startsWith("- ") || line.startsWith("> ")) {
+			units.push({ kind: "item", lines: [line] });
+		} else {
+			const cur = units[units.length - 1];
+			if (cur && cur.kind === "item") cur.lines.push(line);
+			else units.push({ kind: "other", lines: [line] });
+		}
+	}
+	return units;
+}
+
+const render = (units: Unit[]) => units.map((u) => u.lines.join("\n")).join("\n");
+
 /**
- * Trim a [MEMORY] block to `limit` chars by dropping whole trailing bullet
- * lines (never cutting mid-fact). Section headers left without bullets are
- * removed too.
+ * Trim a [MEMORY] block to `limit` chars by dropping whole memories from the end
+ * (a bullet together with its continuation lines — never half a fact). Section
+ * headers left without items are removed. A single oversized memory is cut
+ * with an ellipsis as a last resort.
  */
 export function fitToLimit(text: string, limit = HOOK_OUTPUT_LIMIT): string {
 	if (text.length <= limit) return text;
-	const lines = text.split("\n");
-	while (lines.join("\n").length > limit && lines.length > 1) {
-		// drop the last bullet (or continuation line) we can find
+	const units = toUnits(text);
+	while (render(units).length > limit) {
 		let idx = -1;
-		for (let i = lines.length - 1; i >= 0; i--) {
-			const l = lines[i]!;
-			if (l.startsWith("- ") || l.startsWith("> ") || l.startsWith("  >")) {
+		for (let i = units.length - 1; i >= 0; i--) {
+			if (units[i]!.kind === "item") {
 				idx = i;
 				break;
 			}
 		}
-		if (idx === -1) {
-			lines.pop();
-			continue;
-		}
-		lines.splice(idx, 1);
-		// drop continuation lines that belonged to the removed bullet
-		while (idx < lines.length && lines[idx]!.startsWith("  >")) lines.splice(idx, 1);
+		const items = units.filter((u) => u.kind === "item").length;
+		if (idx === -1 || items <= 1) break;
+		units.splice(idx, 1);
 	}
-	// remove headers with no remaining content
-	const out: string[] = [];
-	for (let i = 0; i < lines.length; i++) {
-		const l = lines[i]!;
-		if (l.startsWith("## ")) {
-			const next = lines.slice(i + 1).find((x) => x.trim() !== "");
-			if (!next || next.startsWith("## ")) continue;
-		}
-		out.push(l);
-	}
-	return out.join("\n");
+	// Drop headers that no longer introduce any item.
+	const kept = units.filter((u, i) => {
+		if (u.kind !== "header" || u.lines[0]!.startsWith("[MEMORY]")) return true;
+		const next = units.slice(i + 1).find((x) => x.kind !== "other" || x.lines.join("").trim() !== "");
+		return !!next && next.kind === "item";
+	});
+	const out = render(kept);
+	return out.length > limit ? out.slice(0, limit - 1) + "…" : out;
+}
+
+/**
+ * Of the memories offered to a block, return the ids that actually survived
+ * fitToLimit() — only those may be recorded as "already shown this session".
+ */
+export function survivingIds(fitted: string, items: Array<{ id: string; memory: string }>): string[] {
+	const norm = (s: string) => s.replace(/\s+/g, " ").trim();
+	const hay = norm(fitted);
+	return items
+		.filter((it) => {
+			const probe = norm(it.memory).slice(0, 80);
+			return probe.length > 0 && hay.includes(probe);
+		})
+		.map((it) => it.id);
 }

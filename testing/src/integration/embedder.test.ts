@@ -1,97 +1,152 @@
 /**
- * Integration tests for embedder.ts — Voyage AI embedding with mocked HTTP.
+ * Integration tests for embedder.ts — the local on-device embedding path.
  *
- * These tests mock fetch() to avoid real API calls while verifying the
- * embed() function's request format, error handling, and telemetry recording.
+ * @huggingface/transformers is mocked process-wide by preload.ts (no model
+ * download, no ONNX runtime): the fake pipeline records what embedder.ts sends
+ * it and returns deterministic bag-of-words vectors. This verifies the real
+ * embedder logic around the model — model selection, prefixes, input caps,
+ * query memoisation, cache dir, readiness and thresholds.
  *
- * IMPORTANT: VOYAGE_API_KEY is read at module evaluation time from config.ts.
- * We use Bun's mock.module() to override the config export before embedder loads.
+ * The Voyage provider is chosen at import time (EMBEDDING_PROVIDER), so it is
+ * not exercised in this process; its request shape is unchanged from 0.7.x.
  */
 
-import { describe, test, expect, afterEach, mock } from "bun:test";
-import { installFetchMock, restoreFetch, voyageEmbedResponse } from "../helpers/mock-fetch.js";
-import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { join } from "node:path";
 
-// Mock the config module to provide a fake VOYAGE_API_KEY for testing.
-// This must happen before embedder.ts is imported.
-mock.module("../../../plugin/src/config.js", () => {
-	// Re-export everything from the real config, but override VOYAGE_API_KEY
-	const realConfig = require("../../../plugin/src/config.js");
-	return {
-		...realConfig,
-		VOYAGE_API_KEY: "test-voyage-key-for-unit-tests",
-	};
+import {
+	activeThresholds,
+	currentEmbedModelId,
+	DEFAULT_LOCAL_MODEL,
+	embed,
+	embedBatch,
+	embedderInfo,
+	isEmbedderReady,
+	isLocalRuntimeAvailable,
+	LOCAL_MODELS,
+	modelCacheDir,
+	_resetEmbedderForTests,
+} from "../../../plugin/src/embedder.js";
+import { PLUGIN_CONFIG } from "../../../plugin/src/plugin-config.js";
+import { bowVector, resetTransformersState, transformersState } from "../helpers/mock-embedder.js";
+import { markEmbedderMissing, markEmbedderReady, TEST_DATA_DIR } from "../helpers/test-env.js";
+
+const savedLocalModel = process.env.CODEXFI_LOCAL_MODEL;
+
+beforeEach(() => {
+	_resetEmbedderForTests();
+	resetTransformersState();
 });
-
-const { embed } = await import("../../../plugin/src/embedder.js");
 
 afterEach(() => {
-	restoreFetch();
+	if (savedLocalModel === undefined) delete process.env.CODEXFI_LOCAL_MODEL;
+	else process.env.CODEXFI_LOCAL_MODEL = savedLocalModel;
+	PLUGIN_CONFIG.similarityThreshold = undefined;
+	PLUGIN_CONFIG.displaySimilarityThreshold = undefined;
+	_resetEmbedderForTests();
 });
 
-describe("embed", () => {
-	test("returns a vector of correct dimensions", async () => {
-		const expectedVector = new Array(EMBEDDING_DIMS).fill(0.5);
-		installFetchMock({
-			"api.voyageai.com": voyageEmbedResponse(expectedVector),
-		});
-
-		const result = await embed("hello world", "document");
-		expect(result).toEqual(expectedVector);
-		expect(result.length).toBe(EMBEDDING_DIMS);
+describe("embedderInfo", () => {
+	test("defaults to the local default model, tagged local:<name>", () => {
+		const info = embedderInfo();
+		expect(info.provider).toBe("local");
+		expect(info.model).toBe(DEFAULT_LOCAL_MODEL);
+		expect(info.id).toBe(`local:${DEFAULT_LOCAL_MODEL}`);
+		expect(info.dims).toBe(LOCAL_MODELS[DEFAULT_LOCAL_MODEL]!.dims);
+		expect(currentEmbedModelId()).toBe(info.id);
 	});
 
-	test("sends correct model and input", async () => {
-		let capturedBody: Record<string, unknown> | null = null;
-		const originalFetch = globalThis.fetch;
-
-		// @ts-expect-error — Bun's fetch type includes preconnect; test mock omits it
-		globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-			if (init?.body) {
-				capturedBody = JSON.parse(init.body as string);
-			}
-			return new Response(JSON.stringify({
-				data: [{ embedding: new Array(EMBEDDING_DIMS).fill(0) }],
-				usage: { total_tokens: 5 },
-			}), { status: 200, headers: { "Content-Type": "application/json" } });
-		};
-
-		await embed("test text", "document");
-
-		expect(capturedBody).not.toBeNull();
-		expect(capturedBody!.model).toBe("voyage-code-3");
-		expect(capturedBody!.input).toEqual(["test text"]);
-		expect(capturedBody!.input_type).toBe("document");
-
-		globalThis.fetch = originalFetch;
+	test("CODEXFI_LOCAL_MODEL selects another registered model; unknown names fall back", () => {
+		process.env.CODEXFI_LOCAL_MODEL = "all-MiniLM-L6-v2";
+		expect(embedderInfo().id).toBe("local:all-MiniLM-L6-v2");
+		expect(embedderInfo().dims).toBe(384);
+		process.env.CODEXFI_LOCAL_MODEL = "no-such-model";
+		expect(embedderInfo().model).toBe(DEFAULT_LOCAL_MODEL);
 	});
 
-	test("sends query input type for search embeddings", async () => {
-		let capturedBody: Record<string, unknown> | null = null;
+	test("model weights are cached under DATA_DIR/models", () => {
+		expect(modelCacheDir()).toBe(join(TEST_DATA_DIR, "models"));
+		expect(embedderInfo().cacheDir).toBe(modelCacheDir());
+	});
+});
 
-		// @ts-expect-error — Bun's fetch type includes preconnect; test mock omits it
-		globalThis.fetch = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
-			if (init?.body) {
-				capturedBody = JSON.parse(init.body as string);
-			}
-			return new Response(JSON.stringify({
-				data: [{ embedding: new Array(EMBEDDING_DIMS).fill(0) }],
-				usage: { total_tokens: 5 },
-			}), { status: 200, headers: { "Content-Type": "application/json" } });
-		};
-
-		await embed("search query", "query");
-
-		expect(capturedBody!.input_type).toBe("query");
-
-		restoreFetch();
+describe("local embedding", () => {
+	test("loads the model's ONNX repo once with its dtype", async () => {
+		await embed("first");
+		await embed("second");
+		expect(transformersState.pipelineCalls).toHaveLength(1);
+		const spec = LOCAL_MODELS[DEFAULT_LOCAL_MODEL]!;
+		expect(transformersState.pipelineCalls[0]).toEqual({ task: "feature-extraction", repo: spec.repo, opts: { dtype: spec.dtype } });
 	});
 
-	test("throws on API error after retries", async () => {
-		installFetchMock({
-			"api.voyageai.com": () => new Response("Rate limited", { status: 429 }),
-		});
+	test("returns the model's vector for a document", async () => {
+		expect(await embed("SQLite runs in WAL mode")).toEqual(bowVector("SQLite runs in WAL mode"));
+	});
 
-		await expect(embed("test", "document")).rejects.toThrow("Voyage AI API error 429");
+	test("query vs document prefixes follow the model spec", async () => {
+		process.env.CODEXFI_LOCAL_MODEL = "all-MiniLM-L6-v2";
+		const spec = LOCAL_MODELS["all-MiniLM-L6-v2"]!;
+		await embed("find the auth code", "query");
+		await embed("auth lives in src/auth", "document");
+		expect(transformersState.inputs[0]).toEqual([`${spec.queryPrefix ?? ""}find the auth code`]);
+		expect(transformersState.inputs[1]).toEqual([`${spec.documentPrefix ?? ""}auth lives in src/auth`]);
+	});
+
+	test("long inputs are capped at ~4 chars per model token", async () => {
+		const spec = LOCAL_MODELS[DEFAULT_LOCAL_MODEL]!;
+		await embed("w".repeat(spec.maxTokens * 4 + 1000));
+		expect(transformersState.inputs[0]![0]!.length).toBe((spec.documentPrefix ?? "").length + spec.maxTokens * 4);
+	});
+
+	test("query embeddings are memoised; documents are not", async () => {
+		await embed("same query", "query");
+		await embed("same query", "query");
+		expect(transformersState.inputs).toHaveLength(1);
+		await embed("same doc", "document");
+		await embed("same doc", "document");
+		expect(transformersState.inputs).toHaveLength(3);
+	});
+
+	test("embedBatch sends one batch and preserves order; empty input short-circuits", async () => {
+		const texts = ["one fish", "two fish", "red fish"];
+		expect(await embedBatch(texts)).toEqual(texts.map((t) => bowVector(t)));
+		expect(transformersState.inputs).toEqual([texts]);
+		expect(await embedBatch([])).toEqual([]);
+		expect(transformersState.inputs).toHaveLength(1);
+	});
+
+	test("the local runtime is reported available", async () => {
+		expect(await isLocalRuntimeAvailable()).toBe(true);
+	});
+});
+
+describe("isEmbedderReady", () => {
+	test("false until the model weights exist on disk, true after", async () => {
+		await markEmbedderMissing();
+		expect(isEmbedderReady()).toBe(false);
+		await markEmbedderReady();
+		expect(isEmbedderReady()).toBe(true);
+		await markEmbedderMissing();
+	});
+});
+
+describe("activeThresholds", () => {
+	test("model-specific defaults, with codexfi.jsonc overrides winning", () => {
+		const base = LOCAL_MODELS[DEFAULT_LOCAL_MODEL]!.thresholds;
+		expect(activeThresholds()).toEqual(base);
+		PLUGIN_CONFIG.similarityThreshold = 0.9;
+		PLUGIN_CONFIG.displaySimilarityThreshold = 0.95;
+		expect(activeThresholds()).toEqual({ ...base, similarity: 0.9, display: 0.95 });
+	});
+
+	test("every registered model defines sane thresholds", () => {
+		for (const [name, spec] of Object.entries(LOCAL_MODELS)) {
+			const t = spec.thresholds;
+			expect(t.dedupDistance, name).toBeGreaterThan(0);
+			expect(t.structuralDedupDistance, name).toBeGreaterThanOrEqual(t.dedupDistance);
+			expect(t.contradictionDistance, name).toBeGreaterThan(t.dedupDistance);
+			expect(t.display, name).toBeGreaterThanOrEqual(t.similarity);
+		}
 	});
 });

@@ -68,12 +68,24 @@ export function open(dbPath: string): void {
  * Each step checks the live schema first, so it is safe to run on every open.
  */
 function migrate(conn: DatabaseLike): void {
-	const cols = conn.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
-	if (!cols.some((c) => c.name === "embed_model")) {
-		conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
-		// Every pre-1.0 row was embedded with Voyage — label them so the local
-		// re-embed job can find and migrate them.
-		conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+	const hasColumn = () =>
+		(conn.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>).some((c) => c.name === "embed_model");
+	if (hasColumn()) return;
+	// Several hook/worker processes may open an old database at the same moment.
+	// BEGIN IMMEDIATE takes the write lock (waiting up to busy_timeout), and the
+	// column is re-checked inside the transaction so only the first one migrates.
+	conn.run("BEGIN IMMEDIATE");
+	try {
+		if (!hasColumn()) {
+			conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
+			// Every pre-1.0 row was embedded with Voyage — label them so the local
+			// re-embed pass can find and migrate them.
+			conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+		}
+		conn.run("COMMIT");
+	} catch (e) {
+		try { conn.run("ROLLBACK"); } catch { /* already rolled back */ }
+		if (!hasColumn()) throw e;
 	}
 }
 

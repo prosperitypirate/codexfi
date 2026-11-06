@@ -19,13 +19,13 @@ import { runAutoInit } from "./auto-init.js";
 import { ensureInit } from "./runtime.js";
 import {
 	acquireWorkerLock,
+	claimJob,
 	listJobs,
 	loadSession,
 	logLine,
-	readJob,
 	releaseWorkerLock,
-	removeJob,
 	saveSession,
+	touchWorkerLock,
 	workerRunning,
 	type Job,
 } from "./state.js";
@@ -37,31 +37,68 @@ function sanitize(messages: TranscriptMessage[]): Array<{ role: string; content:
 	return messages.map((m) => ({ role: m.role, content: stripPrivateContent(m.content) }));
 }
 
-async function processTurn(job: Job): Promise<number> {
+/** After this many consecutive failed extraction attempts for a session, skip the stuck span. */
+const MAX_CONSECUTIVE_FAILURES = 5;
+
+/**
+ * Extract everything appended to the session's transcript since its saved offset.
+ *
+ * - The offset only advances after every window was stored, so an LLM outage
+ *   (offline, rate limit, logged out) retries on the next turn instead of
+ *   silently dropping the turn. Completed windows are remembered (`doneWindows`)
+ *   so a retry never re-extracts them.
+ * - A very short exchange ("use pnpm" / "ok") is left pending and extracted
+ *   together with the next turn — unless `flush` (session end / compaction).
+ */
+async function processTurn(job: Job, opts: { flush?: boolean } = {}): Promise<number> {
 	if (!job.transcriptPath || !job.sessionId) return 0;
-	const state = loadSession(job.sessionId);
+	const sessionId = job.sessionId;
+	const state = loadSession(sessionId);
 	const chunk = readTranscriptFrom(job.transcriptPath, state.transcriptOffset);
 	if (chunk.messages.length === 0) {
-		if (chunk.nextOffset !== state.transcriptOffset) saveSession(job.sessionId, { ...state, transcriptOffset: chunk.nextOffset });
+		if (chunk.nextOffset !== state.transcriptOffset) {
+			saveSession(sessionId, { ...state, transcriptOffset: chunk.nextOffset, doneWindows: 0 });
+		}
 		return 0;
 	}
 
-	let stored = 0;
 	const conversationChars = renderConversation(chunk.messages).length;
-	if (conversationChars >= MIN_EXCHANGE_CHARS) {
-		for (const window of windowMessages(chunk.messages, MAX_CONTENT_CHARS)) {
-			const results = await store.ingest(sanitize(window), job.projectTag, {
-				metadata: { source: "claude-code", session_id: job.sessionId, date: today() },
+	if (conversationChars < MIN_EXCHANGE_CHARS && !opts.flush) return 0;
+
+	let stored = 0;
+	const windows = conversationChars >= MIN_EXCHANGE_CHARS ? windowMessages(chunk.messages, MAX_CONTENT_CHARS) : [];
+	const alreadyDone = chunk.reset ? 0 : (state.doneWindows ?? 0);
+	for (let i = alreadyDone; i < windows.length; i++) {
+		try {
+			const results = await store.ingest(sanitize(windows[i]!), job.projectTag, {
+				metadata: { source: "claude-code", session_id: sessionId, date: today() },
 			});
 			stored += results.length;
+			const progress = loadSession(sessionId);
+			saveSession(sessionId, { ...progress, doneWindows: i + 1 });
+		} catch (e) {
+			const latest = loadSession(sessionId);
+			const failures = (latest.failures ?? 0) + 1;
+			const giveUp = failures >= MAX_CONSECUTIVE_FAILURES;
+			logLine("worker", giveUp ? "extraction failed repeatedly — skipping this span" : "extraction failed — will retry next turn", {
+				session: sessionId,
+				failures,
+				error: e instanceof Error ? e.message : String(e),
+			});
+			saveSession(sessionId, giveUp
+				? { ...latest, transcriptOffset: chunk.nextOffset, doneWindows: 0, failures: 0 }
+				: { ...latest, failures });
+			return stored;
 		}
 	}
 
 	// Re-load before saving: a hook may have appended injected ids meanwhile.
-	const latest = loadSession(job.sessionId);
-	saveSession(job.sessionId, {
+	const latest = loadSession(sessionId);
+	saveSession(sessionId, {
 		...latest,
 		transcriptOffset: chunk.nextOffset,
+		doneWindows: 0,
+		failures: 0,
 		turns: latest.turns + 1,
 		cwd: job.cwd,
 		transcriptPath: job.transcriptPath,
@@ -119,7 +156,7 @@ async function processJob(job: Job): Promise<number> {
 		case "summary":
 			// Flush any unextracted tail first so the summary isn't the only record.
 			await settle(job);
-			await processTurn(job);
+			await processTurn(job, { flush: true });
 			return processSummary(job);
 		case "warmup":
 			// Loading the embedder downloads the model weights on first use.
@@ -150,9 +187,9 @@ export async function runWorker(): Promise<void> {
 			const jobs = listJobs();
 			if (jobs.length === 0) break;
 			for (const name of jobs) {
-				const job = readJob(name);
-				removeJob(name);
+				const job = claimJob(name);
 				if (!job) continue;
+				touchWorkerLock();
 				const t0 = Date.now();
 				try {
 					const n = await processJob(job);

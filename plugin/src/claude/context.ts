@@ -78,6 +78,8 @@ function sessionsOnly(byType: Record<string, StructuredMemory[]>, since?: number
 export interface SessionContext {
 	text: string;
 	injectedIds: string[];
+	/** Memories offered to the block (id + text) — used to compute what survived trimming. */
+	injectedItems: Array<{ id: string; memory: string }>;
 	memoryBank: MemoryBankInfo | null;
 	projectMemoryCount: number;
 }
@@ -106,12 +108,15 @@ export async function buildSessionContext(
 		);
 	}
 
-	const injectedIds = [
-		...Object.values(byType).flat().map((m) => m.id),
-		...profileRows.map((p) => p.id),
+	const injectedItems = [
+		...Object.values(byType).flat().map((m) => ({ id: m.id, memory: m.memory ?? "" })),
+		...profileRows.map((p) => ({ id: p.id, memory: p.memory })),
 	];
-	const projectMemoryCount = Object.values(full).reduce((n, items) => n + items.length, 0);
-	return { text, injectedIds, memoryBank: bank, projectMemoryCount };
+	const injectedIds = injectedItems.map((i) => i.id);
+	// Any stored memory counts — not only the structural types rendered above —
+	// so a project with only atomic memories doesn't re-queue auto-init forever.
+	const projectMemoryCount = (await store.list(projectTag, { limit: 1_000_000 })).length;
+	return { text, injectedIds, injectedItems, memoryBank: bank, projectMemoryCount };
 }
 
 function toMinimal(rows: SearchResult[]): MemoriesResponseMinimal {
@@ -128,6 +133,7 @@ function toMinimal(rows: SearchResult[]): MemoriesResponseMinimal {
 export interface PromptContext {
 	text: string;
 	injectedIds: string[];
+	injectedItems: Array<{ id: string; memory: string }>;
 }
 
 /**
@@ -173,5 +179,5 @@ export async function buildPromptContext(
 		text = `${text || "[MEMORY]"}\n\n## Also on Record (matched by type for this list-style request)\n${lines.join("\n")}`;
 	}
 	const shown = [...userFresh, ...semantic].filter((r) => r.score >= display).concat(extras);
-	return { text, injectedIds: shown.map((r) => r.id) };
+	return { text, injectedIds: shown.map((r) => r.id), injectedItems: shown.map((r) => ({ id: r.id, memory: r.memory })) };
 }

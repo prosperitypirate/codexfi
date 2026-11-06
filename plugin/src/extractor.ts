@@ -6,7 +6,7 @@
  */
 
 import { MAX_CONTENT_CHARS, MAX_SUMMARY_CHARS } from "./config.js";
-import { callLlm } from "./llm.js";
+import { callLlm, callLlmStrict } from "./llm.js";
 import {
 	CONDENSE_SYSTEM,
 	CONDENSE_USER,
@@ -115,16 +115,18 @@ export async function extractMemories(
 
 	const truncated = conversation.slice(0, MAX_CONTENT_CHARS);
 
+	// Strict: an LLM failure must surface to the caller (the worker keeps the
+	// transcript offset and retries) instead of looking like "nothing to extract".
 	let raw: string;
 	switch (mode) {
 		case "init":
-			raw = await callLlm(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated), { operation: "init" });
+			raw = (await callLlmStrict(INIT_EXTRACTION_SYSTEM, INIT_EXTRACTION_USER.replace("{content}", truncated), { operation: "init" })).text;
 			break;
 		case "summary":
-			raw = await callLlm(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated), { operation: "summary" });
+			raw = (await callLlmStrict(SUMMARY_SYSTEM, SUMMARY_USER.replace("{conversation}", truncated), { operation: "summary" })).text;
 			break;
 		default:
-			raw = await callLlm(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated), { operation: "extraction" });
+			raw = (await callLlmStrict(EXTRACTION_SYSTEM, EXTRACTION_USER.replace("{conversation}", truncated), { operation: "extraction" })).text;
 			break;
 	}
 

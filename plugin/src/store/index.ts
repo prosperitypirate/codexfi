@@ -8,7 +8,7 @@
 import { join } from "node:path";
 import { DATA_DIR } from "../config.js";
 import { open, getDb, _openForTests, _resetForTests as _sqliteReset } from "./sqlite.js";
-import { add, bulkAdd, update, deleteById, getById, countRows, scan } from "./crud.js";
+import { add, bulkAdd, update, deleteById, getById, countRows, scan, staleEmbeddingRows } from "./crud.js";
 import { search } from "./search.js";
 
 // Re-export types so consumers import from a single location
@@ -21,7 +21,7 @@ export type {
 } from "./types.js";
 
 // Re-export CRUD + search (unchanged signatures)
-export { add, bulkAdd, update, deleteById, getById, countRows, scan, search };
+export { add, bulkAdd, update, deleteById, getById, countRows, scan, staleEmbeddingRows, search };
 
 // ── Lifecycle ───────────────────────────────────────────────────────────────────
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # codexfi launcher — runs the bundled CLI with whichever JS runtime is present.
-# Prefers Bun (fastest startup), then Node >= 22.5 (needs the built-in node:sqlite).
+# Prefers Bun (fastest startup), then Node >= 22.13 (built-in node:sqlite without a flag).
 # Exits 0 silently when no runtime is found: a memory plugin must never break a session.
 DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 ENTRY="$DIR/dist/codexfi.js"
@@ -16,10 +16,10 @@ if [ -n "$BUN" ]; then
 fi
 
 NODE="$(command -v node 2>/dev/null)"
-if [ -n "$NODE" ] && "$NODE" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=5)?0:1)' 2>/dev/null; then
+if [ -n "$NODE" ] && "$NODE" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>22||(a===22&&b>=13)?0:1)' 2>/dev/null; then
   exec "$NODE" "$ENTRY" "$@"
 fi
 
 LOGDIR="${CODEXFI_DATA_DIR:-$HOME/.codexfi}/logs"
-mkdir -p "$LOGDIR" 2>/dev/null && echo "no usable runtime (need bun, or node >= 22.5) for: $*" >> "$LOGDIR/launcher.log"
+mkdir -p "$LOGDIR" 2>/dev/null && echo "no usable runtime (need bun, or node >= 22.13) for: $*" >> "$LOGDIR/launcher.log"
 exit 0

@@ -141,6 +141,16 @@ export function getById(id: string): MemoryRecord | undefined {
 	return row ? rowToRecord(row) : undefined;
 }
 
+/**
+ * Ids + text of rows whose vector came from a different embedding model —
+ * a light query (no vectors / chunks) for the re-embed pass.
+ */
+export function staleEmbeddingRows(currentModel: string, limit: number): Array<{ id: string; memory: string }> {
+	return getDb()
+		.prepare("SELECT id, memory FROM memories WHERE embed_model != ? LIMIT ?")
+		.all(currentModel, limit) as Array<{ id: string; memory: string }>;
+}
+
 /** Total number of records (including superseded). */
 export function countRows(): number {
 	const row = getDb().prepare("SELECT COUNT(*) as cnt FROM memories").get() as { cnt: number };

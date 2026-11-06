@@ -64,6 +64,9 @@ export function detectMemoryKeyword(text: string): boolean {
 	return MEMORY_KEYWORD_PATTERN.test(withoutCode);
 }
 
+/** Leave room for REMEMBER_NOTE under Claude Code's 10k cap. */
+const HOOK_LIMIT_WITH_NOTE = 9_000;
+
 const REMEMBER_NOTE =
 	"Note from codexfi: the user asked for something to be remembered. The codexfi `memory_add` tool stores it " +
 	"permanently (scope \"project\" for this repo, \"user\" for cross-project preferences); turns are also " +
@@ -76,16 +79,18 @@ async function onSessionStart(input: HookInput, cwd: string): Promise<void> {
 	// again would duplicate it and bust the prompt cache.
 	if (input.source === "resume") return;
 
-	const { ensureInit, tagsFor, fitToLimit } = await import("./runtime.js");
+	const { ensureInit, tagsFor, fitToLimit, survivingIds } = await import("./runtime.js");
 	const { buildSessionContext } = await import("./context.js");
 	await ensureInit();
 	const tags = tagsFor(cwd);
 
 	const ctx = await buildSessionContext(tags.project, tags.user, cwd);
 
-	// Fresh context window (startup / clear / compact): nothing has been shown yet.
+	const fitted = fitToLimit(ctx.text);
+	// Fresh context window (startup / clear / compact): only what survived trimming
+	// counts as shown.
 	const state = loadSession(input.session_id);
-	saveSession(input.session_id, { ...state, injected: ctx.injectedIds, cwd, transcriptPath: input.transcript_path });
+	saveSession(input.session_id, { ...state, injected: survivingIds(fitted, ctx.injectedItems), cwd, transcriptPath: input.transcript_path });
 
 	const { isEmbedderReady } = await import("../embedder.js");
 	if (!isEmbedderReady()) {
@@ -97,14 +102,14 @@ async function onSessionStart(input: HookInput, cwd: string): Promise<void> {
 		spawnWorker();
 	}
 	pruneSessions();
-	emitContext("session-start", fitToLimit(ctx.text));
+	emitContext("session-start", fitted);
 }
 
 async function onUserPromptSubmit(input: HookInput): Promise<void> {
 	const prompt = (input.prompt ?? "").trim();
 	if (prompt.length < 3) return;
 
-	const cwd = input.cwd ?? process.cwd();
+	const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
 	const { isEmbedderReady } = await import("../embedder.js");
 	if (!isEmbedderReady()) {
 		// First run: never download model weights inside the prompt hook.
@@ -114,22 +119,24 @@ async function onUserPromptSubmit(input: HookInput): Promise<void> {
 		if (detectMemoryKeyword(prompt)) emitContext("user-prompt-submit", REMEMBER_NOTE);
 		return;
 	}
-	const { ensureInit, tagsFor, fitToLimit } = await import("./runtime.js");
+	const { ensureInit, tagsFor, fitToLimit, survivingIds } = await import("./runtime.js");
 	const { buildPromptContext } = await import("./context.js");
 	await ensureInit();
 	const tags = tagsFor(cwd);
 
 	const state = loadSession(input.session_id);
 	const ctx = await buildPromptContext(prompt, tags.project, tags.user, new Set(state.injected));
-	if (ctx.injectedIds.length > 0) {
+	const fitted = fitToLimit(ctx.text, HOOK_LIMIT_WITH_NOTE);
+	const shown = survivingIds(fitted, ctx.injectedItems);
+	if (shown.length > 0) {
 		// Re-load: the worker may have advanced the transcript offset meanwhile.
 		const latest = loadSession(input.session_id);
-		saveSession(input.session_id, { ...latest, injected: [...latest.injected, ...ctx.injectedIds] });
+		saveSession(input.session_id, { ...latest, injected: [...latest.injected, ...shown] });
 	}
 
-	let text = ctx.text;
+	let text = fitted;
 	if (detectMemoryKeyword(prompt)) text = text ? `${text}\n\n${REMEMBER_NOTE}` : REMEMBER_NOTE;
-	emitContext("user-prompt-submit", fitToLimit(text));
+	emitContext("user-prompt-submit", text);
 }
 
 function enqueueFromHook(kind: "turn" | "summary", input: HookInput, cwd: string, reason?: string): void {
@@ -158,7 +165,9 @@ export async function runHook(event: HookEvent, rawInput?: string): Promise<void
 	} catch {
 		input = {};
 	}
-	const cwd = input.cwd ?? process.cwd();
+	// Key memory by the project root, not the shell's current subdirectory, so a
+	// `cd src/` mid-session doesn't split the project into two memory scopes.
+	const cwd = process.env.CLAUDE_PROJECT_DIR || input.cwd || process.cwd();
 	if (isDisabled(cwd)) return;
 	// Subagent hook traffic is exploration noise — memory serves the main thread.
 	if (input.agent_id) return;

@@ -4,12 +4,13 @@
  * formatContextForPrompt is a pure function with zero network calls.
  * Tests cover all changes introduced in design doc 010 (Richer [MEMORY] Block):
  *   - architecture-pattern rendering with '> pattern:' prefix
- *   - displaySimilarityThreshold filtering (< 0.60 excluded)
+ *   - display-threshold filtering (model-specific floor, see embedder.ts)
  *   - Recent Sessions (up to 3, with condensation)
  *   - Active Context 2,000-char render cap
  *   - Full [MEMORY] block structure with all new sections
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect } from "bun:test";
 import {
 	formatContextForPrompt,
@@ -20,6 +21,7 @@ import {
 	type ProfileResult,
 	type MemoriesResponseMinimal,
 } from "../../../plugin/src/services/context.js";
+import { activeThresholds } from "../../../plugin/src/embedder.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -82,16 +84,21 @@ describe("architecture-pattern rendering", () => {
 	});
 });
 
-// ── displaySimilarityThreshold filtering ─────────────────────────────────────
+// ── Display threshold filtering ──────────────────────────────────────────────
+// The display floor is model-specific (embedder.ts activeThresholds().display;
+// a displaySimilarityThreshold in codexfi.jsonc overrides it), so scores here
+// are expressed relative to the active value.
 
-describe("displaySimilarityThreshold filtering", () => {
-	test("memories below 0.60 similarity are excluded from Relevant section", () => {
+describe("display threshold filtering", () => {
+	const D = activeThresholds().display;
+
+	test("memories below the display threshold are excluded from Relevant section", () => {
 		const semantic: MemoriesResponseMinimal = {
 			results: [
-				makeSemanticResult("High relevance memory", 0.85),
-				makeSemanticResult("Medium relevance memory", 0.62),
-				makeSemanticResult("Below threshold memory", 0.58),
-				makeSemanticResult("Low relevance memory", 0.45),
+				makeSemanticResult("High relevance memory", Math.min(1, D + 0.25)),
+				makeSemanticResult("Medium relevance memory", D + 0.02),
+				makeSemanticResult("Below threshold memory", D - 0.02),
+				makeSemanticResult("Low relevance memory", D - 0.15),
 			],
 		};
 
@@ -104,9 +111,9 @@ describe("displaySimilarityThreshold filtering", () => {
 		expect(block).not.toContain("Low relevance memory");
 	});
 
-	test("memories at exactly 0.60 are included (inclusive threshold)", () => {
+	test("memories exactly at the display threshold are included (inclusive)", () => {
 		const semantic: MemoriesResponseMinimal = {
-			results: [makeSemanticResult("At threshold memory", 0.60)],
+			results: [makeSemanticResult("At threshold memory", D)],
 		};
 
 		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, undefined);
@@ -117,9 +124,9 @@ describe("displaySimilarityThreshold filtering", () => {
 	test("when all memories are below threshold, Relevant section is omitted", () => {
 		const semantic: MemoriesResponseMinimal = {
 			results: [
-				makeSemanticResult("Low score 1", 0.45),
-				makeSemanticResult("Low score 2", 0.50),
-				makeSemanticResult("Low score 3", 0.55),
+				makeSemanticResult("Low score 1", D - 0.15),
+				makeSemanticResult("Low score 2", D - 0.1),
+				makeSemanticResult("Low score 3", D - 0.05),
 			],
 		};
 
@@ -468,15 +475,15 @@ describe("cross-section dedup", () => {
 		expect(block).toContain("## Relevant to Current Task");
 	});
 
-	test("below displaySimilarityThreshold, a semantic hit does NOT suppress the structural bullet", () => {
-		// Only hits >= displaySimilarityThreshold (0.60) are even shown under
+	test("below the display threshold, a semantic hit does NOT suppress the structural bullet", () => {
+		// Only hits >= the display threshold are even shown under
 		// Relevant to Current Task, so only those should count for dedup —
 		// otherwise a low-confidence hit could silently delete a structural fact.
 		const byType = {
 			"tech-context": [makeMemory("tc1", "Uses PostgreSQL 15", "tech-context")],
 		};
 		const semantic: MemoriesResponseMinimal = {
-			results: [makeSemanticResult("Uses PostgreSQL 15", 0.40)],
+			results: [makeSemanticResult("Uses PostgreSQL 15", activeThresholds().display - 0.1)],
 		};
 
 		const block = formatContextForPrompt(EMPTY_PROFILE, EMPTY_USER, semantic, byType);

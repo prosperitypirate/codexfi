@@ -1,18 +1,19 @@
 /**
  * Fetch mock utilities for tests that need to intercept HTTP calls
- * to external APIs (Voyage AI, Anthropic, xAI, Google).
+ * to external APIs (Voyage AI, Anthropic Messages API).
  *
  * Uses Bun's native mock() to replace global fetch.
  */
 
 import { mock } from "bun:test";
-import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
+
+const VOYAGE_DIMS = 1024;
 
 /**
  * Create a mock Voyage AI embedding response.
  */
 export function voyageEmbedResponse(vector?: number[]): Response {
-	const v = vector ?? new Array(EMBEDDING_DIMS).fill(0.1);
+	const v = vector ?? new Array(VOYAGE_DIMS).fill(0.1);
 	return new Response(JSON.stringify({
 		data: [{ embedding: v }],
 		usage: { total_tokens: 10 },

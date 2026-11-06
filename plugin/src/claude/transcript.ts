@@ -21,6 +21,8 @@
 
 import { closeSync, fstatSync, openSync, readSync } from "node:fs";
 
+import { stripPrivateContent } from "../services/privacy.js";
+
 export interface TranscriptMessage {
 	role: "user" | "assistant";
 	content: string;
@@ -106,12 +108,15 @@ export function recordsToMessages(records: unknown[]): TranscriptMessage[] {
 		if (!raw || typeof raw !== "object") continue;
 		const r = raw as Record<string, unknown>;
 		if (r.isSidechain === true || r.isMeta === true) continue;
+		// Compaction summaries are Claude Code's own recap of earlier turns (which
+		// were already extracted) and can embed injected [MEMORY] text — skip.
+		if (r.isCompactSummary === true || r.isVisibleInTranscriptOnly === true) continue;
 		const ts = typeof r.timestamp === "string" ? r.timestamp : undefined;
 
 		if (r.type === "attachment") {
 			const a = r.attachment as Record<string, unknown> | undefined;
 			if (a?.type === "queued_command") {
-				push("user", cleanUserText(textFromBlocks(a.prompt)), ts);
+				push("user", stripPrivateContent(cleanUserText(textFromBlocks(a.prompt))), ts);
 			}
 			continue;
 		}
@@ -121,14 +126,18 @@ export function recordsToMessages(records: unknown[]): TranscriptMessage[] {
 
 		if (r.type === "user" && msg.role === "user") {
 			if (typeof msg.content === "string") {
-				push("user", cleanUserText(msg.content), ts);
+				push("user", stripPrivateContent(cleanUserText(msg.content)), ts);
 				continue;
 			}
 			if (!Array.isArray(msg.content)) continue;
-			for (const b of msg.content as Array<Record<string, unknown>>) {
-				if (b?.type === "text") push("user", cleanUserText(String(b.text ?? "")), ts);
-				else if (b?.type === "tool_result" && b.is_error === true) {
-					push("user", `[tool-error] ${cap(toolResultText(b).trim(), TOOL_ERROR_CAP)}`, ts);
+			const blocks = msg.content as Array<Record<string, unknown>>;
+			// Join all text blocks of the record BEFORE stripping <private> spans, so
+			// a tag opened in one block and closed in another is still redacted.
+			const text = blocks.filter((b) => b?.type === "text").map((b) => String(b.text ?? "")).join("\n");
+			if (text) push("user", stripPrivateContent(cleanUserText(text)), ts);
+			for (const b of blocks) {
+				if (b?.type === "tool_result" && b.is_error === true) {
+					push("user", `[tool-error] ${cap(stripPrivateContent(toolResultText(b).trim()), TOOL_ERROR_CAP)}`, ts);
 				}
 			}
 			continue;
@@ -136,12 +145,12 @@ export function recordsToMessages(records: unknown[]): TranscriptMessage[] {
 
 		if (r.type === "assistant" && msg.role === "assistant") {
 			if (typeof msg.content === "string") {
-				push("assistant", msg.content, ts);
+				push("assistant", stripPrivateContent(msg.content), ts);
 				continue;
 			}
 			if (!Array.isArray(msg.content)) continue;
 			for (const b of msg.content as Array<Record<string, unknown>>) {
-				if (b?.type === "text") push("assistant", String(b.text ?? ""), ts);
+				if (b?.type === "text") push("assistant", stripPrivateContent(String(b.text ?? "")), ts);
 				else if (b?.type === "tool_use") push("assistant", describeToolUse(b as { name?: string; input?: Record<string, unknown> }), ts);
 			}
 		}

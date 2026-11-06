@@ -1,0 +1,5 @@
+[test]
+# Isolates every test run from the developer's machine BEFORE any plugin module
+# loads: temp HOME + CODEXFI_DATA_DIR, fake `claude` binary, mocked local
+# embedding model and mocked LLM. See src/helpers/preload.ts.
+preload = ["./src/helpers/preload.ts"]

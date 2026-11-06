@@ -7,13 +7,13 @@
  * ~/.codexfi/store.db.
  */
 
+import "../helpers/preload.js"; // sandbox first: plugin modules read env/HOME at import time
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { mkdtempSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import * as vs from "../../../plugin/src/store/index.js";
-import { EMBEDDING_DIMS } from "../../../plugin/src/config.js";
-import { deterministicVector } from "../helpers/mock-embedder.js";
+import { deterministicVector, MOCK_DIMS as EMBEDDING_DIMS } from "../helpers/mock-embedder.js";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -23,7 +23,7 @@ import { deterministicVector } from "../helpers/mock-embedder.js";
  * Defaults:
  *   - `userId`       → "u1"
  *   - `superseded_by` → "" (active, not superseded)
- *   - `vector`       → deterministicVector(text) — repeatable 1024-dim float array
+ *   - `vector`       → deterministicVector(text) — repeatable 384-dim float array
  *   - `type`         → "tech-context"
  *   - `hash`         → id  (good enough for uniqueness in tests)
  */

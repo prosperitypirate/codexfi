@@ -94,6 +94,7 @@ class CostLedger {
 
 	/** Record one LLM completion (claude-cli or anthropic-api). */
 	async recordLlm(backend: string, model: string, promptTokens: number, completionTokens: number, costUsd: number): Promise<void> {
+		await this.load(); // other processes write costs.json too — merge, don't clobber
 		const b = this.bucket(backend);
 		b.calls++;
 		b.prompt_tokens += promptTokens;
@@ -106,6 +107,7 @@ class CostLedger {
 
 	/** Record one embedding call (voyage or local). */
 	async recordEmbedding(backend: string, model: string, tokens: number, costUsd: number): Promise<void> {
+		await this.load();
 		const b = this.bucket(backend);
 		b.calls++;
 		b.tokens += tokens;
