@@ -881,3 +881,58 @@ Set these in `benchmark/.env.local` (loaded automatically with override semantic
 > `benchmark/.env.local`, which keys overrode root `.env`, and warns if the file is missing.
 
 Run output is saved to `data/runs/<run-id>/` (gitignored).
+
+---
+
+## LLM backends, concurrency, datasets & memory-bank mode
+
+### Flags & environment
+
+| Flag / env | Default | Description |
+|---|---|---|
+| `--dataset v1\|v2` | `v1` | `v1` = `src/dataset/`, `v2` = `src/dataset-v2/` (fails clearly if missing). Recorded in checkpoint + report; a run cannot be resumed with a different dataset. |
+| `--mode memory-bank` | — | Memory Bank vs codexfi experiment (below). |
+| `--conditions a,b,c` | all | memory-bank mode only: `no-memory,mb-only,codexfi-only,mb+codexfi,full-context`. |
+| `--skip-ingest --run-tag <tag>` | — | Reuse an already-ingested run tag in the store at `CODEXFI_DATA_DIR` (no ingest, no cleanup). |
+| `BENCH_LLM_BACKEND` | `api` | LLM for answer, judge, retrieval-relevance and bank building. `api` = ai-sdk with `ANTHROPIC_API_KEY` (historical behaviour). `claude-cli` = headless `claude -p` using the local Claude subscription. The engine's own extraction/embedding is **not** affected. |
+| `BENCH_CONCURRENCY` | `4` | Parallel LLM calls in the answer / evaluate phases (results keep question order; progress is checkpointed, so interrupted phases resume per question). |
+| `BENCH_NO_LIVE=1` | — | Don't start the live dashboard (it is never started in memory-bank mode). |
+| `JUDGE_MODEL` / `ANSWERING_MODEL` | `claude-sonnet-4-6` | Model ids. Both backends accept full ids. The answer phase now uses `ANSWERING_MODEL`; before, it used `JUDGE_MODEL`. |
+| `MB_MODEL` | `claude-sonnet-4-6` | Model that maintains the simulated Memory Bank. |
+| `BENCH_FULL_CONTEXT_MAX_CHARS` | `600000` | `full-context` is skipped (with a note in the report) above this size. |
+| `BENCH_CLI_CWD` | scratch `bench-cwd` | cwd for the `claude` child, kept outside the repo so the repo's `.claude` hooks never fire. |
+| `BENCH_CLI_TIMEOUT_MS` / `MB_TIMEOUT_MS` / `BENCH_CLI_MAX_RETRIES` | `300000` / `900000` / `5` | claude-cli per-call timeout (answer/judge, bank update) and retry count (exponential backoff). |
+
+**claude-cli details.** Each call runs `claude -p --model <id> --output-format json --system-prompt-file <tmp> --tools "" --no-session-persistence --setting-sources "" --strict-mcp-config --disable-slash-commands`. The prompt goes through stdin and the answer is read from `.result`; usage, cost and duration are recorded. The child env removes `ANTHROPIC_API_KEY` (otherwise the CLI would bill the API account) and sets `CODEXFI_DISABLE=1`, `MAX_THINKING_TOKENS=0` and `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`. Differences from `api`: there is no temperature control, and there is no 400-token answer cap, because the CLI errors instead of truncating when a cap is hit. Absolute scores are therefore not strictly comparable across backends; compare runs on the same backend.
+
+> Always set `CODEXFI_DATA_DIR` to a scratch directory for bench runs so `~/.codexfi` is never touched.
+
+### `--mode memory-bank` — does codexfi add value on top of a Memory Bank?
+
+A **Memory Bank** is six markdown files per project (`projectbrief.md`, `productContext.md`, `systemPatterns.md`, `techContext.md`, `activeContext.md`, `progress.md`). The developer asks the agent to update them at the end of each session ("save bank"), within token budgets: brief ≤3k, product ≤8k, patterns ≤15k, tech ≤10k, active ≤19k with rolling-window aging (last 1–2 sessions full, 2–3 weeks ~500 tok/session, older ~80 tok/session), progress ≤12k with a milestones table. The total target is ~67k tokens, with a hard cap of 70k. The maintainer prompt is in `src/memory-bank/prompt.ts`.
+
+Phases: `ingest` (codexfi, only if a codexfi condition is selected) → `mb-build` → `mb-contexts` → `mb-answer` → `mb-evaluate` → report.
+
+- **mb-build.** Sessions are processed in codexfi's ingest order. After each one, `MB_MODEL` gets the current bank for that session's project plus the transcript, and returns all six files as JSON. Sessions tagged `both` update every project's bank. A bank is checkpointed after every update, so the build can resume. If a bank goes over budget, it gets one condense pass. Final banks are written to `data/runs/<id>/memory-bank/<project>/*.md`, and per-update token sizes go to `memory-bank/sizes.json`.
+- **Conditions** (all use the block-quality system/user prompts):
+
+| Condition | Context |
+|---|---|
+| `no-memory` | none (floor) |
+| `mb-only` | **all** projects' banks concatenated. Questions are cross-project, so this mirrors a developer who has both banks loaded. |
+| `codexfi-only` | the codexfi `[MEMORY]` block, built exactly as in block-quality mode |
+| `mb+codexfi` | banks + codexfi block with `memoryBankAware: true` (structured sections omitted; keeps Recent Sessions + Relevant to Current Task) |
+| `full-context` | every ingested session transcript (oracle / upper bound), if ≤ `BENCH_FULL_CONTEXT_MAX_CHARS` |
+
+  Both codexfi variants come from `buildCodexfiBlock()` in `src/pipeline/codexfi-block.ts`, which block-quality mode also uses. Tune that function.
+- **Report** (`report.json` + `report.md` in the run dir, plus a terminal summary): accuracy per condition × category; average context size per condition (chars and est. tokens); answer and judge latency; the delta `mb+codexfi − mb-only` per category, with the questions that flipped each way; final bank sizes. `bench serve` does not render memory-bank reports.
+
+```bash
+# isolate the store; subscription-backed LLM calls
+export CODEXFI_DATA_DIR=/tmp/bench-store BENCH_LLM_BACKEND=claude-cli
+
+bun run bench run -r mb-v1 --mode memory-bank                                    # all conditions, v1
+bun run bench run -r mb-v2 --mode memory-bank --dataset v2 --conditions mb-only,mb+codexfi
+bun run bench run -r mb-smoke --mode memory-bank --limit 5 --conditions no-memory,mb-only,mb+codexfi
+bun run bench run -r ret-cli --limit 5                                            # retrieval mode via claude-cli
+```

@@ -8,6 +8,8 @@
  *
  * This measures how well the *formatted block* serves an agent, distinct
  * from Tier 1 which measures raw retrieval quality per question.
+ *
+ * Block construction lives in ./codexfi-block.ts (shared with memory-bank mode).
  */
 
 import type {
@@ -18,15 +20,7 @@ import type {
 import { markPhaseComplete } from "../utils/checkpoint.js";
 import { log } from "../utils/logger.js";
 import { emit } from "../live/emitter.js";
-
-import * as db from "../../../plugin/src/db.js";
-import * as store from "../../../plugin/src/store.js";
-import {
-  formatContextForPrompt,
-  applyPerTypeCaps,
-  RENDERED_STRUCTURAL_TYPES,
-  type StructuredMemory,
-} from "../../../plugin/src/services/context.js";
+import { buildCodexfiBlock, type CodexfiBlockStats } from "./codexfi-block.js";
 
 export async function runBlockAssembly(
   questions: UnifiedQuestion[],
@@ -35,77 +29,31 @@ export async function runBlockAssembly(
   log.phase("BLOCK ASSEMBLY");
   log.info(`Assembling [MEMORY] blocks for ${questions.length} questions...`);
 
-  // Refresh table to see all ingested data
-  await db.refresh();
-
-  // ── Fetch all structured memories once (shared across all questions) ────────
-  // Matches the plugin's Turn 1 listStructuredMemories call (index.ts) — scoped
-  // to RENDERED_STRUCTURAL_TYPES so non-rendered atomic types (learned-pattern,
-  // error-solution, preference) can't starve this fetch. limit 100 matches
-  // plugin-config.ts's maxStructuredMemories default. See issue #201.
-  const allRows = await store.listStructured(cp.runTag, RENDERED_STRUCTURAL_TYPES, { limit: 100 });
-
-  // Group by metadata.type — identical to index.ts's buildStructuredSections()
-  const byType: Record<string, StructuredMemory[]> = {};
-  for (const row of allRows) {
-    const memType = (row.metadata?.type as string | undefined) ?? "other";
-    if (!byType[memType]) byType[memType] = [];
-    byType[memType].push({
-      id: row.id,
-      memory: row.memory,
-      similarity: 1,
-      metadata: row.metadata,
-      createdAt: row.created_at ?? undefined,
-    });
-  }
-  applyPerTypeCaps(byType);
-
-  log.info(`  Structured memories: ${allRows.length} total, ${Object.keys(byType).length} types`);
-
   // ── Per-question block assembly ──────────────────────────────────────────────
   const results: BlockQualityPhaseResult[] = [];
 
   for (const q of questions) {
     const start = Date.now();
-
-    // Semantic search using the question as the query — mirrors per-turn refresh
-    // (index.ts:874-895). Threshold 0.2 matches benchmark's search phase threshold.
-    const semanticRows = await store.search(q.question, cp.runTag, {
-      limit: 20,
-      threshold: 0.2,
+    let stats: CodexfiBlockStats = { semanticHits: 0, topScore: 0, structuredRows: 0 };
+    const block = await buildCodexfiBlock(q.question, cp.runTag, {
+      memoryBankAware: false,
+      onStats: (s) => { stats = s; },
     });
-
-    // Convert to MemoriesResponseMinimal format expected by formatContextForPrompt
-    const semanticResults = {
-      results: semanticRows.map((r) => ({
-        similarity: r.score,
-        memory: r.memory,
-        chunk: r.chunk ?? "",
-        date: r.date ?? (r.metadata?.date as string | undefined),
-      })),
-    };
-
-    // Assemble the [MEMORY] block — same function used by the plugin in production
-    const block = formatContextForPrompt(
-      null,                   // no user profile in benchmark
-      { results: [] },        // no user-scoped memories in benchmark
-      semanticResults,
-      byType,
-    );
-
     const durationMs = Date.now() - start;
+
+    if (results.length === 0) log.info(`  Structured memories (after per-type caps): ${stats.structuredRows}`);
     results.push({ questionId: q.questionId, block, durationMs });
 
     log.dim(
       `  ${q.questionId} [${q.questionType}]: block ${block.length} chars, ` +
-      `${semanticRows.length} semantic hits`
+      `${stats.semanticHits} semantic hits`
     );
     emit({
       type: "search_question",
       questionId: q.questionId,
       questionType: q.questionType,
-      resultCount: semanticRows.length,
-      topScore: semanticRows[0]?.score ?? 0,
+      resultCount: stats.semanticHits,
+      topScore: stats.topScore,
       done: results.length,
       total: questions.length,
     });

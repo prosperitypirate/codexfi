@@ -1,36 +1,20 @@
-import { generateText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import type { Config } from "../utils/config.js";
+import { complete, type LlmUsage } from "../llm/backend.js";
 
-type JudgeResult = {
+export type JudgeResult = {
   score: 0 | 1;
   label: "correct" | "incorrect";
   explanation: string;
+  durationMs?: number;
+  usage?: LlmUsage;
 };
 
-function createModel(config: Config) {
-  if (config.anthropicApiKey && config.judgeModel.includes("claude")) {
-    const anthropic = createAnthropic({ apiKey: config.anthropicApiKey });
-    return anthropic(config.judgeModel);
-  }
-  if (config.openaiApiKey) {
-    const openai = createOpenAI({ apiKey: config.openaiApiKey });
-    return openai(config.judgeModel);
-  }
-  throw new Error("No valid LLM provider configured for judging");
+export async function judge(prompt: string, config: Config): Promise<JudgeResult> {
+  const res = await complete({ model: config.judgeModel, prompt, maxOutputTokens: 200 }, config);
+  return { ...parseJudge(res.text), durationMs: res.durationMs, usage: res.usage };
 }
 
-export async function judge(prompt: string, config: Config): Promise<JudgeResult> {
-  const model = createModel(config);
-
-  const { text } = await generateText({
-    model,
-    prompt,
-    maxOutputTokens: 200,
-    temperature: 0,
-  });
-
+function parseJudge(text: string): Omit<JudgeResult, "durationMs" | "usage"> {
   // Extract JSON from the response
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) {
@@ -54,23 +38,27 @@ export async function judge(prompt: string, config: Config): Promise<JudgeResult
   }
 }
 
+export interface AnswerResponse {
+  text: string;
+  durationMs: number;
+  usage?: LlmUsage;
+}
+
 export async function answer(
   prompt: string,
   config: Config,
   options?: { system?: string },
-): Promise<string> {
-  const model = createModel(config);
-
-  const { text } = await generateText({
-    model,
-    ...(options?.system ? { system: options.system } : {}),
+): Promise<AnswerResponse> {
+  const res = await complete({
+    model: config.answeringModel,
+    system: options?.system,
     prompt,
     // 400 tokens: tight limit forces concise, comprehensive list-style answers.
     // Increasing this causes the model to elaborate narrowly on a few items rather
     // than broadly covering all retrieved facts — hurting enumeration coverage.
+    // (api backend only — the claude CLI errors instead of truncating at a cap.)
     maxOutputTokens: 400,
-    temperature: 0,
-  });
+  }, config);
 
-  return text.trim();
+  return { text: res.text.trim(), durationMs: res.durationMs, usage: res.usage };
 }

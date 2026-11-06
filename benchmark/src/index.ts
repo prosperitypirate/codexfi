@@ -11,68 +11,20 @@
  *   bun run bench list                  # list all runs
  */
 
+import "./env-preload.js";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join } from "node:path";
 
-// ── Load benchmark/.env.local regardless of CWD ────────────────────────────
-// Bun only auto-loads .env from cwd. When run from project root, benchmark/.env.local
-// (which has JUDGE_MODEL, ANSWERING_MODEL, ANTHROPIC_API_KEY, etc.) would be missed.
-// .env.local follows standard convention: it OVERRIDES root .env values.
-const __benchmarkDir = join(dirname(fileURLToPath(import.meta.url)), "..");
-const localEnvPath = join(__benchmarkDir, ".env.local");
-const loadedFromLocal: Array<{ key: string; masked: string; overrode: boolean }> = [];
-
-if (existsSync(localEnvPath)) {
-	const envContent = readFileSync(localEnvPath, "utf-8");
-	for (const line of envContent.split("\n")) {
-		const trimmed = line.trim();
-		if (!trimmed || trimmed.startsWith("#")) continue;
-		const eqIdx = trimmed.indexOf("=");
-		if (eqIdx === -1) continue;
-		const key = trimmed.slice(0, eqIdx).trim();
-		const value = trimmed.slice(eqIdx + 1).trim();
-		const hadPrevious = key in process.env && process.env[key] !== value;
-		// .env.local OVERRIDES root .env — this is standard .env.local semantics
-		process.env[key] = value;
-		// Log presence and length only — no substrings of secrets in CI logs
-		const isSecret = /key|token|secret/i.test(key);
-		const masked = isSecret
-			? `[${value.length} chars]`
-			: (value.length <= 8 ? value : `${value.slice(0, 4)}...${value.slice(-4)}`);
-		loadedFromLocal.push({ key, masked, overrode: hadPrevious });
-	}
-}
-
-// ── Verification: always log what benchmark/.env.local provided ─────────────
-const DIM = "\x1b[2m";
-const BOLD = "\x1b[1m";
-const GREEN = "\x1b[32m";
-const YELLOW = "\x1b[33m";
-const RED = "\x1b[31m";
-const CYAN = "\x1b[36m";
-const RESET = "\x1b[0m";
-
-if (loadedFromLocal.length > 0) {
-	console.log(`\n${CYAN}${BOLD}── benchmark/.env.local ${"─".repeat(30)}${RESET}`);
-	for (const { key, masked, overrode } of loadedFromLocal) {
-		const tag = overrode ? `${YELLOW}(overrode root .env)${RESET}` : `${DIM}(set)${RESET}`;
-		console.log(`  ${GREEN}${key}${RESET} = ${masked} ${tag}`);
-	}
-	console.log();
-} else {
-	console.log(`${RED}WARNING: benchmark/.env.local not found or empty at ${localEnvPath}${RESET}`);
-	console.log(`${RED}JUDGE_MODEL, ANSWERING_MODEL, and ANTHROPIC_API_KEY may be incorrect!${RESET}\n`);
-}
 import { randomBytes } from "node:crypto";
 
-import type { Checkpoint, UnifiedSession, UnifiedQuestion } from "./types.js";
+import { MB_CONDITIONS, type Checkpoint, type MbCondition, type UnifiedSession, type UnifiedQuestion } from "./types.js";
 import { loadConfig } from "./utils/config.js";
 import { log } from "./utils/logger.js";
 import {
   loadCheckpoint,
   saveCheckpoint,
   isPhaseComplete,
+  markPhaseComplete,
   reportPath,
 } from "./utils/checkpoint.js";
 import { OpencodeMemoryProvider } from "./providers/codexfi.js";
@@ -82,6 +34,11 @@ import { runBlockAssembly } from "./pipeline/block-quality.js";
 import { runAnswer }        from "./pipeline/answer.js";
 import { runEvaluate }      from "./pipeline/evaluate.js";
 import { runReport }        from "./pipeline/report.js";
+import { runMemoryBankBuild } from "./pipeline/mb-build.js";
+import { runMbContexts, runMbAnswer, runMbEvaluate, needsBank, needsCodexfi } from "./pipeline/mb-conditions.js";
+import { runMbReport }      from "./pipeline/mb-report.js";
+import { cliCwd }           from "./llm/backend.js";
+import * as engineConfig    from "../../plugin/src/config.js";
 import { activateLiveMode, emit, isLiveMode } from "./live/emitter.js";
 import { startLiveServer }                    from "./live/server.js";
 
@@ -89,9 +46,18 @@ const RUNS_DIR = join(import.meta.dir, "../data/runs");
 
 // ── Dataset loading ─────────────────────────────────────────────────────────────
 
-function loadDataset(): { sessions: UnifiedSession[]; questions: UnifiedQuestion[] } {
-  const sessionsPath  = join(import.meta.dir, "dataset/sessions.json");
-  const questionsPath = join(import.meta.dir, "dataset/questions.json");
+type DatasetId = "v1" | "v2";
+const DATASET_DIRS: Record<DatasetId, string> = { v1: "dataset", v2: "dataset-v2" };
+
+function loadDataset(id: DatasetId): { sessions: UnifiedSession[]; questions: UnifiedQuestion[] } {
+  const dir = join(import.meta.dir, DATASET_DIRS[id]);
+  const sessionsPath  = join(dir, "sessions.json");
+  const questionsPath = join(dir, "questions.json");
+  for (const p of [sessionsPath, questionsPath]) {
+    if (!existsSync(p)) {
+      throw new Error(`Dataset ${id} not found: ${p} is missing (expected ${DATASET_DIRS[id]}/sessions.json + questions.json under benchmark/src/)`);
+    }
+  }
   const sessions  = JSON.parse(readFileSync(sessionsPath,  "utf-8")) as UnifiedSession[];
   const questions = JSON.parse(readFileSync(questionsPath, "utf-8")) as UnifiedQuestion[];
   return { sessions, questions };
@@ -99,51 +65,99 @@ function loadDataset(): { sessions: UnifiedSession[]; questions: UnifiedQuestion
 
 // ── Commands ────────────────────────────────────────────────────────────────────
 
+function argValue(args: string[], flag: string): string | undefined {
+  const i = args.indexOf(flag);
+  return i !== -1 ? args[i + 1] : undefined;
+}
+
 async function cmdRun(args: string[]): Promise<void> {
   const noCleanup  = args.includes("--no-cleanup");
-  const ridIdx     = args.indexOf("-r");
-  const runId      = ridIdx !== -1 ? args[ridIdx + 1] : randomBytes(4).toString("hex");
-  const limitIdx   = args.indexOf("--limit");
-  const limit      = limitIdx !== -1 ? parseInt(args[limitIdx + 1]) : undefined;
-  const modeIdx    = args.indexOf("--mode");
-  const modeArg    = modeIdx !== -1 ? args[modeIdx + 1] : "retrieval";
-  const isBlockQuality = modeArg === "block-quality";
+  const skipIngest = args.includes("--skip-ingest");
+  const runId      = argValue(args, "-r") ?? randomBytes(4).toString("hex");
+  const limitArg   = argValue(args, "--limit");
+  const limit      = limitArg ? parseInt(limitArg) : undefined;
+  const modeArg    = argValue(args, "--mode") ?? "retrieval";
+  if (!["retrieval", "block-quality", "memory-bank"].includes(modeArg)) {
+    throw new Error(`Unknown --mode "${modeArg}" (expected retrieval | block-quality | memory-bank)`);
+  }
+  const mode = modeArg as "retrieval" | "block-quality" | "memory-bank";
+  const isBlockQuality = mode === "block-quality";
+  const isMemoryBank   = mode === "memory-bank";
+  const datasetArg = argValue(args, "--dataset");
+  if (datasetArg && datasetArg !== "v1" && datasetArg !== "v2") {
+    throw new Error(`Unknown --dataset "${datasetArg}" (expected v1 | v2)`);
+  }
+  const runTagArg = argValue(args, "--run-tag");
+  if (skipIngest && !runTagArg) {
+    throw new Error("--skip-ingest requires --run-tag <tag> (an already-ingested tag in the store at CODEXFI_DATA_DIR)");
+  }
+  const conditionsArg = argValue(args, "--conditions");
+  let conditionsReq: MbCondition[] | undefined;
+  if (conditionsArg) {
+    conditionsReq = conditionsArg.split(",").map((c) => c.trim()).filter(Boolean) as MbCondition[];
+    const bad = conditionsReq.filter((c) => !(MB_CONDITIONS as readonly string[]).includes(c));
+    if (bad.length) throw new Error(`Unknown condition(s): ${bad.join(", ")} (valid: ${MB_CONDITIONS.join(", ")})`);
+  }
 
-  // Always start the live dashboard — opens browser automatically via server.ts.
-  activateLiveMode();
-  startLiveServer();
+  // Live dashboard: default on for retrieval/block-quality (opens browser via server.ts).
+  // Off for memory-bank mode (the dashboard doesn't know its phases) or BENCH_NO_LIVE=1.
+  if (process.env.BENCH_NO_LIVE !== "1" && !isMemoryBank) {
+    activateLiveMode();
+    startLiveServer();
+  }
 
   const config = loadConfig();
-  const { sessions: allSessions, questions: allQuestions } = loadDataset();
+
+  // Load or create checkpoint
+  let cp = loadCheckpoint(runId);
+  const dataset: DatasetId = (cp?.dataset ?? datasetArg ?? "v1") as DatasetId;
+  if (cp && datasetArg && (cp.dataset ?? "v1") !== datasetArg) {
+    throw new Error(`Run ${runId} was created with --dataset ${cp.dataset ?? "v1"}; cannot resume with --dataset ${datasetArg}`);
+  }
+  if (cp && (cp.mode ?? "retrieval") !== mode) {
+    throw new Error(`Run ${runId} was created with --mode ${cp.mode ?? "retrieval"}; cannot resume with --mode ${mode}`);
+  }
+
+  const { sessions: allSessions, questions: allQuestions } = loadDataset(dataset);
   const questions = limit ? allQuestions.slice(0, limit) : allQuestions;
   const sessions  = limit ? allSessions.slice(0, limit)  : allSessions;
 
   const runStartTime = Date.now();
+  const engine = engineConfig as Record<string, unknown>;
 
   console.log(`\n  DevMemBench — Coding Assistant Memory Benchmark`);
   console.log(`  ${"─".repeat(48)}`);
   console.log(`  Run ID  : ${runId}`);
-  console.log(`  Mode    : ${isBlockQuality ? "block-quality (Tier 2)" : "retrieval (Tier 1)"}`);
-  console.log(`  Provider: codexfi`);
+  console.log(`  Mode    : ${isMemoryBank ? "memory-bank (Memory Bank vs codexfi)" : isBlockQuality ? "block-quality (Tier 2)" : "retrieval (Tier 1)"}`);
+  console.log(`  Dataset : ${dataset}`);
+  console.log(`  Provider: codexfi  (engine extraction: ${String(engine.EXTRACTION_PROVIDER ?? "?")} / ${String(engine.EXTRACTION_MODEL ?? "?")}, store: ${String(engine.DATA_DIR ?? "?")})`);
+  console.log(`  LLM     : ${config.llmBackend}${config.llmBackend === "claude-cli" ? ` (cwd ${cliCwd()})` : ""} · concurrency ${config.concurrency}`);
+  console.log(`  Answer  : ${config.answeringModel}`);
   console.log(`  Judge   : ${config.judgeModel}`);
+  if (isMemoryBank) console.log(`  MB model: ${config.mbModel}`);
   console.log(`  Sessions: ${sessions.length}   Questions: ${questions.length}\n`);
 
   emit({ type: "run_start", runId, provider: "codexfi", judgeModel: config.judgeModel, sessions: sessions.length, questions: questions.length });
 
-  // Load or create checkpoint
-  let cp = loadCheckpoint(runId);
   if (cp) {
     log.info(`Resuming run ${runId} (completed phases: ${cp.completedPhases.join(", ")})`);
+    if (isMemoryBank && conditionsReq && conditionsReq.join(",") !== (cp.mbConditions ?? []).join(",")) {
+      throw new Error(`Run ${runId} was created with --conditions ${(cp.mbConditions ?? []).join(",")}; start a new run to change conditions`);
+    }
   } else {
     cp = {
       runId,
-      runTag: `bench_devmem_${runId}`,
+      runTag: skipIngest ? runTagArg! : `bench_devmem_${runId}`,
       provider: "codexfi",
       judgeModel: config.judgeModel,
       answeringModel: config.answeringModel,
       startedAt: new Date().toISOString(),
       completedPhases: [],
-      mode: isBlockQuality ? "block-quality" : "retrieval",
+      mode,
+      dataset,
+      llmBackend: config.llmBackend,
+      ...(skipIngest ? { skipIngest: true } : {}),
+      ...(isMemoryBank ? { mbConditions: conditionsReq ?? [...MB_CONDITIONS] } : {}),
     };
     saveCheckpoint(cp);
   }
@@ -153,43 +167,63 @@ async function cmdRun(args: string[]): Promise<void> {
 
   // ── Pipeline ──────────────────────────────────────────────────────────────────
 
-  if (!isPhaseComplete(cp, "ingest")) {
-    emit({ type: "phase_start", phase: "ingest" });
-    await runIngest(provider, sessions, cp);
-  } else {
-    log.info("Skipping ingest (already complete)");
+  const wantIngest = !isMemoryBank || needsCodexfi(cp.mbConditions ?? []);
+  if (cp.skipIngest && !isPhaseComplete(cp, "ingest")) {
+    log.warn(`Skipping ingest (--skip-ingest): reusing existing run tag ${cp.runTag}`);
+    markPhaseComplete(cp, "ingest");
   }
-
-  if (isBlockQuality) {
-    // Block-quality mode: assemble [MEMORY] block per question instead of search
-    if (!isPhaseComplete(cp, "block-assembly")) {
-      emit({ type: "phase_start", phase: "block-assembly" });
-      await runBlockAssembly(questions, cp);
+  const ingestTask = async (): Promise<void> => {
+    if (!wantIngest) {
+      log.info("Skipping ingest (no codexfi condition selected)");
+    } else if (!isPhaseComplete(cp, "ingest")) {
+      emit({ type: "phase_start", phase: "ingest" });
+      await runIngest(provider, sessions, cp);
     } else {
-      log.info("Skipping block assembly (already complete)");
+      log.info("Skipping ingest (already complete)");
     }
+  };
+  // In memory-bank mode the bank build (LLM "save bank" per session) and the
+  // codexfi ingest are independent — run them concurrently to halve wall time.
+  if (isMemoryBank && needsBank(cp.mbConditions ?? []) && !isPhaseComplete(cp, "mb-build")) {
+    await Promise.all([ingestTask(), runMemoryBankBuild(sessions, cp, config)]);
   } else {
-    // Standard retrieval mode: per-question semantic search
-    if (!isPhaseComplete(cp, "search")) {
-      emit({ type: "phase_start", phase: "search" });
-      await runSearch(provider, questions, cp);
+    await ingestTask();
+  }
+
+  if (isMemoryBank) {
+    await runMemoryBankPipeline(questions, sessions, cp, config);
+  } else {
+    if (isBlockQuality) {
+      // Block-quality mode: assemble [MEMORY] block per question instead of search
+      if (!isPhaseComplete(cp, "block-assembly")) {
+        emit({ type: "phase_start", phase: "block-assembly" });
+        await runBlockAssembly(questions, cp);
+      } else {
+        log.info("Skipping block assembly (already complete)");
+      }
     } else {
-      log.info("Skipping search (already complete)");
+      // Standard retrieval mode: per-question semantic search
+      if (!isPhaseComplete(cp, "search")) {
+        emit({ type: "phase_start", phase: "search" });
+        await runSearch(provider, questions, cp);
+      } else {
+        log.info("Skipping search (already complete)");
+      }
     }
-  }
 
-  if (!isPhaseComplete(cp, "answer")) {
-    emit({ type: "phase_start", phase: "answer" });
-    await runAnswer(questions, cp, config, isBlockQuality ? { blockOnly: true } : undefined);
-  } else {
-    log.info("Skipping answer (already complete)");
-  }
+    if (!isPhaseComplete(cp, "answer")) {
+      emit({ type: "phase_start", phase: "answer" });
+      await runAnswer(questions, cp, config, isBlockQuality ? { blockOnly: true } : undefined);
+    } else {
+      log.info("Skipping answer (already complete)");
+    }
 
-  if (!isPhaseComplete(cp, "evaluate")) {
-    emit({ type: "phase_start", phase: "evaluate" });
-    await runEvaluate(questions, cp, config);
-  } else {
-    log.info("Skipping evaluate (already complete)");
+    if (!isPhaseComplete(cp, "evaluate")) {
+      emit({ type: "phase_start", phase: "evaluate" });
+      await runEvaluate(questions, cp, config);
+    } else {
+      log.info("Skipping evaluate (already complete)");
+    }
   }
 
   // Record total run duration (before report so it's included in report.json)
@@ -198,14 +232,16 @@ async function cmdRun(args: string[]): Promise<void> {
   cp.totalDurationMs = totalDurationMs;
   saveCheckpoint(cp);
 
-  if (!isPhaseComplete(cp, "report")) {
+  if (isMemoryBank) {
+    runMbReport(cp, questions);
+  } else if (!isPhaseComplete(cp, "report")) {
     runReport(cp);
   } else {
     log.info("Skipping report (already complete)");
   }
 
   // Emit final score
-  if (cp.evaluations) {
+  if (cp.evaluations && !isMemoryBank) {
     const correct = cp.evaluations.filter(e => e.score === 1).length;
     const total   = cp.evaluations.length;
     const byType: Record<string, { correct: number; total: number }> = {};
@@ -235,12 +271,16 @@ async function cmdRun(args: string[]): Promise<void> {
 
   // ── Cleanup ───────────────────────────────────────────────────────────────────
 
-  if (!noCleanup) {
+  if (cp.skipIngest) {
+    log.warn(`Skipping cleanup: run tag ${cp.runTag} was not ingested by this run (--skip-ingest).`);
+  } else if (!wantIngest) {
+    // nothing was ingested
+  } else if (!noCleanup) {
     emit({ type: "phase_start", phase: "cleanup" });
     log.phase("CLEANUP");
     await provider.clear(cp.runTag);
   } else {
-    log.warn("Skipping cleanup (--no-cleanup). Memories remain in backend.");
+    log.warn(`Skipping cleanup (--no-cleanup). Memories remain in backend under run tag ${cp.runTag}.`);
   }
 
   emit({ type: "phase_start", phase: "done" });
@@ -252,6 +292,27 @@ async function cmdRun(args: string[]): Promise<void> {
     await new Promise((r) => setTimeout(r, 1500));
     process.exit(0);
   }
+}
+
+async function runMemoryBankPipeline(
+  questions: UnifiedQuestion[],
+  sessions: UnifiedSession[],
+  cp: Checkpoint,
+  config: ReturnType<typeof loadConfig>,
+): Promise<void> {
+  const conditions = cp.mbConditions!;
+  log.info(`Conditions: ${conditions.join(", ")}`);
+
+  if (needsBank(conditions)) {
+    if (!isPhaseComplete(cp, "mb-build")) await runMemoryBankBuild(sessions, cp, config);
+    else log.info("Skipping mb-build (already complete)");
+  }
+  if (!isPhaseComplete(cp, "mb-contexts")) await runMbContexts(questions, sessions, cp, config);
+  else log.info("Skipping mb-contexts (already complete)");
+  if (!isPhaseComplete(cp, "mb-answer")) await runMbAnswer(questions, sessions, cp, config);
+  else log.info("Skipping mb-answer (already complete)");
+  if (!isPhaseComplete(cp, "mb-evaluate")) await runMbEvaluate(questions, cp, config);
+  else log.info("Skipping mb-evaluate (already complete)");
 }
 
 function cmdStatus(args: string[]): void {
@@ -277,6 +338,14 @@ function cmdStatus(args: string[]): void {
   if (cp.evaluations) {
     const correct = cp.evaluations.filter((e) => e.score === 1).length;
     console.log(`  Accuracy: ${correct}/${cp.evaluations.length}`);
+  }
+  if (cp.mode === "memory-bank") {
+    console.log(`  Dataset: ${cp.dataset ?? "v1"}   Conditions: ${(cp.mbConditions ?? []).join(", ")}`);
+    if (cp.memoryBank) console.log(`  Bank updates applied: ${cp.memoryBank.applied.length}`);
+    for (const [c, evals] of Object.entries(cp.mbEvaluations ?? {})) {
+      const es = Object.values(evals ?? {});
+      console.log(`  ${c.padEnd(14)} ${es.filter((e) => e.score === 1).length}/${es.length}`);
+    }
   }
   console.log();
 }
@@ -321,9 +390,12 @@ function cmdList(): void {
     const cp = loadCheckpoint(runId);
     if (!cp) continue;
     const hasReport = existsSync(reportPath(runId));
+    const mbEval = cp.mode === "memory-bank" ? Object.values(cp.mbEvaluations?.["mb+codexfi"] ?? {}) : [];
     const accuracy = cp.evaluations
       ? `${((cp.evaluations.filter((e) => e.score === 1).length / cp.evaluations.length) * 100).toFixed(1)}%`
-      : "(incomplete)";
+      : mbEval.length > 0
+        ? `mb+cfx ${((mbEval.filter((e) => e.score === 1).length / mbEval.length) * 100).toFixed(1)}%`
+        : "(incomplete)";
     const duration = cp.totalDurationMs
       ? `${Math.floor(cp.totalDurationMs / 60000)}m ${Math.round((cp.totalDurationMs % 60000) / 1000)}s`
       : "";
@@ -343,7 +415,12 @@ function printHelp(): void {
                                              (ingest → block-assembly → answer → evaluate → report)
     bun run bench run -r <id>                Named run (resumes if exists)
     bun run bench run --no-cleanup           Keep ingested memories after run
-    bun run bench run --limit <n>            Run only first N questions
+    bun run bench run --limit <n>            Run only first N questions (and first N sessions)
+    bun run bench run --dataset v1|v2        Dataset (v1 = src/dataset/, v2 = src/dataset-v2/)
+    bun run bench run --mode memory-bank     Memory Bank vs codexfi experiment
+          [--conditions a,b,c]               no-memory,mb-only,codexfi-only,mb+codexfi,full-context (default all)
+    bun run bench run --skip-ingest --run-tag <tag>
+                                             Reuse an already-ingested run tag (no ingest, no cleanup)
     bun run bench status -r <id>             Check run progress
     bun run bench serve -r <id>              Open results dashboard in browser
     bun run bench list                       List all runs
@@ -353,6 +430,9 @@ function printHelp(): void {
     block-quality  Tier 2: assembled [MEMORY] block as system context → answer
                    Measures how well the formatted block serves an agent.
                    Use before/after plugin changes to measure presentation quality.
+    memory-bank    Does codexfi add value on top of a Memory Bank? Builds a simulated
+                   6-file bank per project ("save bank" after each session), then
+                   answers every question under each condition and reports deltas.
 
   Environment variables:
     MEMORY_BACKEND_URL   Backend URL (default: http://localhost:8020)
@@ -360,6 +440,11 @@ function printHelp(): void {
     OPENAI_API_KEY       OpenAI API key (for GPT judge)
     JUDGE_MODEL          Override judge model
     ANSWERING_MODEL      Override answering model
+    BENCH_LLM_BACKEND    api (default) | claude-cli (headless \`claude -p\`, subscription)
+    BENCH_CONCURRENCY    Parallel answer/judge calls (default 4)
+    BENCH_NO_LIVE=1      Don't start the live dashboard
+    MB_MODEL             Memory Bank maintainer model (default claude-sonnet-4-6)
+    BENCH_FULL_CONTEXT_MAX_CHARS  full-context condition cap (default 600000)
   `);
 }
 

@@ -1,0 +1,1093 @@
+{
+  "projects": [
+    {
+      "name": "ledgerline",
+      "description": "A multi-tenant, usage-based billing and invoicing backend. Tenants (SaaS companies) send metered usage events through an ingestion API. Ledgerline rates the events against price plans, aggregates them per billing period, and finalizes invoices. It syncs customers and payments with Stripe, ingests Stripe webhooks, delivers outbound webhooks to tenants, renders PDF invoices and emails them to end customers.",
+      "initialStack": "Node.js 22.14 LTS, TypeScript 5.7, Fastify 5.2, zod 3.24, Prisma ORM 6.4, PostgreSQL 16 (Render Postgres), BullMQ 5 on Upstash Redis for background jobs, stripe-node SDK with a pinned API version, Vitest 3, pnpm 10. Hosted on Render (web service plus background worker, Frankfurt region). GitHub repo ines-dev/ledgerline."
+    },
+    {
+      "name": "fieldnote",
+      "description": "An offline-first mobile app for field inspections, such as building, safety and equipment checks. Inspectors fill in inspection forms and take photos with no connectivity. Edits are stored on-device and synced to a server when the device is online, with conflict resolution for concurrent offline edits. Photos upload to object storage, and push notifications alert inspectors to newly assigned jobs.",
+      "initialStack": "React Native via Expo SDK 54 (TypeScript), expo-sqlite with hand-written SQL, React Navigation 7, zustand 5, pnpm 10, expo-image-manipulator for photo compression, Expo Push Service. Sync server: Python 3.12, FastAPI 0.115, SQLAlchemy 2.0 (async, asyncpg), Alembic, PostgreSQL 16, Poetry 2, black + flake8 + isort, PyJWT. Photos in AWS S3 via presigned URLs. Server hosted on Railway. GitHub repo ines-dev/fieldnote."
+    }
+  ],
+  "developer": "Ines is a freelance full-stack developer based in Lisbon (Europe/Lisbon timezone). She does her deep work in early-morning sessions and occasionally works on Saturday. She builds both projects solo, prefers small reviewable changes, wants to see a plan before any code is written, and hates default exports, files named utils.ts, emojis in commits and long-winded explanations. She is pragmatic about reversing a decision once it proves painful, and she often goes on short tangents about tooling.",
+  "sessions": [
+    {
+      "sessionId": "S01",
+      "date": "2026-03-02",
+      "project": "both",
+      "title": "Fresh MacBook dev setup for both projects",
+      "summary": "Ines sets up a new MacBook Pro for both projects. She installs Homebrew, iTerm2 with oh-my-zsh, VS Code as her editor, Docker Desktop, nvm for Node and pyenv for Python. She enables pnpm 10 globally through corepack and writes a global CLAUDE.md. In it she states her commit convention (Conventional Commits, lowercase, no scope, no emojis) and asks for concise bullet-point answers without headers. A tangent on her slow zsh startup ends with 'deal with it later'.",
+      "messageCount": 16
+    },
+    {
+      "sessionId": "S02",
+      "date": "2026-03-04",
+      "project": "ledgerline",
+      "title": "Scaffolding ledgerline: Fastify, Prisma, Render",
+      "summary": "The assistant scaffolds ledgerline on Node 22.14 LTS with TypeScript 5.7, Fastify 5.2, zod 3.24 and Prisma 6.4. The schema keeps Prisma's default camelCase column names. A render.yaml defines a web service, a background worker and a Render Postgres 16 instance in Frankfurt. Ines asks for Vitest tests written as nested describe/it blocks. A first attempt to use path aliases breaks the tsx dev runner, so they settle on relative imports plus a single '#src/*' subpath import.",
+      "messageCount": 24
+    },
+    {
+      "sessionId": "S03",
+      "date": "2026-03-05",
+      "project": "ledgerline",
+      "title": "Core billing domain model and job queue choice",
+      "summary": "Ines asks for every plan to be presented as a numbered checklist before any code. The assistant then designs the tenants, customers, meters, price_plans and usage_events tables. Tenant isolation is enforced at the application level by a required tenantId filter on every repository method. Money is stored as integer cents in plain JS numbers for now, with a TODO about precision for fractional unit rates. Background jobs use BullMQ 5 on an Upstash Redis instance, and a first 'rate-usage' job is stubbed.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S04",
+      "date": "2026-03-09",
+      "project": "fieldnote",
+      "title": "Scaffolding the fieldnote Expo app",
+      "summary": "The assistant scaffolds the fieldnote client with create-expo-app on Expo SDK 54, using pnpm 10 as the package manager. Navigation uses React Navigation 7 with a native stack, and UI state lives in zustand 5. Local persistence is expo-sqlite with hand-written SQL migrations in a migrations/ folder. Ines rejects a generated src/utils.ts and has its helpers split into date.ts and ids.ts. The session ends with an inspections list screen reading from SQLite.",
+      "messageCount": 19
+    },
+    {
+      "sessionId": "S05",
+      "date": "2026-03-10",
+      "project": "fieldnote",
+      "title": "FastAPI sync server skeleton and auth",
+      "summary": "The sync server is set up on Python 3.12 with FastAPI, async SQLAlchemy 2.0, Alembic and Poetry 2, with black, flake8 and isort for formatting and linting. Auth uses PyJWT with HS256-signed access tokens that expire after 15 minutes. The service is deployed to Railway with a Railway Postgres plugin. Getting the Alembic async env.py working takes two failed attempts before the assistant uses run_sync correctly.",
+      "messageCount": 21
+    },
+    {
+      "sessionId": "S06",
+      "date": "2026-03-12",
+      "project": "ledgerline",
+      "title": "Stripe customer sync and API version pinning",
+      "summary": "The assistant integrates stripe-node with the API version pinned to 2025-03-31.basil, and the key is read from a STRIPE_SECRET env var. Customer creation in ledgerline now mirrors to Stripe Customers, with the Stripe ID stored on the customer row. Ines mentions she prefers 'type' aliases over 'interface' throughout. A long tangent about pg-mem not supporting a Prisma-generated query ends with tests running against pg-mem for now and skipping that one case.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S07",
+      "date": "2026-03-14",
+      "project": "fieldnote",
+      "title": "Offline edits and first conflict strategy",
+      "summary": "In a Saturday session, Ines and the assistant design the offline edit model. Each local row gets a dirty flag and an updated_at, and conflicts are resolved with record-level last-write-wins using the server receive timestamp. Syncing is manual only, triggered by pull-to-refresh on the inspections list. The inspection forms (fire extinguisher, ladder, electrical panel) are hard-coded as TypeScript form definitions. Ines notes that record-level LWW will lose data, but says it is fine for the prototype.",
+      "messageCount": 17
+    },
+    {
+      "sessionId": "S08",
+      "date": "2026-03-17",
+      "project": "ledgerline",
+      "title": "Stripe webhook ingestion and outbound tenant webhooks",
+      "summary": "The assistant adds a raw-body Stripe webhook endpoint with signature verification. Events are deduplicated by event.id in a Redis set with a 24-hour TTL. Outbound webhooks to tenants (invoice.finalized, usage.threshold) are delivered by a BullMQ job with 5 attempts and exponential backoff starting at 30 seconds. Errors follow a thrown AppError class hierarchy (NotFoundError, ConflictError, ValidationError) that is mapped to HTTP codes in a Fastify error handler. Fastify's JSON parser consuming the raw body causes a first failed attempt, which is fixed with a content-type parser scoped to the route.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S09",
+      "date": "2026-03-19",
+      "project": "fieldnote",
+      "title": "First sync endpoint and a WatermelonDB experiment",
+      "summary": "The server gets a single POST /sync endpoint that accepts dirty records and returns changes since a cursor. Hand-writing the client-side change tracking feels fragile, so Ines starts a trial of WatermelonDB 0.28 to replace the raw expo-sqlite layer. The assistant models the inspections and findings tables in Watermelon's schema, but the JSI adapter build fails in the Expo dev client. The session ends mid-task. The next step is to check WatermelonDB's New Architecture compatibility and port the photos table before deciding whether to keep it.",
+      "messageCount": 23
+    },
+    {
+      "sessionId": "S10",
+      "date": "2026-03-20",
+      "project": "ledgerline",
+      "title": "Usage ingestion API and invoice numbering",
+      "summary": "The assistant builds POST /v1/usage-events with idempotency keys, plus @fastify/rate-limit set to 100 requests per second per tenant, keyed on the API key. Invoice numbers are defined as INV-{tenantSlug}-{6-digit global sequence}, backed by a Postgres sequence. Ines again objects to a lib/utils.ts, which is split up by concern, and she asks for named exports only. A side discussion on API key hashing leads to SHA-256 with a key prefix kept for lookup.",
+      "messageCount": 20
+    },
+    {
+      "sessionId": "S11",
+      "date": "2026-03-24",
+      "project": "fieldnote",
+      "title": "Photo capture and uploads to S3",
+      "summary": "Photos are captured with expo-camera, then resized to a 2048px long edge as JPEG at quality 0.8 with expo-image-manipulator. They are queued in a local uploads table and sent with up to 3 concurrent uploads. The FastAPI server issues presigned PUT URLs for an AWS S3 bucket, fieldnote-photos, in eu-west-1. Uploads time out on a throttled network, which leads to resumable retry logic tracked per photo. WatermelonDB is left untouched this session.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S12",
+      "date": "2026-03-26",
+      "project": "both",
+      "title": "Shared lint config, design tokens and switching to mise",
+      "summary": "Ines creates a shared workspace package, @ines-dev/eslint-config, with an ESLint 9 flat config plus Prettier 3, and a small @ines-dev/tokens package of color and spacing tokens. Both repos consume the packages via GitHub Packages. Tired of juggling nvm and pyenv, she switches both repos to mise, using a .mise.toml that pins Node and Python per project. A peer-dependency conflict between eslint-plugin-react-native and ESLint 9 is solved by using the FlatCompat shim in the fieldnote config only.",
+      "messageCount": 18
+    },
+    {
+      "sessionId": "S13",
+      "date": "2026-03-30",
+      "project": "ledgerline",
+      "title": "Migrating from Prisma to Drizzle (part 1)",
+      "summary": "Rating queries need window functions and raw SQL, which Prisma makes awkward, so Ines decides to migrate to Drizzle ORM. The schema moves to snake_case columns using Drizzle's casing: 'snake_case' option. Money changes to bigint minor units, with unit rates as numeric(20,8) handled through decimal.js. Tests move from pg-mem to Testcontainers with postgres:16, which finally fixes the skipped test. The session ends mid-migration: customers, meters and usage are ported, but the invoices and webhooks modules still use Prisma. The next step is to port invoices.",
+      "messageCount": 26
+    },
+    {
+      "sessionId": "S14",
+      "date": "2026-03-31",
+      "project": "fieldnote",
+      "title": "Moving to Expo Router and adding push notifications",
+      "summary": "The app's navigation is migrated from React Navigation 7 to file-based Expo Router 6. The assistant has to restructure the auth flow into a (auth) group layout after a redirect loop on first launch. Push notifications for newly assigned inspections are sent with expo-server-sdk-python as fire-and-forget calls, with no receipt checking. Push tokens are stored per device in a device_tokens table.",
+      "messageCount": 20
+    },
+    {
+      "sessionId": "S15",
+      "date": "2026-04-02",
+      "project": "ledgerline",
+      "title": "Finishing Drizzle port and first PDF invoices",
+      "summary": "Picking up from S13, the assistant ports the invoices and webhooks modules to Drizzle and removes Prisma entirely. PDF invoices are rendered on demand with Puppeteer 24 and Handlebars HTML templates, and are not stored anywhere yet. The default payment terms are Net 30. Ines announces she now wants flat Vitest test() calls named in a given/when/then style with no nested describes, and has the new invoice tests rewritten that way.",
+      "messageCount": 24
+    },
+    {
+      "sessionId": "S16",
+      "date": "2026-04-06",
+      "project": "fieldnote",
+      "title": "Dropping WatermelonDB, background sync, npm switch",
+      "summary": "Resuming the S09 experiment, Ines finds WatermelonDB's New Architecture support too shaky on SDK 54. She reverts to expo-sqlite, this time with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations. Metro keeps failing to resolve hoisted dependencies under pnpm, so the fieldnote client switches to npm. Background sync is added with expo-background-task at the 15-minute minimum interval, and Sentry is wired in for crash reports.",
+      "messageCount": 24
+    },
+    {
+      "sessionId": "S17",
+      "date": "2026-04-08",
+      "project": "ledgerline",
+      "title": "Row-level security and invoice emails",
+      "summary": "Ines worries about a missed tenantId filter, so tenant isolation moves to Postgres row-level security. Policies read current_setting('app.tenant_id'), which is set via SET LOCAL inside a per-request transaction wrapper. Invoice emails are sent through Postmark with a templated message and the PDF attached. While cleaning up config, the Stripe env var is renamed from STRIPE_SECRET to STRIPE_API_KEY. A migration that enables RLS fails at first because the table owner bypasses policies, so FORCE ROW LEVEL SECURITY is added.",
+      "messageCount": 21
+    },
+    {
+      "sessionId": "S18",
+      "date": "2026-04-09",
+      "project": "fieldnote",
+      "title": "Field-level LWW with hybrid logical clocks (server)",
+      "summary": "Inspectors report losing each other's edits, so conflict resolution is redesigned as field-level last-write-wins using hybrid logical clocks. Each field change carries an HLC timestamp and a node ID, and the server-side merge plus a field_versions table are implemented. Deletions become tombstones retained for 30 days. Because inspectors stay offline for long stretches, the access token TTL is raised from 15 to 60 minutes. The session ends mid-task, with the client-side HLC generation and merge as the next step.",
+      "messageCount": 25
+    },
+    {
+      "sessionId": "S19",
+      "date": "2026-04-13",
+      "project": "ledgerline",
+      "title": "Hourly usage rollups and webhook retry tuning",
+      "summary": "Invoice previews are slow when aggregating raw usage events on read, so the assistant adds a usage_rollups_hourly table populated by a BullMQ job. A tenant complains about missed webhooks during their deploys, so outbound delivery changes to 10 attempts with exponential backoff capped at 6 hours. Ines updates her commit convention: Conventional Commits now require a scope, e.g. feat(billing): or fix(webhooks):. A tangent about whether rollups should be idempotent ends with upserts using ON CONFLICT.",
+      "messageCount": 19
+    },
+    {
+      "sessionId": "S20",
+      "date": "2026-04-15",
+      "project": "both",
+      "title": "Shared CI template and a new editor",
+      "summary": "The assistant creates the ines-dev/ci-templates repo with a reusable GitHub Actions workflow tagged v1. It runs lint, typecheck and tests on Node 22, and both repos call it. Ines mentions she has switched from VS Code to Zed and asks for any editor-specific instructions to target Zed. She also replaced Docker Desktop with OrbStack, which Testcontainers needed a DOCKER_HOST tweak for. The global CLAUDE.md is split into per-repo CLAUDE.md files.",
+      "messageCount": 17
+    },
+    {
+      "sessionId": "S21",
+      "date": "2026-04-17",
+      "project": "fieldnote",
+      "title": "Client-side HLC merge and internal builds",
+      "summary": "Picking up from S18, the client gets an HLC implementation persisted in SQLite. Each field edit now records its clock, and the sync code merges server field versions per field. A clock-skew test with a device set 2 hours ahead exposes a bug where the logical counter is not reset, and it is fixed. Ines sets up EAS Build with internal distribution so two pilot inspectors can install the app.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S22",
+      "date": "2026-04-20",
+      "project": "ledgerline",
+      "title": "Replacing BullMQ/Redis with pg-boss (part 1)",
+      "summary": "To drop the Upstash Redis dependency, Ines decides to move background jobs from BullMQ to pg-boss 10 on the existing Postgres. Stripe webhook dedupe moves from the Redis set to a processed_stripe_events table with a unique event_id, kept for 30 days. Domain-layer errors are switched to neverthrow Result types instead of the thrown AppError classes. Ines asks that answers now show the code diff first, followed by at most 5 bullets of explanation. The session ends with the workers ported but the cron-style jobs (invoice finalization, rollups) still on BullMQ, and porting those is the next step.",
+      "messageCount": 25
+    },
+    {
+      "sessionId": "S23",
+      "date": "2026-04-22",
+      "project": "fieldnote",
+      "title": "Server tooling refresh: uv, Python 3.13, ruff, v2 sync",
+      "summary": "The sync server moves from Poetry 2 to uv, which comes with an upgrade from Python 3.12 to 3.13 pinned in .mise.toml. black, flake8 and isort are replaced by ruff for both linting and formatting. The sync API is split into POST /v2/sync/push and GET /v2/sync/pull to carry the HLC payloads, and the old /sync endpoint is kept for one release behind a deprecation header. asyncpg briefly fails to install wheels on 3.13 until it is bumped.",
+      "messageCount": 18
+    },
+    {
+      "sessionId": "S24",
+      "date": "2026-04-22",
+      "project": "ledgerline",
+      "title": "Finishing pg-boss, new invoice numbering, proration",
+      "summary": "In a second session the same day, the assistant finishes the S22 migration. Invoice finalization and rollups become pg-boss schedules, and the Upstash Redis instance and BullMQ are removed. After her accountant objects, invoice numbers change to {tenantPrefix}-{YYYY}-{5-digit seq} with a per-tenant sequence that resets yearly. Default payment terms change to Net 14, and plan changes are prorated by day. Ines asks for plans as a short table with columns step | files | risk instead of a numbered checklist.",
+      "messageCount": 23
+    },
+    {
+      "sessionId": "S25",
+      "date": "2026-04-24",
+      "project": "fieldnote",
+      "title": "Moving photos to Cloudflare R2 and server-driven forms",
+      "summary": "To avoid S3 egress costs, photo storage moves to a Cloudflare R2 bucket, fieldnote-photos. The S3-compatible API is used through boto3 with an R2 API token, and new uploads use R2 presigned URLs. The hard-coded TypeScript forms are replaced by JSON Schema form templates that are versioned on the server and cached on-device. The session ends mid-task: existing photos are still in S3, and writing a backfill/copy script is the next step.",
+      "messageCount": 23
+    },
+    {
+      "sessionId": "S26",
+      "date": "2026-04-28",
+      "project": "ledgerline",
+      "title": "Lighter PDFs with react-pdf, storage in R2",
+      "summary": "Puppeteer's Chromium keeps hitting memory limits, so PDF rendering is rewritten with @react-pdf/renderer 4, using React components in place of the Handlebars templates. Finalized invoice PDFs are now stored in an R2 bucket, ledgerline-invoices, with keys of the form tenants/{tenantId}/invoices/{number}.pdf. To save time, Ines reuses the account-wide R2 API token already created for fieldnote. Font embedding for non-Latin customer names fails at first until Noto Sans is registered.",
+      "messageCount": 21
+    },
+    {
+      "sessionId": "S27",
+      "date": "2026-04-30",
+      "project": "fieldnote",
+      "title": "S3-to-R2 backfill and Expo SDK 55 upgrade",
+      "summary": "Picking up from S25, the assistant writes an idempotent backfill script that copies all S3 photos to R2, verifies the checksums and rewrites the storage keys. The S3 bucket is then set to expire objects after 30 days. The app is upgraded from Expo SDK 54 to SDK 55, and expo-background-task needs a config plugin change. Pilot users find uploads too slow on rural cellular, so photo compression drops to a 1600px long edge at JPEG quality 0.7.",
+      "messageCount": 24
+    },
+    {
+      "sessionId": "S28",
+      "date": "2026-05-04",
+      "project": "ledgerline",
+      "title": "Moving ledgerline from Render to Fly.io and Neon (part 1)",
+      "summary": "Ines moves ledgerline hosting from Render to Fly.io in the fra region, with separate app and worker process groups in fly.toml. Postgres moves from Render Postgres 16 to Neon Postgres 17 in eu-central-1 using pg_dump/pg_restore. Secrets are set with fly secrets, and the Stripe key env var is renamed again, from STRIPE_API_KEY to STRIPE_SECRET_KEY. The session ends mid-task: staging is working on Fly, but the production DNS cutover and Render shutdown are the next step.",
+      "messageCount": 27
+    },
+    {
+      "sessionId": "S29",
+      "date": "2026-05-06",
+      "project": "both",
+      "title": "Common logging library and switching to Biome",
+      "summary": "The assistant defines a shared JSON log schema with the fields ts, level, msg, svc and trace_id. It is implemented as @ines-dev/log on pino 9 for Node and as a structlog processor config for the Python server. The initial redaction list is authorization and cookie. Ines replaces ESLint 9 and Prettier 3 with Biome 2, retiring @ines-dev/eslint-config in favor of a shared @ines-dev/biome-config. She also mentions she moved to Ghostty and replaced oh-my-zsh with starship, which finally fixes her slow shell startup.",
+      "messageCount": 20
+    },
+    {
+      "sessionId": "S30",
+      "date": "2026-05-07",
+      "project": "fieldnote",
+      "title": "fieldnote sync server to Fly.io, RS256 tokens",
+      "summary": "To consolidate on one host, the fieldnote sync server moves from Railway to a Fly.io app, fieldnote-sync, in fra, and its Postgres moves to Neon as well. JWT signing changes from HS256 to RS256, with the public key published at /.well-known/jwks.json. Existing HS256 tokens are accepted for 7 days during the transition. A Dockerfile built with uv's official image hits a missing libpq at first, which is fixed by switching to psycopg-free asyncpg-only dependencies.",
+      "messageCount": 19
+    },
+    {
+      "sessionId": "S31",
+      "date": "2026-05-11",
+      "project": "ledgerline",
+      "title": "Fly.io cutover, RLS rollback, Node 24 and Stripe clover",
+      "summary": "Picking up from S28, the production DNS is cut over to Fly.io and the Render services are deleted. On Neon's pooled connections, RLS session settings cause intermittent cross-request leakage in a test and painful debugging. Ines reverts tenant isolation to application-level scoping through a mandatory tenantScope() Drizzle helper. Node is upgraded from 22 to 24 LTS, with ci-templates bumped to v2 running Node 24 plus pnpm store caching. The Stripe API version is bumped from 2025-03-31.basil to 2025-09-30.clover after a webhook payload diff review.",
+      "messageCount": 24
+    },
+    {
+      "sessionId": "S32",
+      "date": "2026-05-13",
+      "project": "fieldnote",
+      "title": "Manual merge for notes, sync cadence, tombstone retention",
+      "summary": "Field-level LWW still clobbers the long free-text notes field, so concurrent edits to notes now produce a conflict record. The record is resolved in a manual merge UI that shows both versions side by side. Background sync moves to every 30 minutes, plus an immediate sync on app foreground, to save battery. One device came back after 6 weeks offline and resurrected deleted findings, so tombstone retention is raised from 30 to 90 days.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S33",
+      "date": "2026-05-15",
+      "project": "ledgerline",
+      "title": "Load testing ingestion with k6",
+      "summary": "A k6 load test against staging shows the largest tenant regularly hitting 429s at the 100 requests per second limit. The per-tenant rate limit is raised to 300 requests per second with a burst of 600, and the limiter is moved to a Postgres-free in-memory store per Fly machine. Ines accepts that the limit is per instance for now. A short tangent concludes that the hourly rollups job can keep up at 3x the current volume.",
+      "messageCount": 16
+    },
+    {
+      "sessionId": "S34",
+      "date": "2026-05-18",
+      "project": "fieldnote",
+      "title": "Push notification receipts",
+      "summary": "Some inspectors stopped receiving assignment pushes because their tokens were stale. The fire-and-forget push calls are replaced with stored ticket IDs, and an APScheduler job checks Expo push receipts every 15 minutes. Tokens that return DeviceNotRegistered are pruned automatically. The assistant adds a small admin endpoint that lists recent push failures.",
+      "messageCount": 14
+    },
+    {
+      "sessionId": "S35",
+      "date": "2026-05-20",
+      "project": "ledgerline",
+      "title": "Switching to Resend and abandoning neverthrow",
+      "summary": "Invoice emails move from Postmark to Resend, with React Email templates shared alongside the react-pdf components. After a month of using it, Ines finds neverthrow too verbose at service boundaries. Domain errors go back to thrown, typed error classes (an evolution of the original AppError hierarchy), and the remaining Result-returning functions are unwrapped. A tangent about email bounces adds a Resend webhook to mark customer emails as undeliverable.",
+      "messageCount": 21
+    },
+    {
+      "sessionId": "S36",
+      "date": "2026-05-21",
+      "project": "fieldnote",
+      "title": "Photo quality complaints, token refresh, TestFlight",
+      "summary": "Inspectors complain that 1600px photos are too blurry to read serial plates, so compression goes back to a 2048px long edge at JPEG quality 0.75. Access tokens are shortened from 60 to 30 minutes, and RS256 refresh tokens valid for 30 days add silent refresh, which keeps offline sessions working. Distribution moves from EAS internal builds to TestFlight and the Google Play internal testing track for a wider pilot.",
+      "messageCount": 20
+    },
+    {
+      "sessionId": "S37",
+      "date": "2026-05-23",
+      "project": "both",
+      "title": "Incident: R2 token rotation breaks both apps",
+      "summary": "On Saturday morning Ines notices full presigned R2 URLs, including X-Amz-Credential and X-Amz-Signature, in fieldnote's logs, and she rotates the shared R2 API token. This breaks ledgerline overnight: invoice finalization jobs fail to store PDFs and pg-boss retries pile up. The fix creates two bucket-scoped R2 tokens, one per project, with a 90-day rotation reminder. The shared logger's redaction list adds x-api-key, stripe-signature and the presigned query params (X-Amz-Credential, X-Amz-Signature). A short postmortem is written into both repos' docs/incidents/.",
+      "messageCount": 23
+    },
+    {
+      "sessionId": "S38",
+      "date": "2026-05-26",
+      "project": "ledgerline",
+      "title": "Per-tenant payment terms and no mid-cycle proration (part 1)",
+      "summary": "Ines says tables render badly in her terminal and asks for plans as numbered checklists again. Tenants want control over payment terms, so terms become a per-tenant setting with a default back to Net 30. Daily proration on plan changes is dropped, and plan changes now take effect at the next billing cycle. The session ends mid-task: existing pending proration line items in open invoices need a data migration, which is the next step.",
+      "messageCount": 22
+    },
+    {
+      "sessionId": "S39",
+      "date": "2026-05-27",
+      "project": "fieldnote",
+      "title": "Back to pnpm with hoisted linker",
+      "summary": "Expo SDK 55 handles pnpm better, so the fieldnote client moves back from npm to pnpm 10 with node-linker=hoisted in .npmrc. This matches ledgerline and the shared packages. The EAS Build config is updated to install with pnpm, and one stale package-lock.json-dependent script is fixed. A final check confirms Metro bundling and the background task still work on both platforms.",
+      "messageCount": 15
+    },
+    {
+      "sessionId": "S40",
+      "date": "2026-05-29",
+      "project": "ledgerline",
+      "title": "Proration migration and May invoice dry-run",
+      "summary": "Picking up from S38, the assistant writes a reversible migration that removes pending proration line items from open invoices and records the deferred plan changes in plan_change_schedule. A dry run of the May invoice cycle against a Neon branch shows that 3 tenants' totals change as expected. Ines also confirms that the R2 PDF storage fixed in S37 is working. She then tags the release v0.9.0.",
+      "messageCount": 18
+    }
+  ],
+  "updateChains": [
+    {
+      "topic": "Background job queue",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S03",
+          "value": "BullMQ 5 on Upstash Redis"
+        },
+        {
+          "sessionId": "S22",
+          "value": "pg-boss 10 on Postgres (migration in progress; cron jobs still on BullMQ)"
+        },
+        {
+          "sessionId": "S24",
+          "value": "pg-boss 10 only; BullMQ and Upstash Redis removed"
+        }
+      ]
+    },
+    {
+      "topic": "ORM",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "Prisma ORM 6.4"
+        },
+        {
+          "sessionId": "S13",
+          "value": "Drizzle ORM (partial; invoices/webhooks still on Prisma)"
+        },
+        {
+          "sessionId": "S15",
+          "value": "Drizzle ORM only; Prisma removed"
+        }
+      ]
+    },
+    {
+      "topic": "Database column naming",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "camelCase (Prisma default)"
+        },
+        {
+          "sessionId": "S13",
+          "value": "snake_case via Drizzle casing: 'snake_case'"
+        }
+      ]
+    },
+    {
+      "topic": "Application hosting",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "Render web service + background worker, Frankfurt"
+        },
+        {
+          "sessionId": "S28",
+          "value": "Fly.io region fra with app/worker process groups (staging only; prod still on Render)"
+        },
+        {
+          "sessionId": "S31",
+          "value": "Fly.io fra in production; Render deleted"
+        }
+      ]
+    },
+    {
+      "topic": "Postgres provider and version",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "Render Postgres 16"
+        },
+        {
+          "sessionId": "S28",
+          "value": "Neon Postgres 17, eu-central-1"
+        }
+      ]
+    },
+    {
+      "topic": "Pinned Stripe API version",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S06",
+          "value": "2025-03-31.basil"
+        },
+        {
+          "sessionId": "S31",
+          "value": "2025-09-30.clover"
+        }
+      ]
+    },
+    {
+      "topic": "Stripe key environment variable name",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S06",
+          "value": "STRIPE_SECRET"
+        },
+        {
+          "sessionId": "S17",
+          "value": "STRIPE_API_KEY"
+        },
+        {
+          "sessionId": "S28",
+          "value": "STRIPE_SECRET_KEY (set via fly secrets)"
+        }
+      ]
+    },
+    {
+      "topic": "Outbound tenant webhook retry policy",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S08",
+          "value": "5 attempts, exponential backoff starting at 30s"
+        },
+        {
+          "sessionId": "S19",
+          "value": "10 attempts, exponential backoff capped at 6 hours"
+        }
+      ]
+    },
+    {
+      "topic": "Stripe inbound webhook deduplication",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S08",
+          "value": "Redis set keyed by event.id with 24h TTL"
+        },
+        {
+          "sessionId": "S22",
+          "value": "processed_stripe_events Postgres table, unique event_id, kept 30 days"
+        }
+      ]
+    },
+    {
+      "topic": "Usage ingestion rate limit per tenant",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S10",
+          "value": "100 req/s per tenant (@fastify/rate-limit, keyed on API key)"
+        },
+        {
+          "sessionId": "S33",
+          "value": "300 req/s per tenant with burst 600, in-memory per Fly machine"
+        }
+      ]
+    },
+    {
+      "topic": "Money representation",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S03",
+          "value": "integer cents as plain JS number"
+        },
+        {
+          "sessionId": "S13",
+          "value": "bigint minor units; unit rates numeric(20,8) via decimal.js"
+        }
+      ]
+    },
+    {
+      "topic": "Tenant isolation mechanism",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S03",
+          "value": "application-level required tenantId filter in repositories"
+        },
+        {
+          "sessionId": "S17",
+          "value": "Postgres row-level security via SET LOCAL app.tenant_id + FORCE ROW LEVEL SECURITY"
+        },
+        {
+          "sessionId": "S31",
+          "value": "reverted to application-level scoping via mandatory tenantScope() Drizzle helper"
+        }
+      ]
+    },
+    {
+      "topic": "Node.js version",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "Node.js 22.14 LTS"
+        },
+        {
+          "sessionId": "S31",
+          "value": "Node.js 24 LTS"
+        }
+      ]
+    },
+    {
+      "topic": "PDF invoice renderer",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S15",
+          "value": "Puppeteer 24 + Handlebars HTML templates"
+        },
+        {
+          "sessionId": "S26",
+          "value": "@react-pdf/renderer 4 with React components"
+        }
+      ]
+    },
+    {
+      "topic": "Invoice number format",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S10",
+          "value": "INV-{tenantSlug}-{6-digit global sequence}"
+        },
+        {
+          "sessionId": "S24",
+          "value": "{tenantPrefix}-{YYYY}-{5-digit per-tenant sequence, resets yearly}"
+        }
+      ]
+    },
+    {
+      "topic": "Default invoice payment terms",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S15",
+          "value": "Net 30"
+        },
+        {
+          "sessionId": "S24",
+          "value": "Net 14"
+        },
+        {
+          "sessionId": "S38",
+          "value": "per-tenant setting, default Net 30"
+        }
+      ]
+    },
+    {
+      "topic": "Transactional email provider",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S17",
+          "value": "Postmark"
+        },
+        {
+          "sessionId": "S35",
+          "value": "Resend with React Email templates"
+        }
+      ]
+    },
+    {
+      "topic": "Domain error handling pattern",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S08",
+          "value": "thrown AppError class hierarchy mapped in Fastify error handler"
+        },
+        {
+          "sessionId": "S22",
+          "value": "neverthrow Result types in domain layer"
+        },
+        {
+          "sessionId": "S35",
+          "value": "back to thrown typed error classes; neverthrow removed"
+        }
+      ]
+    },
+    {
+      "topic": "Proration on plan changes",
+      "project": "ledgerline",
+      "steps": [
+        {
+          "sessionId": "S24",
+          "value": "daily proration on mid-cycle plan changes"
+        },
+        {
+          "sessionId": "S38",
+          "value": "no mid-cycle proration; changes apply next billing cycle (migration of existing items pending)"
+        },
+        {
+          "sessionId": "S40",
+          "value": "no proration; pending items migrated into plan_change_schedule"
+        }
+      ]
+    },
+    {
+      "topic": "Expo SDK version",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S04",
+          "value": "Expo SDK 54"
+        },
+        {
+          "sessionId": "S27",
+          "value": "Expo SDK 55"
+        }
+      ]
+    },
+    {
+      "topic": "On-device data layer",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S04",
+          "value": "expo-sqlite with hand-written SQL migrations"
+        },
+        {
+          "sessionId": "S09",
+          "value": "trialing WatermelonDB 0.28 (in progress)"
+        },
+        {
+          "sessionId": "S16",
+          "value": "expo-sqlite + Drizzle ORM expo-sqlite driver; WatermelonDB abandoned"
+        }
+      ]
+    },
+    {
+      "topic": "Client navigation library",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S04",
+          "value": "React Navigation 7 native stack"
+        },
+        {
+          "sessionId": "S14",
+          "value": "Expo Router 6 (file-based, (auth) group layout)"
+        }
+      ]
+    },
+    {
+      "topic": "fieldnote client package manager",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S04",
+          "value": "pnpm 10"
+        },
+        {
+          "sessionId": "S16",
+          "value": "npm (Metro hoisting issues with pnpm)"
+        },
+        {
+          "sessionId": "S39",
+          "value": "pnpm 10 with node-linker=hoisted"
+        }
+      ]
+    },
+    {
+      "topic": "Offline conflict resolution strategy",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S07",
+          "value": "record-level last-write-wins by server receive timestamp"
+        },
+        {
+          "sessionId": "S18",
+          "value": "field-level LWW with hybrid logical clocks (server side; client pending)"
+        },
+        {
+          "sessionId": "S32",
+          "value": "field-level HLC LWW plus manual merge UI for the notes text field"
+        }
+      ]
+    },
+    {
+      "topic": "Sync API endpoints",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S09",
+          "value": "single POST /sync"
+        },
+        {
+          "sessionId": "S23",
+          "value": "POST /v2/sync/push and GET /v2/sync/pull; /sync deprecated"
+        }
+      ]
+    },
+    {
+      "topic": "Client sync trigger/cadence",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S07",
+          "value": "manual pull-to-refresh only"
+        },
+        {
+          "sessionId": "S16",
+          "value": "expo-background-task every 15 minutes"
+        },
+        {
+          "sessionId": "S32",
+          "value": "every 30 minutes plus immediate sync on app foreground"
+        }
+      ]
+    },
+    {
+      "topic": "Python dependency manager",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S05",
+          "value": "Poetry 2"
+        },
+        {
+          "sessionId": "S23",
+          "value": "uv"
+        }
+      ]
+    },
+    {
+      "topic": "Python version for sync server",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S05",
+          "value": "Python 3.12"
+        },
+        {
+          "sessionId": "S23",
+          "value": "Python 3.13 (pinned in .mise.toml)"
+        }
+      ]
+    },
+    {
+      "topic": "Sync server hosting",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S05",
+          "value": "Railway with Railway Postgres"
+        },
+        {
+          "sessionId": "S30",
+          "value": "Fly.io app fieldnote-sync in fra with Neon Postgres"
+        }
+      ]
+    },
+    {
+      "topic": "Photo object storage",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S11",
+          "value": "AWS S3 bucket fieldnote-photos, eu-west-1"
+        },
+        {
+          "sessionId": "S25",
+          "value": "Cloudflare R2 bucket fieldnote-photos (new uploads; S3 backfill pending)"
+        },
+        {
+          "sessionId": "S27",
+          "value": "Cloudflare R2 only; S3 objects backfilled and expiring after 30 days"
+        }
+      ]
+    },
+    {
+      "topic": "Photo compression settings",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S11",
+          "value": "2048px long edge, JPEG quality 0.8"
+        },
+        {
+          "sessionId": "S27",
+          "value": "1600px long edge, JPEG quality 0.7"
+        },
+        {
+          "sessionId": "S36",
+          "value": "2048px long edge, JPEG quality 0.75"
+        }
+      ]
+    },
+    {
+      "topic": "Access token TTL",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S05",
+          "value": "15 minutes"
+        },
+        {
+          "sessionId": "S18",
+          "value": "60 minutes"
+        },
+        {
+          "sessionId": "S36",
+          "value": "30 minutes with 30-day refresh tokens and silent refresh"
+        }
+      ]
+    },
+    {
+      "topic": "JWT signing algorithm",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S05",
+          "value": "HS256 shared secret"
+        },
+        {
+          "sessionId": "S30",
+          "value": "RS256 with JWKS at /.well-known/jwks.json (HS256 accepted 7 days)"
+        }
+      ]
+    },
+    {
+      "topic": "Tombstone retention for deletions",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S18",
+          "value": "30 days"
+        },
+        {
+          "sessionId": "S32",
+          "value": "90 days"
+        }
+      ]
+    },
+    {
+      "topic": "Push notification delivery handling",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S14",
+          "value": "Expo Push via expo-server-sdk-python, fire-and-forget, no receipts"
+        },
+        {
+          "sessionId": "S34",
+          "value": "tickets stored; APScheduler checks receipts every 15 min; DeviceNotRegistered tokens pruned"
+        }
+      ]
+    },
+    {
+      "topic": "Inspection form definitions",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S07",
+          "value": "hard-coded TypeScript form definitions"
+        },
+        {
+          "sessionId": "S25",
+          "value": "server-driven, versioned JSON Schema templates cached on-device"
+        }
+      ]
+    },
+    {
+      "topic": "App distribution to testers",
+      "project": "fieldnote",
+      "steps": [
+        {
+          "sessionId": "S21",
+          "value": "EAS Build internal distribution"
+        },
+        {
+          "sessionId": "S36",
+          "value": "TestFlight + Google Play internal testing track"
+        }
+      ]
+    },
+    {
+      "topic": "Code editor",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "VS Code"
+        },
+        {
+          "sessionId": "S20",
+          "value": "Zed"
+        }
+      ]
+    },
+    {
+      "topic": "Terminal and shell prompt",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "iTerm2 + zsh with oh-my-zsh"
+        },
+        {
+          "sessionId": "S29",
+          "value": "Ghostty + zsh with starship (oh-my-zsh removed)"
+        }
+      ]
+    },
+    {
+      "topic": "Runtime version manager",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "nvm for Node, pyenv for Python"
+        },
+        {
+          "sessionId": "S12",
+          "value": "mise with per-repo .mise.toml"
+        }
+      ]
+    },
+    {
+      "topic": "Local container runtime",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "Docker Desktop"
+        },
+        {
+          "sessionId": "S20",
+          "value": "OrbStack"
+        }
+      ]
+    },
+    {
+      "topic": "Commit message convention",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "Conventional Commits, lowercase, no scope, no emojis"
+        },
+        {
+          "sessionId": "S19",
+          "value": "Conventional Commits with required scope, e.g. feat(billing):"
+        }
+      ]
+    },
+    {
+      "topic": "Test writing style",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S02",
+          "value": "nested describe/it blocks"
+        },
+        {
+          "sessionId": "S15",
+          "value": "flat test() calls with given/when/then names, no nesting"
+        }
+      ]
+    },
+    {
+      "topic": "Assistant response formatting preference",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S01",
+          "value": "concise bullet points, no headers"
+        },
+        {
+          "sessionId": "S22",
+          "value": "code diff first, then at most 5 explanation bullets"
+        }
+      ]
+    },
+    {
+      "topic": "Plan presentation format",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S03",
+          "value": "numbered checklist before any code"
+        },
+        {
+          "sessionId": "S24",
+          "value": "short table: step | files | risk"
+        },
+        {
+          "sessionId": "S38",
+          "value": "numbered checklist again (tables render badly in terminal)"
+        }
+      ]
+    },
+    {
+      "topic": "JS lint/format tooling (shared package)",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S12",
+          "value": "ESLint 9 flat config + Prettier 3 via @ines-dev/eslint-config"
+        },
+        {
+          "sessionId": "S29",
+          "value": "Biome 2 via @ines-dev/biome-config"
+        }
+      ]
+    },
+    {
+      "topic": "Shared CI template",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S20",
+          "value": "ines-dev/ci-templates reusable workflow v1, Node 22"
+        },
+        {
+          "sessionId": "S31",
+          "value": "ines-dev/ci-templates v2, Node 24 with pnpm store caching"
+        }
+      ]
+    },
+    {
+      "topic": "Shared logger redaction list",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S29",
+          "value": "authorization, cookie"
+        },
+        {
+          "sessionId": "S37",
+          "value": "authorization, cookie, x-api-key, stripe-signature, X-Amz-Credential, X-Amz-Signature"
+        }
+      ]
+    },
+    {
+      "topic": "Cloudflare R2 credentials across projects",
+      "project": "personal",
+      "steps": [
+        {
+          "sessionId": "S25",
+          "value": "account-wide R2 API token created for fieldnote"
+        },
+        {
+          "sessionId": "S26",
+          "value": "same account-wide token reused by ledgerline"
+        },
+        {
+          "sessionId": "S37",
+          "value": "two bucket-scoped tokens, one per project, 90-day rotation reminder"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "sessions": 40,
+  "messages": 1158,
+  "chars": 425392,
+  "estTokens": 106348,
+  "projects": {
+    "both": 5,
+    "ledgerline": 18,
+    "fieldnote": 17
+  },
+  "dateRange": [
+    "2026-03-02",
+    "2026-05-29"
+  ],
+  "facts": 256,
+  "factsVerified": 254,
+  "factsSuperseded": 71,
+  "factsSuperseding": 71,
+  "factsByCategory": {
+    "tech-stack": 35,
+    "config": 71,
+    "preference": 14,
+    "progress": 34,
+    "error-solution": 40,
+    "architecture": 62
+  },
+  "sessionsRegenerated": 19,
+  "sessionsFullyVerified": 38,
+  "questionCandidates": {
+    "tech-stack": 40,
+    "architecture": 41,
+    "session-continuity": 41,
+    "preference": 40,
+    "error-solution": 39,
+    "knowledge-update": 48,
+    "cross-session-synthesis": 40,
+    "abstention": 40
+  },
+  "validationRound1": {
+    "passed": 277,
+    "total": 289
+  },
+  "validationRepair": {
+    "attempted": 12,
+    "fixed": 12,
+    "passedAfterFix": 12
+  },
+  "abstentionStringCheck": {
+    "passed": 40,
+    "total": 40
+  },
+  "questionsByCategory": {
+    "tech-stack": 30,
+    "architecture": 30,
+    "session-continuity": 30,
+    "preference": 30,
+    "error-solution": 30,
+    "knowledge-update": 30,
+    "cross-session-synthesis": 30,
+    "abstention": 30
+  },
+  "questions": 240
+}

@@ -1,0 +1,3159 @@
+[
+  {
+    "factId": "F001",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "On her new MacBook Pro the developer uses VS Code as her code editor and Docker Desktop as her local container runtime.",
+    "keyValues": [
+      "VS Code",
+      "Docker Desktop"
+    ],
+    "supersededBy": "F122",
+    "verified": true
+  },
+  {
+    "factId": "F002",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer manages runtime versions with nvm for Node and pyenv for Python on her new MacBook.",
+    "keyValues": [
+      "nvm",
+      "pyenv"
+    ],
+    "supersededBy": "F073",
+    "verified": true
+  },
+  {
+    "factId": "F003",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer's terminal setup is iTerm2 running zsh with oh-my-zsh, and Homebrew is installed as the system package manager.",
+    "keyValues": [
+      "iTerm2",
+      "oh-my-zsh",
+      "Homebrew"
+    ],
+    "supersededBy": "F185",
+    "verified": true
+  },
+  {
+    "factId": "F004",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "config",
+    "statement": "The developer enables pnpm 10 globally through corepack rather than installing it separately.",
+    "keyValues": [
+      "corepack enable",
+      "pnpm 10"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F005",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "preference",
+    "statement": "In her global CLAUDE.md the developer requires Conventional Commits that are lowercase, have no scope and contain no emojis.",
+    "keyValues": [
+      "Conventional Commits",
+      "no scope",
+      "no emojis"
+    ],
+    "supersededBy": "F118",
+    "verified": true
+  },
+  {
+    "factId": "F006",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer's global CLAUDE.md asks for concise bullet-point answers without headers.",
+    "keyValues": [
+      "CLAUDE.md",
+      "bullet points",
+      "no headers"
+    ],
+    "supersededBy": "F136",
+    "verified": true
+  },
+  {
+    "factId": "F007",
+    "sessionId": "S01",
+    "project": "personal",
+    "category": "progress",
+    "statement": "A tangent about the developer's slow zsh startup in S01 was left unresolved, and she said she would 'deal with it later'.",
+    "keyValues": [
+      "deal with it later",
+      "zsh startup"
+    ],
+    "supersededBy": "F186",
+    "verified": true
+  },
+  {
+    "factId": "F008",
+    "sessionId": "S02",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline is scaffolded on Node.js 22.14 LTS with TypeScript 5.7, Fastify 5.2, zod 3.24 and Prisma ORM 6.4, in the GitHub repo ines-dev/ledgerline.",
+    "keyValues": [
+      "22.14",
+      "Fastify 5.2",
+      "Prisma 6.4"
+    ],
+    "supersededBy": "F076",
+    "verified": true
+  },
+  {
+    "factId": "F009",
+    "sessionId": "S02",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's Prisma schema keeps Prisma's default camelCase column names rather than mapping to snake_case.",
+    "keyValues": [
+      "camelCase",
+      "schema.prisma"
+    ],
+    "supersededBy": "F077",
+    "verified": true
+  },
+  {
+    "factId": "F010",
+    "sessionId": "S02",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's render.yaml defines a Render web service, a background worker and a Render Postgres 16 instance, all in the Frankfurt region.",
+    "keyValues": [
+      "render.yaml",
+      "frankfurt",
+      "Postgres 16"
+    ],
+    "supersededBy": "F173",
+    "verified": true
+  },
+  {
+    "factId": "F011",
+    "sessionId": "S02",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer asks for Vitest tests to be written as nested describe/it blocks.",
+    "keyValues": [
+      "describe",
+      "it(",
+      "Vitest"
+    ],
+    "supersededBy": "F091",
+    "verified": true
+  },
+  {
+    "factId": "F012",
+    "sessionId": "S02",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "In ledgerline, the first attempt to use TypeScript path aliases from tsconfig paths broke the tsx dev runner, which could not resolve the aliased imports at runtime.",
+    "keyValues": [
+      "tsx",
+      "paths",
+      "ERR_MODULE_NOT_FOUND"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F013",
+    "sessionId": "S02",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed the path alias breakage by dropping tsconfig aliases and using relative imports plus a single '#src/*' subpath import defined in package.json imports.",
+    "keyValues": [
+      "#src/*",
+      "\"imports\""
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F014",
+    "sessionId": "S03",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer asks for every plan to be presented as a numbered checklist before any code is written.",
+    "keyValues": [
+      "numbered checklist",
+      "before any code"
+    ],
+    "supersededBy": "F151",
+    "verified": true
+  },
+  {
+    "factId": "F015",
+    "sessionId": "S03",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's core billing domain model consists of the tenants, customers, meters, price_plans and usage_events tables.",
+    "keyValues": [
+      "price_plans",
+      "usage_events",
+      "meters"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F016",
+    "sessionId": "S03",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline enforces tenant isolation at the application level by requiring a tenantId filter on every repository method.",
+    "keyValues": [
+      "tenantId",
+      "repository"
+    ],
+    "supersededBy": "F101",
+    "verified": true
+  },
+  {
+    "factId": "F017",
+    "sessionId": "S03",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline stores money as integer cents in plain JS numbers for now, with a TODO about precision for fractional unit rates.",
+    "keyValues": [
+      "integer cents",
+      "TODO",
+      "fractional unit rates"
+    ],
+    "supersededBy": "F078",
+    "verified": true
+  },
+  {
+    "factId": "F018",
+    "sessionId": "S03",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline runs background jobs on BullMQ 5 backed by an Upstash Redis instance.",
+    "keyValues": [
+      "BullMQ 5",
+      "Upstash Redis"
+    ],
+    "supersededBy": "F133",
+    "verified": true
+  },
+  {
+    "factId": "F019",
+    "sessionId": "S03",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S03 ledgerline had its domain tables designed and a first 'rate-usage' BullMQ job stubbed but not yet implemented.",
+    "keyValues": [
+      "rate-usage"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F020",
+    "sessionId": "S04",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "The fieldnote client is scaffolded with create-expo-app on Expo SDK 54 in TypeScript, using pnpm 10 as its package manager.",
+    "keyValues": [
+      "create-expo-app",
+      "SDK 54",
+      "pnpm 10"
+    ],
+    "supersededBy": "F097",
+    "verified": true
+  },
+  {
+    "factId": "F021",
+    "sessionId": "S04",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote's navigation uses React Navigation 7 with a native stack navigator.",
+    "keyValues": [
+      "React Navigation 7",
+      "createNativeStackNavigator"
+    ],
+    "supersededBy": "F082",
+    "verified": true
+  },
+  {
+    "factId": "F022",
+    "sessionId": "S04",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote keeps UI state in zustand 5 stores.",
+    "keyValues": [
+      "zustand 5"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F023",
+    "sessionId": "S04",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's local persistence uses expo-sqlite with hand-written SQL migrations stored in a migrations/ folder.",
+    "keyValues": [
+      "expo-sqlite",
+      "migrations/"
+    ],
+    "supersededBy": "F051",
+    "verified": true
+  },
+  {
+    "factId": "F024",
+    "sessionId": "S04",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer rejects files named utils.ts; in fieldnote a generated src/utils.ts was split into date.ts and ids.ts.",
+    "keyValues": [
+      "src/utils.ts",
+      "date.ts",
+      "ids.ts"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F025",
+    "sessionId": "S04",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S04 fieldnote had an inspections list screen that reads inspections from SQLite.",
+    "keyValues": [
+      "inspections list"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F026",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote's sync server runs on Python 3.12 with FastAPI, async SQLAlchemy 2.0 using asyncpg, Alembic for migrations, and Poetry 2 for dependency management.",
+    "keyValues": [
+      "Python 3.12",
+      "Poetry 2",
+      "asyncpg"
+    ],
+    "supersededBy": "F139",
+    "verified": true
+  },
+  {
+    "factId": "F027",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server uses black, flake8 and isort for formatting and linting.",
+    "keyValues": [
+      "black",
+      "flake8",
+      "isort"
+    ],
+    "supersededBy": "F141",
+    "verified": true
+  },
+  {
+    "factId": "F028",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server authenticates with PyJWT access tokens signed with HS256 that expire after 15 minutes.",
+    "keyValues": [
+      "HS256",
+      "15 minutes",
+      "PyJWT"
+    ],
+    "supersededBy": "F112",
+    "verified": true
+  },
+  {
+    "factId": "F029",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server is deployed to Railway with a Railway Postgres plugin providing the database.",
+    "keyValues": [
+      "Railway",
+      "Railway Postgres"
+    ],
+    "supersededBy": "F187",
+    "verified": true
+  },
+  {
+    "factId": "F030",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "Getting fieldnote's Alembic async env.py working failed twice, with migrations erroring because the async engine was called from synchronous Alembic context code.",
+    "keyValues": [
+      "env.py",
+      "greenlet_spawn has not been called"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F031",
+    "sessionId": "S05",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote's Alembic async env.py was fixed by opening an async connection and calling connection.run_sync(do_run_migrations).",
+    "keyValues": [
+      "run_sync",
+      "do_run_migrations"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F032",
+    "sessionId": "S06",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's stripe-node client pins the Stripe API version to 2025-03-31.basil.",
+    "keyValues": [
+      "2025-03-31.basil"
+    ],
+    "supersededBy": "F200",
+    "verified": true
+  },
+  {
+    "factId": "F033",
+    "sessionId": "S06",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline reads the Stripe secret key from the STRIPE_SECRET environment variable.",
+    "keyValues": [
+      "STRIPE_SECRET"
+    ],
+    "supersededBy": "F104",
+    "verified": true
+  },
+  {
+    "factId": "F034",
+    "sessionId": "S06",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "Creating a customer in ledgerline now mirrors it to a Stripe Customer and stores the returned Stripe ID on the ledgerline customer row.",
+    "keyValues": [
+      "stripeCustomerId",
+      "customers.create"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F035",
+    "sessionId": "S06",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer prefers TypeScript 'type' aliases over 'interface' declarations throughout her code.",
+    "keyValues": [
+      "type",
+      "interface"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F036",
+    "sessionId": "S06",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's pg-mem test database does not support one Prisma-generated query, so that single test case is skipped while the rest of the suite runs on pg-mem.",
+    "keyValues": [
+      "pg-mem",
+      "it.skip"
+    ],
+    "supersededBy": "F079",
+    "verified": true
+  },
+  {
+    "factId": "F037",
+    "sessionId": "S06",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S06 ledgerline's tests ran against pg-mem with one known-skipped case left to revisit.",
+    "keyValues": [
+      "pg-mem"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F038",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "In fieldnote's offline edit model, designed in a Saturday session, each local row gets a dirty flag and an updated_at column.",
+    "keyValues": [
+      "dirty",
+      "updated_at"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F039",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote resolves offline edit conflicts with record-level last-write-wins using the server receive timestamp.",
+    "keyValues": [
+      "last-write-wins",
+      "server receive timestamp"
+    ],
+    "supersededBy": "F108",
+    "verified": true
+  },
+  {
+    "factId": "F040",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote syncing is manual only, triggered by pull-to-refresh on the inspections list.",
+    "keyValues": [
+      "pull-to-refresh",
+      "RefreshControl"
+    ],
+    "supersededBy": "F098",
+    "verified": true
+  },
+  {
+    "factId": "F041",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's inspection forms (fire extinguisher, ladder, electrical panel) are hard-coded as TypeScript form definitions.",
+    "keyValues": [
+      "fire extinguisher",
+      "electrical panel",
+      "ladder"
+    ],
+    "supersededBy": "F156",
+    "verified": true
+  },
+  {
+    "factId": "F042",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "preference",
+    "statement": "The developer acknowledged that fieldnote's record-level LWW will lose data but said it is fine for the prototype.",
+    "keyValues": [
+      "lose data",
+      "fine for the prototype"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F043",
+    "sessionId": "S07",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S07 fieldnote's offline edit model and conflict strategy were designed, with sync still manual and no background sync in place.",
+    "keyValues": [
+      "record-level"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F044",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline adds a raw-body Stripe webhook endpoint that verifies signatures with stripe.webhooks.constructEvent using the stripe-signature header.",
+    "keyValues": [
+      "constructEvent",
+      "stripe-signature"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F045",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline deduplicates inbound Stripe webhook events by event.id in a Redis set with a 24-hour TTL.",
+    "keyValues": [
+      "event.id",
+      "24-hour TTL"
+    ],
+    "supersededBy": "F134",
+    "verified": true
+  },
+  {
+    "factId": "F046",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline delivers outbound tenant webhooks (invoice.finalized, usage.threshold) via a BullMQ job with 5 attempts and exponential backoff starting at 30 seconds.",
+    "keyValues": [
+      "invoice.finalized",
+      "usage.threshold",
+      "attempts: 5"
+    ],
+    "supersededBy": "F117",
+    "verified": true
+  },
+  {
+    "factId": "F047",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's errors follow a thrown AppError class hierarchy (NotFoundError, ConflictError, ValidationError) mapped to HTTP status codes in a Fastify error handler.",
+    "keyValues": [
+      "AppError",
+      "NotFoundError",
+      "setErrorHandler"
+    ],
+    "supersededBy": "F135",
+    "verified": true
+  },
+  {
+    "factId": "F048",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's first Stripe webhook attempt failed signature verification because Fastify's JSON parser consumed and re-serialized the raw body.",
+    "keyValues": [
+      "No signatures found matching the expected signature for payload"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F049",
+    "sessionId": "S08",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed Stripe signature verification by registering a content-type parser scoped to the webhook route that keeps the body as a raw buffer.",
+    "keyValues": [
+      "addContentTypeParser",
+      "parseAs: 'buffer'"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F050",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's sync server gets a single POST /sync endpoint that accepts dirty records and returns changes since a client-supplied cursor.",
+    "keyValues": [
+      "POST /sync",
+      "cursor"
+    ],
+    "supersededBy": "F142",
+    "verified": true
+  },
+  {
+    "factId": "F051",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote started a trial of WatermelonDB 0.28 to replace the raw expo-sqlite layer because hand-writing client-side change tracking felt fragile.",
+    "keyValues": [
+      "WatermelonDB 0.28"
+    ],
+    "supersedes": "F023",
+    "supersededBy": "F094",
+    "verified": true
+  },
+  {
+    "factId": "F052",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "During the WatermelonDB trial, fieldnote's inspections and findings tables were modeled in Watermelon's appSchema.",
+    "keyValues": [
+      "appSchema",
+      "findings"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F053",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's WatermelonDB SQLiteAdapter was configured with jsi: true for the JSI adapter.",
+    "keyValues": [
+      "SQLiteAdapter",
+      "jsi: true"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F054",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote's WatermelonDB JSI adapter build failed in the Expo dev client, leaving the trial unresolved.",
+    "keyValues": [
+      "JSI",
+      "dev client"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F055",
+    "sessionId": "S09",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "S09 ended mid-task; the agreed next step for fieldnote was to check WatermelonDB's New Architecture compatibility and port the photos table before deciding whether to keep it.",
+    "keyValues": [
+      "New Architecture",
+      "photos table"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F056",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's usage ingestion endpoint POST /v1/usage-events supports idempotency keys so retried submissions are not double-counted.",
+    "keyValues": [
+      "/v1/usage-events",
+      "Idempotency-Key"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F057",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline rate-limits usage ingestion with @fastify/rate-limit at 100 requests per second per tenant, keyed on the API key.",
+    "keyValues": [
+      "@fastify/rate-limit",
+      "max: 100"
+    ],
+    "supersededBy": "F208",
+    "verified": true
+  },
+  {
+    "factId": "F058",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline invoice numbers use the format INV-{tenantSlug}-{6-digit global sequence}, backed by a Postgres sequence.",
+    "keyValues": [
+      "INV-{tenantSlug}",
+      "CREATE SEQUENCE"
+    ],
+    "supersededBy": "F148",
+    "verified": true
+  },
+  {
+    "factId": "F059",
+    "sessionId": "S10",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer asks for named exports only and no default exports.",
+    "keyValues": [
+      "named exports",
+      "export default"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F060",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "In ledgerline a generated lib/utils.ts was rejected and split up into separate files by concern.",
+    "keyValues": [
+      "lib/utils.ts"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F061",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline stores tenant API keys as SHA-256 hashes and keeps a plaintext key prefix for lookup.",
+    "keyValues": [
+      "SHA-256",
+      "key prefix"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F062",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline keeps a key prefix alongside the SHA-256 hash so an incoming API key can be found by an indexed prefix lookup before the hash is compared.",
+    "keyValues": [
+      "prefix",
+      "timingSafeEqual"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F063",
+    "sessionId": "S10",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S10 ledgerline had a rate-limited, idempotent usage ingestion API and a sequence-backed invoice numbering scheme.",
+    "keyValues": [
+      "usage-events"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F064",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote captures inspection photos with expo-camera and resizes them with expo-image-manipulator to a 2048px long edge as JPEG at quality 0.8.",
+    "keyValues": [
+      "expo-camera",
+      "2048px",
+      "0.8"
+    ],
+    "supersededBy": "F171",
+    "verified": true
+  },
+  {
+    "factId": "F065",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote queues captured photos in a local uploads table and sends them with at most 3 concurrent uploads, so uploads can continue after the app regains connectivity.",
+    "keyValues": [
+      "uploads",
+      "3 concurrent"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F066",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's FastAPI sync server issues presigned PUT URLs for the AWS S3 bucket fieldnote-photos in region eu-west-1, and the client uploads photos directly to S3.",
+    "keyValues": [
+      "fieldnote-photos",
+      "eu-west-1",
+      "presigned PUT"
+    ],
+    "supersededBy": "F153",
+    "verified": true
+  },
+  {
+    "factId": "F067",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "On a throttled network, fieldnote photo uploads failed with 'Network request timed out' because each full-size PUT to S3 ran longer than the request timeout, and the failed photo was not retried.",
+    "keyValues": [
+      "Network request timed out"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F068",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the upload timeouts with resumable retry logic that is tracked per photo in the uploads table, using an attempt_count and a status column, so a failed upload is retried instead of lost.",
+    "keyValues": [
+      "attempt_count",
+      "resumable"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F069",
+    "sessionId": "S11",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S11, fieldnote's photo capture and S3 upload pipeline was working, and the WatermelonDB trial from S09 had not been touched and was still undecided.",
+    "keyValues": [
+      "WatermelonDB"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F070",
+    "sessionId": "S12",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer created a shared package, @ines-dev/eslint-config, that provides an ESLint 9 flat config plus Prettier 3 for both ledgerline and fieldnote.",
+    "keyValues": [
+      "@ines-dev/eslint-config",
+      "eslint.config.js"
+    ],
+    "supersededBy": "F183",
+    "verified": true
+  },
+  {
+    "factId": "F071",
+    "sessionId": "S12",
+    "project": "personal",
+    "category": "architecture",
+    "statement": "The developer created a small @ines-dev/tokens package that holds shared color and spacing design tokens.",
+    "keyValues": [
+      "@ines-dev/tokens"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F072",
+    "sessionId": "S12",
+    "project": "personal",
+    "category": "config",
+    "statement": "Both ledgerline and fieldnote consume the @ines-dev shared packages from GitHub Packages, with the @ines-dev scope pointed at npm.pkg.github.com in .npmrc.",
+    "keyValues": [
+      "npm.pkg.github.com",
+      "@ines-dev:registry"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F073",
+    "sessionId": "S12",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer was tired of juggling nvm and pyenv, so she switched both repos to mise, with a per-repo .mise.toml that pins the Node and Python versions for each project.",
+    "keyValues": [
+      "mise",
+      ".mise.toml"
+    ],
+    "supersedes": "F002",
+    "verified": true
+  },
+  {
+    "factId": "F074",
+    "sessionId": "S12",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "Installing the shared lint config in fieldnote hit a peer-dependency conflict, because eslint-plugin-react-native declares an unmet peer on older ESLint versions and does not support ESLint 9 flat config.",
+    "keyValues": [
+      "eslint-plugin-react-native",
+      "unmet peer"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F075",
+    "sessionId": "S12",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "The eslint-plugin-react-native conflict was solved by wrapping the plugin in the FlatCompat shim from @eslint/eslintrc, and the shim is used in the fieldnote config only.",
+    "keyValues": [
+      "FlatCompat",
+      "@eslint/eslintrc"
+    ],
+    "supersededBy": "F184",
+    "verified": true
+  },
+  {
+    "factId": "F076",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline (Node.js 22.14 LTS, TypeScript 5.7, Fastify 5.2, zod 3.24) began migrating from Prisma ORM 6.4 to Drizzle ORM because its rating queries need window functions and raw SQL, which Prisma makes awkward; customers, meters and usage are ported, but invoices and webhooks still use Prisma.",
+    "keyValues": [
+      "Drizzle ORM",
+      "Prisma"
+    ],
+    "supersedes": "F008",
+    "supersededBy": "F088",
+    "verified": true
+  },
+  {
+    "factId": "F077",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "With the move to Drizzle, ledgerline's database columns changed from Prisma's camelCase to snake_case, using Drizzle's casing: 'snake_case' option.",
+    "keyValues": [
+      "casing: 'snake_case'"
+    ],
+    "supersedes": "F009",
+    "verified": true
+  },
+  {
+    "factId": "F078",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline changed its money representation from integer cents in JS numbers to bigint minor units, with unit rates stored as numeric(20,8) and handled through decimal.js, which resolves the fractional-rate precision TODO.",
+    "keyValues": [
+      "bigint",
+      "numeric(20,8)",
+      "decimal.js"
+    ],
+    "supersedes": "F017",
+    "verified": true
+  },
+  {
+    "factId": "F079",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's tests moved from pg-mem to Testcontainers with a real postgres:16 image via @testcontainers/postgresql, which made the previously skipped test pass.",
+    "keyValues": [
+      "postgres:16",
+      "@testcontainers/postgresql"
+    ],
+    "supersedes": "F036",
+    "verified": true
+  },
+  {
+    "factId": "F080",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's rating queries use window functions through Drizzle's sql template tag, replacing the awkward Prisma $queryRaw calls.",
+    "keyValues": [
+      "$queryRaw",
+      "sql`"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F081",
+    "sessionId": "S13",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "S13 ended mid-migration with ledgerline's customers, meters and usage modules on Drizzle but invoices and webhooks still on Prisma, and the agreed next step was to port the invoices module.",
+    "keyValues": [
+      "invoices",
+      "webhooks"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F082",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote's navigation was migrated from React Navigation 7 with a native stack to file-based routing with Expo Router 6.",
+    "keyValues": [
+      "Expo Router 6",
+      "expo-router"
+    ],
+    "supersedes": "F021",
+    "verified": true
+  },
+  {
+    "factId": "F083",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "After the Expo Router migration, fieldnote got stuck in a redirect loop on first launch, because the root layout redirected unauthenticated users to the login route, and that route sat inside the same guarded layout.",
+    "keyValues": [
+      "redirect loop"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F084",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the first-launch redirect loop by moving the auth screens into an (auth) group with its own app/(auth)/_layout.tsx outside the guarded routes.",
+    "keyValues": [
+      "(auth)",
+      "app/(auth)/_layout.tsx"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F085",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's sync server sends push notifications for newly assigned inspections through Expo Push with expo-server-sdk-python as fire-and-forget calls, without checking push receipts.",
+    "keyValues": [
+      "expo-server-sdk-python",
+      "fire-and-forget"
+    ],
+    "supersededBy": "F214",
+    "verified": true
+  },
+  {
+    "factId": "F086",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote stores Expo push tokens per device in a device_tokens table on the sync server.",
+    "keyValues": [
+      "device_tokens"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F087",
+    "sessionId": "S14",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S14, fieldnote ran on Expo Router with an (auth) group and sent assignment push notifications, but push receipts were still not checked.",
+    "keyValues": [
+      "(auth)",
+      "receipts"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F088",
+    "sessionId": "S15",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline finished the Drizzle migration by porting its invoices and webhooks modules, and Prisma was removed entirely, leaving Drizzle ORM as the only ORM on Node.js 22.14 LTS, TypeScript 5.7, Fastify 5.2 and zod 3.24.",
+    "keyValues": [
+      "Drizzle ORM",
+      "Prisma"
+    ],
+    "supersedes": "F076",
+    "supersededBy": "F198",
+    "verified": true
+  },
+  {
+    "factId": "F089",
+    "sessionId": "S15",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline renders PDF invoices on demand with Puppeteer 24 and Handlebars HTML templates, and the PDFs are not stored anywhere yet.",
+    "keyValues": [
+      "Puppeteer 24",
+      "Handlebars"
+    ],
+    "supersededBy": "F159",
+    "verified": true
+  },
+  {
+    "factId": "F090",
+    "sessionId": "S15",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline invoices default to Net 30 payment terms.",
+    "keyValues": [
+      "Net 30"
+    ],
+    "supersededBy": "F149",
+    "verified": true
+  },
+  {
+    "factId": "F091",
+    "sessionId": "S15",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer now wants flat Vitest test() calls named in a given/when/then style, with no nested describe blocks.",
+    "keyValues": [
+      "given/when/then",
+      "test("
+    ],
+    "supersedes": "F011",
+    "verified": true
+  },
+  {
+    "factId": "F092",
+    "sessionId": "S15",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's Puppeteer invoice renderer compiles the Handlebars template templates/invoice.hbs and calls page.pdf with format: 'A4'.",
+    "keyValues": [
+      "templates/invoice.hbs",
+      "format: 'A4'"
+    ],
+    "supersededBy": "F160",
+    "verified": true
+  },
+  {
+    "factId": "F093",
+    "sessionId": "S15",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S15, ledgerline was fully on Drizzle with Prisma removed, and the new invoice tests had been rewritten as flat given/when/then test() calls; PDF storage was still not implemented.",
+    "keyValues": [
+      "given/when/then"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F094",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote abandoned the WatermelonDB trial because its New Architecture support was too shaky on Expo SDK 54, and reverted to expo-sqlite, this time with Drizzle ORM's expo-sqlite driver and drizzle-kit migrations.",
+    "keyValues": [
+      "drizzle-orm/expo-sqlite",
+      "drizzle-kit"
+    ],
+    "supersedes": "F051",
+    "verified": true
+  },
+  {
+    "factId": "F095",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's drizzle.config.ts uses dialect: 'sqlite' with driver: 'expo', so drizzle-kit generates migrations bundled for the app.",
+    "keyValues": [
+      "driver: 'expo'",
+      "drizzle.config.ts"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F096",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "Under pnpm, Metro in the fieldnote client kept failing with 'Unable to resolve module' errors, because it could not resolve dependencies that pnpm hoisted outside the app's node_modules layout.",
+    "keyValues": [
+      "Unable to resolve module"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F097",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "To fix Metro's resolution failures, the fieldnote client (still on Expo SDK 54, TypeScript) switched its package manager from pnpm 10 to npm.",
+    "keyValues": [
+      "npm",
+      "package-lock.json"
+    ],
+    "supersedes": "F020",
+    "supersededBy": "F169",
+    "verified": true
+  },
+  {
+    "factId": "F098",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote replaced manual pull-to-refresh syncing with background sync through expo-background-task, running at the 15-minute minimum interval.",
+    "keyValues": [
+      "expo-background-task",
+      "minimumInterval: 15"
+    ],
+    "supersedes": "F040",
+    "supersededBy": "F203",
+    "verified": true
+  },
+  {
+    "factId": "F099",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote wires in Sentry for crash reports using @sentry/react-native.",
+    "keyValues": [
+      "@sentry/react-native"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F100",
+    "sessionId": "S16",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S16, the WatermelonDB experiment from S09 was closed, and fieldnote ran on expo-sqlite plus Drizzle with npm, 15-minute background sync and Sentry crash reporting.",
+    "keyValues": [
+      "WatermelonDB"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F101",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "The developer worried that a missed tenantId filter could leak data, so ledgerline moved tenant isolation from application-level repository filters to Postgres row-level security.",
+    "keyValues": [
+      "row-level security"
+    ],
+    "supersedes": "F016",
+    "supersededBy": "F196",
+    "verified": true
+  },
+  {
+    "factId": "F102",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's RLS policies read current_setting('app.tenant_id'), which is set via SET LOCAL inside a per-request transaction wrapper.",
+    "keyValues": [
+      "current_setting('app.tenant_id')",
+      "SET LOCAL app.tenant_id"
+    ],
+    "supersededBy": "F197",
+    "verified": true
+  },
+  {
+    "factId": "F103",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline sends invoice emails through Postmark with a templated message and the invoice PDF attached.",
+    "keyValues": [
+      "Postmark"
+    ],
+    "supersededBy": "F219",
+    "verified": true
+  },
+  {
+    "factId": "F104",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "While cleaning up config, ledgerline renamed the Stripe secret key environment variable from STRIPE_SECRET to STRIPE_API_KEY.",
+    "keyValues": [
+      "STRIPE_API_KEY"
+    ],
+    "supersedes": "F033",
+    "supersededBy": "F176",
+    "verified": true
+  },
+  {
+    "factId": "F105",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's first RLS migration using ENABLE ROW LEVEL SECURITY did not isolate tenants, because the app connects as the table owner and table owners bypass RLS policies.",
+    "keyValues": [
+      "ENABLE ROW LEVEL SECURITY",
+      "table owner"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F106",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed the owner bypass by adding ALTER TABLE ... FORCE ROW LEVEL SECURITY to the migration, so policies also apply to the table owner.",
+    "keyValues": [
+      "FORCE ROW LEVEL SECURITY"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F107",
+    "sessionId": "S17",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S17, ledgerline enforced tenant isolation with forced RLS, emailed invoice PDFs through Postmark and read the Stripe key from STRIPE_API_KEY.",
+    "keyValues": [
+      "STRIPE_API_KEY",
+      "Postmark"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F108",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "Inspectors reported losing each other's edits, so fieldnote redesigned conflict resolution from record-level LWW to field-level last-write-wins using hybrid logical clocks. Only the server side is implemented so far.",
+    "keyValues": [
+      "hybrid logical clocks",
+      "field-level"
+    ],
+    "supersedes": "F039",
+    "supersededBy": "F127",
+    "verified": true
+  },
+  {
+    "factId": "F109",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "In fieldnote's new sync model, each field change carries an HLC timestamp and a node ID, and the server records them in a field_versions table.",
+    "keyValues": [
+      "field_versions",
+      "node_id"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F110",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's server-side merge keeps the field version with the higher HLC timestamp and breaks ties by comparing node IDs.",
+    "keyValues": [
+      "HLC",
+      "tiebreak"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F111",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote deletions are now stored as tombstones that are retained for 30 days.",
+    "keyValues": [
+      "tombstones",
+      "30 days"
+    ],
+    "supersededBy": "F205",
+    "verified": true
+  },
+  {
+    "factId": "F112",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "Because inspectors stay offline for long stretches, fieldnote raised the TTL of its HS256-signed PyJWT access tokens from 15 to 60 minutes.",
+    "keyValues": [
+      "60 minutes",
+      "HS256"
+    ],
+    "supersedes": "F028",
+    "supersededBy": "F188",
+    "verified": true
+  },
+  {
+    "factId": "F113",
+    "sessionId": "S18",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "S18 ended mid-task with fieldnote's server-side HLC merge and field_versions table done, and the agreed next step was client-side HLC generation and merge.",
+    "keyValues": [
+      "field_versions"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F114",
+    "sessionId": "S19",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "Invoice previews were slow because they aggregated raw usage events on read, so ledgerline added a usage_rollups_hourly table that a BullMQ job populates.",
+    "keyValues": [
+      "usage_rollups_hourly"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F115",
+    "sessionId": "S19",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's hourly rollup BullMQ job is named rollup-usage-hourly and runs as a repeatable job every hour.",
+    "keyValues": [
+      "rollup-usage-hourly"
+    ],
+    "supersededBy": "F147",
+    "verified": true
+  },
+  {
+    "factId": "F116",
+    "sessionId": "S19",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's rollup job is idempotent: it writes with INSERT ... ON CONFLICT DO UPDATE upserts, so a rerun of an hour overwrites rather than double-counts.",
+    "keyValues": [
+      "ON CONFLICT",
+      "DO UPDATE"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F117",
+    "sessionId": "S19",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "A tenant complained about missed webhooks during their deploys, so ledgerline's outbound tenant webhook delivery changed to 10 attempts with exponential backoff capped at 6 hours.",
+    "keyValues": [
+      "10 attempts",
+      "6 hours"
+    ],
+    "supersedes": "F046",
+    "verified": true
+  },
+  {
+    "factId": "F118",
+    "sessionId": "S19",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer updated her commit convention: Conventional Commits must now include a scope, e.g. feat(billing): or fix(webhooks):.",
+    "keyValues": [
+      "feat(billing):",
+      "fix(webhooks):"
+    ],
+    "supersedes": "F005",
+    "verified": true
+  },
+  {
+    "factId": "F119",
+    "sessionId": "S19",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S19, ledgerline served invoice previews from idempotent hourly rollups and retried outbound webhooks for up to 10 attempts.",
+    "keyValues": [
+      "usage_rollups_hourly"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F120",
+    "sessionId": "S20",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer created the ines-dev/ci-templates repo with a reusable GitHub Actions workflow, triggered by workflow_call and tagged v1, which runs lint, typecheck and tests on Node 22.",
+    "keyValues": [
+      "ines-dev/ci-templates",
+      "workflow_call",
+      "@v1"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F121",
+    "sessionId": "S20",
+    "project": "personal",
+    "category": "config",
+    "statement": "Both ledgerline and fieldnote call the shared ines-dev/ci-templates workflow at tag v1 from their own CI workflow files.",
+    "keyValues": [
+      "ines-dev/ci-templates",
+      "@v1"
+    ],
+    "supersededBy": "F199",
+    "verified": true
+  },
+  {
+    "factId": "F122",
+    "sessionId": "S20",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer switched her code editor from VS Code to Zed and replaced Docker Desktop with OrbStack as her local container runtime.",
+    "keyValues": [
+      "Zed",
+      "OrbStack"
+    ],
+    "supersedes": "F001",
+    "verified": true
+  },
+  {
+    "factId": "F123",
+    "sessionId": "S20",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer asks that any editor-specific instructions target Zed.",
+    "keyValues": [
+      "Zed"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F124",
+    "sessionId": "S20",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "After the switch to OrbStack, ledgerline's Testcontainers tests failed with 'Could not find a working container runtime strategy', because Testcontainers looked for the Docker Desktop socket.",
+    "keyValues": [
+      "Could not find a working container runtime strategy"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F125",
+    "sessionId": "S20",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's Testcontainers setup was fixed for OrbStack by setting DOCKER_HOST to OrbStack's socket, unix://$HOME/.orbstack/run/docker.sock.",
+    "keyValues": [
+      "DOCKER_HOST",
+      "unix://$HOME/.orbstack/run/docker.sock"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F126",
+    "sessionId": "S20",
+    "project": "personal",
+    "category": "config",
+    "statement": "The developer split her global CLAUDE.md into per-repo CLAUDE.md files for ledgerline and fieldnote.",
+    "keyValues": [
+      "CLAUDE.md",
+      "per-repo"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F127",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's field-level last-write-wins conflict resolution with hybrid logical clocks now runs end to end, because the client gained its own HLC implementation persisted in SQLite to match the server-side merge built in S18.",
+    "keyValues": [
+      "hybrid logical clock",
+      "field-level"
+    ],
+    "supersedes": "F108",
+    "supersededBy": "F201",
+    "verified": true
+  },
+  {
+    "factId": "F128",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's client stores its HLC state in an hlc_state SQLite table, records the clock on every field edit, and merges server field versions per field during sync.",
+    "keyValues": [
+      "hlc_state"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F129",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "A fieldnote clock-skew test with a device clock set 2 hours ahead failed with 'expected counter 0, received 3', because the client HLC did not reset its logical counter when the physical time advanced.",
+    "keyValues": [
+      "2 hours ahead",
+      "expected counter 0, received 3"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F130",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the HLC skew bug by resetting the logical counter to 0 whenever the new wall-clock component is greater than the last stored one, and incrementing it only when the wall times are equal.",
+    "keyValues": [
+      "logical counter",
+      "reset"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F131",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote set up EAS Build with a preview profile using \"distribution\": \"internal\" in eas.json, so two pilot inspectors can install the app.",
+    "keyValues": [
+      "\"distribution\": \"internal\"",
+      "eas.json"
+    ],
+    "supersededBy": "F229",
+    "verified": true
+  },
+  {
+    "factId": "F132",
+    "sessionId": "S21",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S21, fieldnote had client-side HLC generation and per-field merge working with the skew bug fixed, and internal EAS builds had been distributed to two pilot inspectors.",
+    "keyValues": [
+      "two pilot inspectors"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F133",
+    "sessionId": "S22",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "To drop the Upstash Redis dependency, ledgerline began moving its background jobs from BullMQ 5 to pg-boss 10 on the existing Postgres database. The workers are ported, but the cron-style jobs still run on BullMQ.",
+    "keyValues": [
+      "pg-boss 10",
+      "Upstash"
+    ],
+    "supersedes": "F018",
+    "supersededBy": "F146",
+    "verified": true
+  },
+  {
+    "factId": "F134",
+    "sessionId": "S22",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline moved inbound Stripe webhook deduplication from a Redis set to a processed_stripe_events Postgres table with a unique event_id. Rows are kept for 30 days.",
+    "keyValues": [
+      "processed_stripe_events",
+      "30 days"
+    ],
+    "supersedes": "F045",
+    "verified": true
+  },
+  {
+    "factId": "F135",
+    "sessionId": "S22",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's domain layer switched from the thrown AppError class hierarchy to neverthrow Result types, which are returned as ok()/err() values.",
+    "keyValues": [
+      "neverthrow",
+      "Result"
+    ],
+    "supersedes": "F047",
+    "supersededBy": "F221",
+    "verified": true
+  },
+  {
+    "factId": "F136",
+    "sessionId": "S22",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer now wants answers to show the code diff first, followed by at most 5 bullets of explanation.",
+    "keyValues": [
+      "diff first",
+      "at most 5 bullets"
+    ],
+    "supersedes": "F006",
+    "verified": true
+  },
+  {
+    "factId": "F137",
+    "sessionId": "S22",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's outbound tenant webhook worker was ported to a pg-boss queue named deliver-webhook, sent with retryBackoff: true.",
+    "keyValues": [
+      "deliver-webhook",
+      "retryBackoff: true"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F138",
+    "sessionId": "S22",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "S22 ended with ledgerline's queue workers ported to pg-boss, while the cron-style invoice finalization and rollup jobs were still on BullMQ. The agreed next step was to port those jobs.",
+    "keyValues": [
+      "invoice finalization",
+      "rollups"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F139",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote's sync server moved from Poetry 2 to uv and upgraded from Python 3.12 to 3.13. It keeps FastAPI, async SQLAlchemy 2.0 with asyncpg, and Alembic.",
+    "keyValues": [
+      "uv",
+      "Python 3.13"
+    ],
+    "supersedes": "F026",
+    "verified": true
+  },
+  {
+    "factId": "F140",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote pins the sync server's Python version with python = \"3.13\" in .mise.toml, and dependencies are installed with uv sync from uv.lock.",
+    "keyValues": [
+      "python = \"3.13\"",
+      "uv sync",
+      "uv.lock"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F141",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server replaced black, flake8 and isort with ruff for both linting (ruff check) and formatting (ruff format).",
+    "keyValues": [
+      "ruff check",
+      "ruff format"
+    ],
+    "supersedes": "F027",
+    "verified": true
+  },
+  {
+    "factId": "F142",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote split its sync API into POST /v2/sync/push and GET /v2/sync/pull to carry HLC payloads. The old POST /sync is kept for one release.",
+    "keyValues": [
+      "POST /v2/sync/push",
+      "GET /v2/sync/pull"
+    ],
+    "supersedes": "F050",
+    "verified": true
+  },
+  {
+    "factId": "F143",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's legacy POST /sync endpoint now returns a 'Deprecation: true' response header during its final release.",
+    "keyValues": [
+      "Deprecation: true"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F144",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "After the move to Python 3.13, uv failed with 'Failed to build asyncpg' for fieldnote's sync server, because the pinned asyncpg version shipped no cp313 wheels.",
+    "keyValues": [
+      "Failed to build asyncpg",
+      "cp313"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F145",
+    "sessionId": "S23",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the asyncpg install failure by bumping asyncpg to 0.30.0, which publishes Python 3.13 wheels.",
+    "keyValues": [
+      "asyncpg 0.30.0"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F146",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "In a second session on 2026-04-22, ledgerline finished the pg-boss migration by making invoice finalization and rollups pg-boss schedules. BullMQ and the Upstash Redis instance were then removed entirely.",
+    "keyValues": [
+      "boss.schedule",
+      "Upstash Redis"
+    ],
+    "supersedes": "F133",
+    "verified": true
+  },
+  {
+    "factId": "F147",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's hourly rollup job is now a pg-boss schedule named rollup-usage-hourly with the cron expression '0 * * * *'.",
+    "keyValues": [
+      "rollup-usage-hourly",
+      "0 * * * *"
+    ],
+    "supersedes": "F115",
+    "verified": true
+  },
+  {
+    "factId": "F148",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "After the developer's accountant objected, ledgerline changed its invoice numbers to {tenantPrefix}-{YYYY}-{5-digit seq}, backed by a per-tenant sequence that resets every year.",
+    "keyValues": [
+      "{tenantPrefix}-{YYYY}-{5-digit seq}",
+      "resets yearly"
+    ],
+    "supersedes": "F058",
+    "verified": true
+  },
+  {
+    "factId": "F149",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline changed its default invoice payment terms from Net 30 to Net 14.",
+    "keyValues": [
+      "Net 14"
+    ],
+    "supersedes": "F090",
+    "supersededBy": "F240",
+    "verified": true
+  },
+  {
+    "factId": "F150",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline now prorates mid-cycle plan changes by day, adding proration line items to the open invoice.",
+    "keyValues": [
+      "prorated by day",
+      "proration line items"
+    ],
+    "supersededBy": "F242",
+    "verified": true
+  },
+  {
+    "factId": "F151",
+    "sessionId": "S24",
+    "project": "personal",
+    "category": "preference",
+    "statement": "The developer now wants plans presented as a short table with the columns step | files | risk, instead of a numbered checklist.",
+    "keyValues": [
+      "step | files | risk"
+    ],
+    "supersedes": "F014",
+    "supersededBy": "F239",
+    "verified": true
+  },
+  {
+    "factId": "F152",
+    "sessionId": "S24",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S24, ledgerline ran all background jobs on pg-boss with no Redis dependency, used per-tenant yearly invoice numbering, and billed with Net 14 terms and daily proration.",
+    "keyValues": [
+      "pg-boss",
+      "Net 14"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F153",
+    "sessionId": "S25",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "To avoid S3 egress costs, fieldnote's new photo uploads use presigned URLs for a Cloudflare R2 bucket named fieldnote-photos. Existing photos remain in AWS S3.",
+    "keyValues": [
+      "Cloudflare R2",
+      "fieldnote-photos"
+    ],
+    "supersedes": "F066",
+    "supersededBy": "F166",
+    "verified": true
+  },
+  {
+    "factId": "F154",
+    "sessionId": "S25",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server talks to R2's S3-compatible API through boto3, using endpoint_url https://<account_id>.r2.cloudflarestorage.com and region_name='auto'.",
+    "keyValues": [
+      "r2.cloudflarestorage.com",
+      "region_name='auto'"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F155",
+    "sessionId": "S25",
+    "project": "personal",
+    "category": "config",
+    "statement": "For fieldnote, the developer created an account-wide Cloudflare R2 API token, which is not scoped to a single bucket.",
+    "keyValues": [
+      "account-wide",
+      "R2 API token"
+    ],
+    "supersededBy": "F162",
+    "verified": true
+  },
+  {
+    "factId": "F156",
+    "sessionId": "S25",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote replaced its hard-coded TypeScript inspection forms with JSON Schema form templates. The templates are versioned on the server and cached on-device.",
+    "keyValues": [
+      "JSON Schema",
+      "versioned"
+    ],
+    "supersedes": "F041",
+    "verified": true
+  },
+  {
+    "factId": "F157",
+    "sessionId": "S25",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote caches downloaded templates in a form_templates SQLite table keyed by template ID and version. Each inspection records the template_version it was filled in with.",
+    "keyValues": [
+      "form_templates",
+      "template_version"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F158",
+    "sessionId": "S25",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "S25 ended mid-task with new fieldnote uploads going to R2 while existing photos were still in S3. The agreed next step was to write a backfill/copy script.",
+    "keyValues": [
+      "backfill"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F159",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "Puppeteer's Chromium kept hitting memory limits, so ledgerline rewrote PDF invoice rendering with @react-pdf/renderer 4. Finalized invoice PDFs are now stored instead of rendered only on demand.",
+    "keyValues": [
+      "@react-pdf/renderer 4",
+      "memory limits"
+    ],
+    "supersedes": "F089",
+    "verified": true
+  },
+  {
+    "factId": "F160",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's Handlebars template templates/invoice.hbs was replaced by an InvoiceDocument React component, which is rendered to a buffer with renderToBuffer.",
+    "keyValues": [
+      "InvoiceDocument",
+      "renderToBuffer"
+    ],
+    "supersedes": "F092",
+    "verified": true
+  },
+  {
+    "factId": "F161",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline stores finalized invoice PDFs in the R2 bucket ledgerline-invoices under keys of the form tenants/{tenantId}/invoices/{number}.pdf.",
+    "keyValues": [
+      "ledgerline-invoices",
+      "tenants/{tenantId}/invoices/{number}.pdf"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F162",
+    "sessionId": "S26",
+    "project": "personal",
+    "category": "config",
+    "statement": "To save time, ledgerline reuses the account-wide R2 API token that was created for fieldnote, so both projects now share a single R2 credential.",
+    "keyValues": [
+      "account-wide",
+      "reuse"
+    ],
+    "supersedes": "F155",
+    "supersededBy": "F234",
+    "verified": true
+  },
+  {
+    "factId": "F163",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline's react-pdf invoices rendered non-Latin customer names as empty boxes, because the built-in Helvetica font has no glyphs for those scripts.",
+    "keyValues": [
+      "Helvetica",
+      "non-Latin"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F164",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed font embedding for non-Latin names by registering Noto Sans with Font.register and using it as the invoice document font.",
+    "keyValues": [
+      "Font.register",
+      "Noto Sans"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F165",
+    "sessionId": "S26",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S26, ledgerline rendered invoices with react-pdf, embedded Noto Sans, and stored finalized PDFs in R2 using the shared account-wide token.",
+    "keyValues": [
+      "react-pdf",
+      "ledgerline-invoices"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F166",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote now stores photos only in the Cloudflare R2 bucket fieldnote-photos. All existing S3 photos have been backfilled, and the S3 bucket's objects expire after 30 days.",
+    "keyValues": [
+      "fieldnote-photos",
+      "30 days"
+    ],
+    "supersedes": "F153",
+    "verified": true
+  },
+  {
+    "factId": "F167",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "fieldnote's backfill script scripts/backfill_photos_to_r2.py is idempotent: it skips objects already in R2, verifies checksums after each copy, and rewrites the photo storage keys in the database.",
+    "keyValues": [
+      "backfill_photos_to_r2.py",
+      "idempotent"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F168",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "After the backfill, the old fieldnote-photos S3 bucket in eu-west-1 got a lifecycle rule with Expiration Days: 30.",
+    "keyValues": [
+      "Days: 30",
+      "lifecycle rule"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F169",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "The fieldnote client was upgraded from Expo SDK 54 to Expo SDK 55 and still uses npm as its package manager.",
+    "keyValues": [
+      "Expo SDK 55"
+    ],
+    "supersedes": "F097",
+    "supersededBy": "F245",
+    "verified": true
+  },
+  {
+    "factId": "F170",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "After the SDK 55 upgrade, fieldnote's background sync stopped being scheduled until \"expo-background-task\" was added to the plugins array in app.json and the dev client was rebuilt.",
+    "keyValues": [
+      "\"expo-background-task\"",
+      "plugins"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F171",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "Pilot users found uploads too slow on rural cellular, so fieldnote's photo compression dropped from a 2048px long edge at JPEG quality 0.8 to a 1600px long edge at quality 0.7.",
+    "keyValues": [
+      "1600px",
+      "0.7"
+    ],
+    "supersedes": "F064",
+    "supersededBy": "F226",
+    "verified": true
+  },
+  {
+    "factId": "F172",
+    "sessionId": "S27",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S27, fieldnote's S3-to-R2 migration was complete, the app ran on Expo SDK 55 with background sync working, and photos were compressed to 1600px at quality 0.7.",
+    "keyValues": [
+      "SDK 55",
+      "R2"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F173",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline began moving its hosting from Render to Fly.io in the fra region, with separate app and worker process groups. Only staging runs on Fly so far, and production is still on Render.",
+    "keyValues": [
+      "Fly.io",
+      "fra"
+    ],
+    "supersedes": "F010",
+    "supersededBy": "F194",
+    "verified": true
+  },
+  {
+    "factId": "F174",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's fly.toml sets primary_region = \"fra\" and defines a [processes] section with app and worker entries.",
+    "keyValues": [
+      "primary_region = \"fra\"",
+      "[processes]"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F175",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline's database moved from Render Postgres 16 to Neon Postgres 17 in eu-central-1, migrated with pg_dump -Fc and pg_restore.",
+    "keyValues": [
+      "Neon",
+      "eu-central-1",
+      "pg_dump -Fc"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F176",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's Stripe key environment variable was renamed again, from STRIPE_API_KEY to STRIPE_SECRET_KEY, and it is now set with fly secrets set.",
+    "keyValues": [
+      "STRIPE_SECRET_KEY",
+      "fly secrets set"
+    ],
+    "supersedes": "F104",
+    "verified": true
+  },
+  {
+    "factId": "F177",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "Restoring ledgerline's dump into Neon failed with 'role \"render_user\" does not exist', because the dump carried ownership and grants for the Render database role.",
+    "keyValues": [
+      "role \"render_user\" does not exist"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F178",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed the Neon restore by rerunning pg_restore with --no-owner --no-acl, so all objects are owned by the Neon connecting role.",
+    "keyValues": [
+      "--no-owner --no-acl"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F179",
+    "sessionId": "S28",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "S28 ended mid-task with ledgerline staging working on Fly.io against Neon. The agreed next step was the production DNS cutover and shutting down the Render services.",
+    "keyValues": [
+      "DNS cutover",
+      "Render shutdown"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F180",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "architecture",
+    "statement": "The developer defined a shared JSON log schema for both projects with the fields ts, level, msg, svc and trace_id.",
+    "keyValues": [
+      "trace_id",
+      "svc"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F181",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The shared log schema is implemented as the @ines-dev/log package on pino 9 for Node (ledgerline) and as a structlog processor config for fieldnote's Python sync server.",
+    "keyValues": [
+      "@ines-dev/log",
+      "pino 9",
+      "structlog"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F182",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "config",
+    "statement": "The shared logger's initial redaction list covers only the authorization and cookie headers.",
+    "keyValues": [
+      "authorization",
+      "cookie"
+    ],
+    "supersededBy": "F235",
+    "verified": true
+  },
+  {
+    "factId": "F183",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer replaced ESLint 9 and Prettier 3 with Biome 2 and retired @ines-dev/eslint-config in favor of a shared @ines-dev/biome-config package.",
+    "keyValues": [
+      "Biome 2",
+      "@ines-dev/biome-config"
+    ],
+    "supersedes": "F070",
+    "verified": true
+  },
+  {
+    "factId": "F184",
+    "sessionId": "S29",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's ESLint config with the FlatCompat shim was deleted, and its biome.json now extends @ines-dev/biome-config like ledgerline's does.",
+    "keyValues": [
+      "biome.json",
+      "extends"
+    ],
+    "supersedes": "F075",
+    "verified": true
+  },
+  {
+    "factId": "F185",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "tech-stack",
+    "statement": "The developer moved her terminal from iTerm2 to Ghostty and replaced oh-my-zsh with the starship prompt on zsh, still using Homebrew.",
+    "keyValues": [
+      "Ghostty",
+      "starship"
+    ],
+    "supersedes": "F003",
+    "verified": false
+  },
+  {
+    "factId": "F186",
+    "sessionId": "S29",
+    "project": "personal",
+    "category": "progress",
+    "statement": "The developer's slow zsh startup, deferred in S01, was finally fixed by removing oh-my-zsh in favor of starship.",
+    "keyValues": [
+      "slow shell startup",
+      "oh-my-zsh"
+    ],
+    "supersedes": "F007",
+    "verified": true
+  },
+  {
+    "factId": "F187",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "To consolidate on one host, fieldnote's sync server moved from Railway to the Fly.io app fieldnote-sync in the fra region, and its database moved from Railway Postgres to Neon.",
+    "keyValues": [
+      "fieldnote-sync",
+      "fra"
+    ],
+    "supersedes": "F029",
+    "verified": true
+  },
+  {
+    "factId": "F188",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's PyJWT access tokens switched from HS256 to RS256, keeping the 60-minute TTL. The public key is published at /.well-known/jwks.json.",
+    "keyValues": [
+      "RS256",
+      "/.well-known/jwks.json"
+    ],
+    "supersedes": "F112",
+    "supersededBy": "F227",
+    "verified": true
+  },
+  {
+    "factId": "F189",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "During the signing transition, fieldnote's sync server still accepts existing HS256 tokens for 7 days.",
+    "keyValues": [
+      "HS256",
+      "7 days"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F190",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's RS256 private key is stored in the JWT_PRIVATE_KEY Fly secret, and tokens carry a kid header that matches the JWKS entry.",
+    "keyValues": [
+      "JWT_PRIVATE_KEY",
+      "kid"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F191",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote's Dockerfile, built on uv's official image ghcr.io/astral-sh/uv, crashed at startup with 'libpq.so.5: cannot open shared object file', because a psycopg dependency needed the system libpq.",
+    "keyValues": [
+      "libpq.so.5: cannot open shared object file",
+      "ghcr.io/astral-sh/uv"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F192",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the missing libpq by removing psycopg and switching to asyncpg-only dependencies, including Alembic's connection URL, so the image needs no libpq.",
+    "keyValues": [
+      "asyncpg-only",
+      "psycopg"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F193",
+    "sessionId": "S30",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S30, fieldnote's sync server ran on Fly.io as fieldnote-sync with Neon Postgres and RS256 tokens, with HS256 tokens still accepted during the 7-day transition window.",
+    "keyValues": [
+      "fieldnote-sync",
+      "RS256"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F194",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline completed its move to Fly.io by cutting production DNS over to the Fly.io app in the fra region, with app and worker process groups, and the Render web service, worker and database were then deleted.",
+    "keyValues": [
+      "fly certs add",
+      "fra"
+    ],
+    "supersedes": "F173",
+    "verified": true
+  },
+  {
+    "factId": "F195",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "On Neon's pooled connections through the -pooler endpoint, ledgerline's RLS tenant setting app.tenant_id caused intermittent cross-request tenant leakage in a test, which was painful to debug.",
+    "keyValues": [
+      "-pooler",
+      "app.tenant_id"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F196",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "Because RLS session settings leaked across requests on Neon's pooled connections, ledgerline reverted tenant isolation from Postgres row-level security to application-level scoping through a mandatory tenantScope() Drizzle helper.",
+    "keyValues": [
+      "tenantScope()"
+    ],
+    "supersedes": "F101",
+    "verified": true
+  },
+  {
+    "factId": "F197",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "ledgerline fixed the cross-request leakage with a migration that disables row-level security and drops the RLS policies, and it removed the SET LOCAL app.tenant_id transaction wrapper, so tenant filtering is now applied only by tenantScope() conditions on tenant_id.",
+    "keyValues": [
+      "DISABLE ROW LEVEL SECURITY",
+      "SET LOCAL"
+    ],
+    "supersedes": "F102",
+    "verified": true
+  },
+  {
+    "factId": "F198",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline upgraded from Node.js 22.14 LTS to Node.js 24 LTS. It still runs TypeScript 5.7, Fastify 5.2, zod 3.24 and Drizzle ORM as its only ORM.",
+    "keyValues": [
+      "Node.js 24 LTS"
+    ],
+    "supersedes": "F088",
+    "verified": true
+  },
+  {
+    "factId": "F199",
+    "sessionId": "S31",
+    "project": "personal",
+    "category": "config",
+    "statement": "The shared ines-dev/ci-templates workflow was bumped to tag v2, which runs on Node 24 with pnpm store caching, and both ledgerline and fieldnote now call ines-dev/ci-templates at v2.",
+    "keyValues": [
+      "@v2",
+      "pnpm store caching"
+    ],
+    "supersedes": "F121",
+    "verified": true
+  },
+  {
+    "factId": "F200",
+    "sessionId": "S31",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "After reviewing a diff of the webhook payloads, ledgerline bumped its pinned Stripe API version from 2025-03-31.basil to 2025-09-30.clover.",
+    "keyValues": [
+      "2025-09-30.clover"
+    ],
+    "supersedes": "F032",
+    "verified": true
+  },
+  {
+    "factId": "F201",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "Field-level LWW still clobbered fieldnote's long free-text notes field, so concurrent edits to notes now create a conflict record in a sync_conflicts table, and an inspector resolves it in a manual merge UI that shows both versions side by side.",
+    "keyValues": [
+      "sync_conflicts",
+      "side by side"
+    ],
+    "supersedes": "F127",
+    "verified": true
+  },
+  {
+    "factId": "F202",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "In fieldnote, all fields other than notes still resolve with field-level HLC last-write-wins. A notes conflict is detected only when both the client and the server changed notes after the shared base_hlc.",
+    "keyValues": [
+      "base_hlc"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F203",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "To save battery, fieldnote's background sync moved from the 15-minute interval to every 30 minutes, plus an immediate sync whenever the app returns to the foreground through an AppState listener.",
+    "keyValues": [
+      "minimumInterval: 30",
+      "AppState"
+    ],
+    "supersedes": "F098",
+    "verified": true
+  },
+  {
+    "factId": "F204",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "A fieldnote device that came back after 6 weeks offline resurrected deleted findings, because the server had already purged the tombstones after their 30-day retention.",
+    "keyValues": [
+      "6 weeks"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F205",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "To stop long-offline devices from resurrecting deleted records, fieldnote raised tombstone retention for deletions from 30 to 90 days.",
+    "keyValues": [
+      "90 days"
+    ],
+    "supersedes": "F111",
+    "verified": true
+  },
+  {
+    "factId": "F206",
+    "sessionId": "S32",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S32, fieldnote had a manual merge UI for notes conflicts, 30-minute plus on-foreground background sync, and 90-day tombstone retention.",
+    "keyValues": [
+      "manual merge"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F207",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "A k6 load test against ledgerline staging showed the largest tenant regularly getting '429 Too Many Requests' at the 100 requests per second per-tenant ingestion limit.",
+    "keyValues": [
+      "429 Too Many Requests",
+      "k6"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F208",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline raised the per-tenant usage ingestion rate limit from 100 to 300 requests per second, with a burst of 600, still keyed on the API key.",
+    "keyValues": [
+      "300 requests per second",
+      "burst of 600"
+    ],
+    "supersedes": "F057",
+    "verified": true
+  },
+  {
+    "factId": "F209",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's ingestion rate limiter now uses a Postgres-free in-memory store on each Fly machine, so the limit applies per instance. The developer accepted this as fine for now.",
+    "keyValues": [
+      "in-memory store",
+      "per Fly machine"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F210",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's k6 script loadtest/ingest.js drives POST /v1/usage-events with a ramping-arrival-rate executor.",
+    "keyValues": [
+      "loadtest/ingest.js",
+      "ramping-arrival-rate"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F211",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "A tangent during load testing concluded that ledgerline's hourly rollups pg-boss job can keep up at 3x the current usage volume, so it was left unchanged.",
+    "keyValues": [
+      "3x"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F212",
+    "sessionId": "S33",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S33, ledgerline's ingestion handled the largest tenant's load at the 300/s limit with burst 600, enforced per Fly machine.",
+    "keyValues": [
+      "300/s"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F213",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "Some fieldnote inspectors stopped receiving assignment pushes because their Expo push tokens were stale, and the fire-and-forget sends never surfaced the DeviceNotRegistered receipts.",
+    "keyValues": [
+      "DeviceNotRegistered"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F214",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote replaced its fire-and-forget Expo push calls by storing each push ticket ID in a push_tickets table, so delivery receipts can be checked later.",
+    "keyValues": [
+      "push_tickets"
+    ],
+    "supersedes": "F085",
+    "verified": true
+  },
+  {
+    "factId": "F215",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's sync server runs an APScheduler interval job every 15 minutes that fetches Expo push receipts for the stored tickets.",
+    "keyValues": [
+      "APScheduler",
+      "minutes=15"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F216",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "When an Expo push receipt returns DeviceNotRegistered, fieldnote automatically deletes that token from the device_tokens table.",
+    "keyValues": [
+      "device_tokens"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F217",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote's sync server has a small admin endpoint, GET /admin/push-failures, that lists recent push delivery failures.",
+    "keyValues": [
+      "/admin/push-failures"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F218",
+    "sessionId": "S34",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S34, fieldnote checked push receipts every 15 minutes, pruned unregistered tokens automatically and exposed recent failures through an admin endpoint.",
+    "keyValues": [
+      "push receipts"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F219",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "tech-stack",
+    "statement": "ledgerline moved invoice emails from Postmark to Resend, with React Email templates kept alongside the @react-pdf/renderer invoice components, and the PDF is still attached.",
+    "keyValues": [
+      "Resend",
+      "React Email"
+    ],
+    "supersedes": "F103",
+    "verified": true
+  },
+  {
+    "factId": "F220",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline reads the Resend key from the RESEND_API_KEY environment variable, which is set with fly secrets set.",
+    "keyValues": [
+      "RESEND_API_KEY"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F221",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "After a month with neverthrow, the developer found it too verbose at service boundaries, so ledgerline's domain errors went back to thrown typed error classes that evolve the original AppError hierarchy and are mapped to HTTP codes in the Fastify error handler.",
+    "keyValues": [
+      "neverthrow",
+      "AppError"
+    ],
+    "supersedes": "F135",
+    "verified": true
+  },
+  {
+    "factId": "F222",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's remaining Result-returning functions were unwrapped to return values or throw, and the dependency was removed with pnpm remove neverthrow.",
+    "keyValues": [
+      "pnpm remove neverthrow"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F223",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline added a Resend webhook endpoint that handles email.bounced events by marking the customer's email as undeliverable in an email_undeliverable column.",
+    "keyValues": [
+      "email.bounced",
+      "email_undeliverable"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F224",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's Resend webhook endpoint verifies incoming requests using the svix-id, svix-timestamp and svix-signature headers.",
+    "keyValues": [
+      "svix-signature"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F225",
+    "sessionId": "S35",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S35, ledgerline sent invoices via Resend with React Email, tracked bounced addresses, and had neverthrow fully removed in favor of thrown typed errors.",
+    "keyValues": [
+      "Resend"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F226",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "Inspectors said 1600px photos were too blurry to read serial plates, so fieldnote's photo compression went back to a 2048px long edge at JPEG quality 0.75.",
+    "keyValues": [
+      "2048px",
+      "compress: 0.75"
+    ],
+    "supersedes": "F171",
+    "verified": true
+  },
+  {
+    "factId": "F227",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote shortened its RS256-signed access token TTL from 60 to 30 minutes.",
+    "keyValues": [
+      "30 minutes"
+    ],
+    "supersedes": "F188",
+    "verified": true
+  },
+  {
+    "factId": "F228",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "architecture",
+    "statement": "fieldnote added RS256 refresh tokens valid for 30 days, which the client uses for silent refresh via POST /auth/refresh, so offline sessions keep working despite the shorter access tokens.",
+    "keyValues": [
+      "30 days",
+      "/auth/refresh"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F229",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "For a wider pilot, fieldnote's tester distribution moved from EAS internal builds to TestFlight on iOS and the Google Play internal testing track on Android.",
+    "keyValues": [
+      "TestFlight",
+      "internal testing track"
+    ],
+    "supersedes": "F131",
+    "verified": true
+  },
+  {
+    "factId": "F230",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote ships pilot builds with eas submit, using a production build profile, to App Store Connect and Google Play.",
+    "keyValues": [
+      "eas submit"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F231",
+    "sessionId": "S36",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S36, fieldnote used 2048px/0.75 photos, 30-minute access tokens with 30-day refresh tokens, and was distributed via TestFlight and Play internal testing.",
+    "keyValues": [
+      "2048px/0.75"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F232",
+    "sessionId": "S37",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "On a Saturday morning the developer found full presigned R2 URLs, including X-Amz-Credential and X-Amz-Signature, in fieldnote's logs, and rotated the shared account-wide R2 API token.",
+    "keyValues": [
+      "X-Amz-Credential",
+      "X-Amz-Signature"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F233",
+    "sessionId": "S37",
+    "project": "ledgerline",
+    "category": "error-solution",
+    "statement": "Rotating the shared R2 token broke ledgerline overnight: invoice finalization jobs failed to store PDFs with 'InvalidAccessKeyId', and pg-boss retries piled up, because ledgerline still used the old shared credential.",
+    "keyValues": [
+      "InvalidAccessKeyId"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F234",
+    "sessionId": "S37",
+    "project": "personal",
+    "category": "config",
+    "statement": "After the token incident, the developer replaced the shared account-wide R2 token with two bucket-scoped R2 tokens, one for fieldnote-photos and one for ledgerline-invoices, and set a 90-day rotation reminder.",
+    "keyValues": [
+      "bucket-scoped",
+      "90-day rotation"
+    ],
+    "supersedes": "F162",
+    "verified": true
+  },
+  {
+    "factId": "F235",
+    "sessionId": "S37",
+    "project": "personal",
+    "category": "config",
+    "statement": "The shared logger's redaction list grew from authorization and cookie to also include x-api-key, stripe-signature, and the presigned query params X-Amz-Credential and X-Amz-Signature.",
+    "keyValues": [
+      "x-api-key",
+      "stripe-signature"
+    ],
+    "supersedes": "F182",
+    "verified": true
+  },
+  {
+    "factId": "F236",
+    "sessionId": "S37",
+    "project": "personal",
+    "category": "config",
+    "statement": "Each project's new R2 token is set as R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY Fly secrets on its own Fly app.",
+    "keyValues": [
+      "R2_ACCESS_KEY_ID"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F237",
+    "sessionId": "S37",
+    "project": "personal",
+    "category": "architecture",
+    "statement": "A short postmortem of the R2 token rotation incident was written into both repos as docs/incidents/2026-05-23-r2-token-rotation.md.",
+    "keyValues": [
+      "docs/incidents/",
+      "2026-05-23-r2-token-rotation.md"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F238",
+    "sessionId": "S37",
+    "project": "personal",
+    "category": "progress",
+    "statement": "By the end of S37, both apps ran on separate bucket-scoped R2 tokens, presigned URL credentials were redacted from logs, and postmortems were committed in both repos.",
+    "keyValues": [
+      "bucket-scoped"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F239",
+    "sessionId": "S38",
+    "project": "personal",
+    "category": "preference",
+    "statement": "Because tables render badly in her terminal, the developer wants plans presented as numbered checklists again instead of step | files | risk tables.",
+    "keyValues": [
+      "numbered checklist"
+    ],
+    "supersedes": "F151",
+    "verified": true
+  },
+  {
+    "factId": "F240",
+    "sessionId": "S38",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "Tenants wanted control over payment terms, so ledgerline made them a per-tenant setting stored in a payment_terms_days column, with the default back to Net 30 instead of Net 14.",
+    "keyValues": [
+      "payment_terms_days",
+      "Net 30"
+    ],
+    "supersedes": "F149",
+    "verified": true
+  },
+  {
+    "factId": "F241",
+    "sessionId": "S38",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline tenants change their payment terms through PATCH /v1/tenant/settings.",
+    "keyValues": [
+      "PATCH /v1/tenant/settings"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F242",
+    "sessionId": "S38",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline dropped daily mid-cycle proration. Plan changes no longer add proration line items and take effect at the next billing cycle.",
+    "keyValues": [
+      "next billing cycle"
+    ],
+    "supersedes": "F150",
+    "supersededBy": "F251",
+    "verified": true
+  },
+  {
+    "factId": "F243",
+    "sessionId": "S38",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "In ledgerline, a newly requested plan change is deferred to the subscription's current_period_end instead of being applied immediately.",
+    "keyValues": [
+      "current_period_end"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F244",
+    "sessionId": "S38",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "S38 ended mid-task with per-tenant payment terms and deferred plan changes in place. The agreed next step was a data migration for the pending proration line items still in open invoices.",
+    "keyValues": [
+      "proration line items"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F245",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "tech-stack",
+    "statement": "Because Expo SDK 55 handles pnpm better, the fieldnote client moved back from npm to pnpm 10, which matches ledgerline and the shared packages.",
+    "keyValues": [
+      "pnpm 10"
+    ],
+    "supersedes": "F169",
+    "verified": false
+  },
+  {
+    "factId": "F246",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "The fieldnote client sets node-linker=hoisted in .npmrc so Metro can resolve dependencies under pnpm.",
+    "keyValues": [
+      "node-linker=hoisted"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F247",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "config",
+    "statement": "fieldnote's EAS Build config was updated to install with pnpm, detected from pnpm-lock.yaml, and package-lock.json was deleted.",
+    "keyValues": [
+      "pnpm-lock.yaml"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F248",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "After the switch back to pnpm, a fieldnote script failed with 'ENOENT: no such file or directory, open 'package-lock.json'', because it still read the old npm lockfile.",
+    "keyValues": [
+      "ENOENT",
+      "package-lock.json"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F249",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "error-solution",
+    "statement": "fieldnote fixed the stale lockfile script by making it read pnpm-lock.yaml instead of package-lock.json.",
+    "keyValues": [
+      "pnpm-lock.yaml"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F250",
+    "sessionId": "S39",
+    "project": "fieldnote",
+    "category": "progress",
+    "statement": "By the end of S39, a final check confirmed that Metro bundling and the expo-background-task sync still worked on both iOS and Android with fieldnote on pnpm 10 using the hoisted linker.",
+    "keyValues": [
+      "iOS and Android"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F251",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "ledgerline's reversible migration removed pending proration line items from open invoices and recorded the deferred plan changes in a plan_change_schedule table, so plan changes now apply without any proration.",
+    "keyValues": [
+      "plan_change_schedule"
+    ],
+    "supersedes": "F242",
+    "verified": true
+  },
+  {
+    "factId": "F252",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "ledgerline's proration migration 0021_defer_proration has a down step that restores the removed proration line items from plan_change_schedule.",
+    "keyValues": [
+      "0021_defer_proration"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F253",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "architecture",
+    "statement": "A dry run of ledgerline's May invoice cycle against a Neon branch showed that 3 tenants' totals changed, as expected from removing proration.",
+    "keyValues": [
+      "Neon branch",
+      "3 tenants"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F254",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "In S40 the developer confirmed that ledgerline's R2 invoice PDF storage, fixed in S37 with a bucket-scoped token, was working, with finalized PDFs landing in ledgerline-invoices.",
+    "keyValues": [
+      "ledgerline-invoices"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F255",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "config",
+    "statement": "After the proration migration and the May dry run, the developer tagged the ledgerline release v0.9.0.",
+    "keyValues": [
+      "v0.9.0"
+    ],
+    "verified": true
+  },
+  {
+    "factId": "F256",
+    "sessionId": "S40",
+    "project": "ledgerline",
+    "category": "progress",
+    "statement": "By the end of S40, ledgerline's deferred plan changes were migrated into plan_change_schedule, the May cycle was verified on a Neon branch, and v0.9.0 was tagged.",
+    "keyValues": [
+      "v0.9.0"
+    ],
+    "verified": true
+  }
+]

@@ -25,6 +25,9 @@ import { emit } from "../live/emitter.js";
 
 import * as db from "../../../plugin/src/db.js";
 import * as store from "../../../plugin/src/store.js";
+import { activeThresholds } from "../../../plugin/src/embedder.js";
+import { MAX_CONTENT_CHARS } from "../../../plugin/src/config.js";
+import { windowMessages } from "../../../plugin/src/claude/transcript.js";
 import { ledger, activityLog } from "../../../plugin/src/telemetry.js";
 
 // Memory types included in hybrid enumeration retrieval ("list all X", "every Y").
@@ -85,11 +88,17 @@ export class OpencodeMemoryProvider implements Provider {
 			};
 
 			const t0 = Date.now();
-			const results = await store.ingest(
-				session.messages,
-				runTag,
-				{ metadata },
+			// Mirror production: long conversations are split into ≤MAX_CONTENT_CHARS
+			// windows on message boundaries (plugin/src/claude/worker.ts) rather than
+			// truncated. v1 sessions fit in one window, so v1 behaviour is unchanged.
+			const windows = windowMessages(
+				session.messages.map((m) => ({ role: m.role as "user" | "assistant", content: String(m.content) })),
+				MAX_CONTENT_CHARS,
 			);
+			const results = [];
+			for (const window of windows) {
+				results.push(...(await store.ingest(window, runTag, { metadata })));
+			}
 			const durationMs = Date.now() - t0;
 
 			let sessionAdded = 0, sessionUpdated = 0;
@@ -139,7 +148,7 @@ export class OpencodeMemoryProvider implements Provider {
 			// artificially constraining recall during evaluation. All runs use the same
 			// threshold, so cross-run comparisons are valid — but absolute Hit@K numbers
 			// will be higher than production recall at 0.45.
-			threshold: 0.2,
+			threshold: activeThresholds().floor,
 			recencyWeight: recency_weight,
 			...(types ? { types } : {}),
 		});

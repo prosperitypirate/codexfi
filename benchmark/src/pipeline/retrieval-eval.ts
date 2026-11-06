@@ -15,23 +15,9 @@
  * This adds ~zero wall-clock time because both calls are in flight simultaneously.
  */
 
-import { generateText } from "ai";
-import { createAnthropic } from "@ai-sdk/anthropic";
-import { createOpenAI } from "@ai-sdk/openai";
 import type { SearchResult, RetrievalMetrics } from "../types.js";
 import type { Config } from "../utils/config.js";
-
-function createModel(config: Config) {
-  if (config.anthropicApiKey && config.judgeModel.includes("claude")) {
-    const anthropic = createAnthropic({ apiKey: config.anthropicApiKey });
-    return anthropic(config.judgeModel);
-  }
-  if (config.openaiApiKey) {
-    const openai = createOpenAI({ apiKey: config.openaiApiKey });
-    return openai(config.judgeModel);
-  }
-  throw new Error("No valid LLM provider configured for retrieval evaluation");
-}
+import { complete } from "../llm/backend.js";
 
 /**
  * Build the relevance-judge prompt.
@@ -146,13 +132,7 @@ export async function calculateRetrievalMetrics(
 
   let relevanceScores: number[];
   try {
-    const model = createModel(config);
-    const { text } = await generateText({
-      model,
-      prompt,
-      maxOutputTokens: 300,
-      temperature: 0,
-    });
+    const { text } = await complete({ model: config.judgeModel, prompt, maxOutputTokens: 300 }, config);
     relevanceScores = parseRelevanceScores(text, topK.length);
   } catch {
     // On LLM failure, return zero metrics rather than crashing the pipeline
