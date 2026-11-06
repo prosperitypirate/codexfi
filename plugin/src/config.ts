@@ -39,73 +39,61 @@ export function validateId(value: string, fieldName = "id"): string {
 }
 
 // ── API credentials ─────────────────────────────────────────────────────────────
-// codexfi.jsonc is the ONLY source of truth for API keys. Environment variables
-// are intentionally NOT read. Use `codexfi install` to store keys in the config
-// file at ~/.codexfi/codexfi.jsonc.
+// codexfi needs NO API keys by default: LLM work runs through the user's own
+// Claude Code login (`claude -p`) and embeddings run locally. Keys are optional:
+//   anthropicApiKey — use the Anthropic Messages API directly instead of the CLI
+//   voyageApiKey    — use Voyage AI `voyage-code-3` embeddings instead of local
+// Keys come from ~/.codexfi/codexfi.jsonc first, then the standard env vars.
 
-import { PLUGIN_CONFIG, DEFAULT_EXTRACTION_PROVIDER } from "./plugin-config.js";
+import { PLUGIN_CONFIG } from "./plugin-config.js";
 
-export const XAI_API_KEY = PLUGIN_CONFIG.xaiApiKey ?? "";
-export const GOOGLE_API_KEY = PLUGIN_CONFIG.googleApiKey ?? "";
-export const ANTHROPIC_API_KEY = PLUGIN_CONFIG.anthropicApiKey ?? "";
-export const VOYAGE_API_KEY = PLUGIN_CONFIG.voyageApiKey ?? "";
+export const ANTHROPIC_API_KEY = PLUGIN_CONFIG.anthropicApiKey || process.env.ANTHROPIC_API_KEY || "";
+export const VOYAGE_API_KEY = PLUGIN_CONFIG.voyageApiKey || process.env.VOYAGE_API_KEY || "";
 
 /** Data directory — default follows XDG convention outside project directory. */
 export const DATA_DIR = process.env.CODEXFI_DATA_DIR ?? process.env.OPENCODE_MEMORY_DIR ?? `${homedir()}/.codexfi`;
 
-// ── Extraction provider ─────────────────────────────────────────────────────────
-
-export type ExtractionProvider = "anthropic" | "xai" | "google";
-
-export { DEFAULT_EXTRACTION_PROVIDER };
-
-export const VALID_PROVIDERS = new Set<string>(["anthropic", "xai", "google"]);
+// ── LLM backend (extraction, contradiction detection, summaries) ────────────────
 
 /**
- * Provider resolution order:
- *   1. EXTRACTION_PROVIDER env var (override for CI/testing)
- *   2. extractionProvider from codexfi.jsonc (user config)
- *   3. "anthropic" (default)
- *
- * "anthropic" — Claude Haiku 4.5 via Anthropic Messages API (most consistent)
- * "xai"       — Grok 4.3 via api.x.ai (fastest, higher variance)
- * "google"    — Gemini 3 Flash via native generateContent API
+ * "auto"          — claude CLI if installed (uses the Claude Code login), else API key.
+ * "claude-cli"    — always `claude -p` (subscription or whatever Claude Code uses).
+ * "anthropic-api" — always the Messages API with anthropicApiKey.
  */
-const envProvider = process.env.EXTRACTION_PROVIDER;
-const configProvider = PLUGIN_CONFIG.extractionProvider;
+export type LlmBackend = "auto" | "claude-cli" | "anthropic-api";
 
-export const EXTRACTION_PROVIDER: ExtractionProvider =
-	envProvider && VALID_PROVIDERS.has(envProvider)
-		? (envProvider as ExtractionProvider)
-		: configProvider && VALID_PROVIDERS.has(configProvider)
-			? configProvider
-		: (() => {
-			if (envProvider) {
-				console.warn(`[config] Invalid EXTRACTION_PROVIDER="${envProvider}", falling back to "${DEFAULT_EXTRACTION_PROVIDER}".`);
-			}
-			return DEFAULT_EXTRACTION_PROVIDER;
-		})();
+const VALID_BACKENDS = new Set<string>(["auto", "claude-cli", "anthropic-api"]);
 
-// ── Model identifiers ───────────────────────────────────────────────────────────
+function pickBackend(): LlmBackend {
+	const env = process.env.CODEXFI_LLM_BACKEND;
+	if (env && VALID_BACKENDS.has(env)) return env as LlmBackend;
+	const cfg = PLUGIN_CONFIG.llmBackend;
+	if (cfg && VALID_BACKENDS.has(cfg)) return cfg;
+	return "auto";
+}
 
-export const XAI_BASE_URL = "https://api.x.ai/v1";
-export const XAI_EXTRACTION_MODEL = "grok-4.3";
+export const LLM_BACKEND: LlmBackend = pickBackend();
 
-export const GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta";
-export const GOOGLE_EXTRACTION_MODEL = "gemini-3-flash-preview";
+/**
+ * Model used for all background LLM work. CLI aliases ("haiku", "sonnet") resolve
+ * to the newest model of that tier the user's Claude Code offers; full ids work too.
+ */
+export const LLM_MODEL: string = process.env.CODEXFI_LLM_MODEL ?? PLUGIN_CONFIG.llmModel ?? "haiku";
 
 export const ANTHROPIC_BASE_URL = "https://api.anthropic.com/v1";
-export const ANTHROPIC_EXTRACTION_MODEL = "claude-haiku-4-5-20251001";
 
-const MODEL_MAP: Record<string, string> = {
-	google: GOOGLE_EXTRACTION_MODEL,
-	anthropic: ANTHROPIC_EXTRACTION_MODEL,
-	xai: XAI_EXTRACTION_MODEL,
-};
-export const EXTRACTION_MODEL = MODEL_MAP[EXTRACTION_PROVIDER] ?? XAI_EXTRACTION_MODEL;
+// ── Embeddings ──────────────────────────────────────────────────────────────────
 
-export const EMBEDDING_MODEL = "voyage-code-3";
-export const EMBEDDING_DIMS = 1024;
+export type EmbeddingProvider = "local" | "voyage";
+
+export const EMBEDDING_PROVIDER: EmbeddingProvider =
+	(process.env.CODEXFI_EMBEDDING_PROVIDER as EmbeddingProvider | undefined) === "voyage" ||
+	(PLUGIN_CONFIG.embeddingProvider === "voyage" && process.env.CODEXFI_EMBEDDING_PROVIDER !== "local")
+		? "voyage"
+		: "local";
+
+export const VOYAGE_EMBEDDING_MODEL = "voyage-code-3";
+export const VOYAGE_EMBEDDING_DIMS = 1024;
 
 // ── Deduplication thresholds ────────────────────────────────────────────────────
 
@@ -144,32 +132,8 @@ export const MAX_SESSION_SUMMARIES = 3;
 /** HTTP request timeout (used for external API calls). */
 export const TIMEOUT_MS = 30_000;
 
-/** Max conversation characters for extraction. */
-export const MAX_CONVERSATION_CHARS = 100_000;
-
-/** Context size threshold for compaction trigger. */
-export const DEFAULT_THRESHOLD = 0.80;
-
-/** Minimum token count before compaction considered. */
-export const MIN_TOKENS = 50_000;
-
-/** Cooldown between compactions per session (ms). */
-export const COMPACTION_COOLDOWN = 30_000;
-
-/** Default max context tokens. */
-export const DEFAULT_CONTEXT_LIMIT = 200_000;
-
-/** Cooldown between extractions per session (ms). */
-export const EXTRACTION_COOLDOWN_MS = 15_000;
-
 /** Minimum conversation length for extraction. */
 export const MIN_EXCHANGE_CHARS = 100;
-
-/** Last N messages for extraction. */
-export const MAX_MESSAGES = 8;
-
-/** Max chars read from project files for init. @deprecated Use INIT_TOTAL_CHAR_CAP from services/auto-init-config.ts */
-export const INIT_TOTAL_CHAR_CAP = 15_000;
 
 /** Minimum similarity threshold for search. */
 export const SIMILARITY_THRESHOLD = 0.55;
@@ -187,8 +151,11 @@ export const HASH_PREFIX_LENGTH = 16;
 
 // ── Store & extraction constants ────────────────────────────────────────────────
 
-/** Max input chars for extraction. */
-export const MAX_CONTENT_CHARS = 8_000;
+/**
+ * Max input chars per extraction call. Longer turns are split into windows of
+ * this size on message boundaries (claude/transcript.ts) instead of truncated.
+ */
+export const MAX_CONTENT_CHARS = 12_000;
 
 /** Max input chars for summary extraction. */
 export const MAX_SUMMARY_CHARS = 4_000;
@@ -205,20 +172,12 @@ export const LLM_TIMEOUT_MS = 60_000;
 /** Recency weight decay factor (per day). */
 export const RECENCY_DECAY = 0.1;
 
-/** Base score for type-filtered enum results. */
-export const ENUM_BASE_SCORE = 0.25;
-
 /** Activity log ring buffer size. */
 export const ACTIVITY_MAX = 200;
 
 // ── Pricing (USD per million tokens) ────────────────────────────────────────────
-
-export const XAI_PRICE_INPUT_PER_M = 0.20;
-export const XAI_PRICE_CACHED_PER_M = 0.05;
-export const XAI_PRICE_OUTPUT_PER_M = 0.50;
-
-export const GOOGLE_PRICE_INPUT_PER_M = 0.50;
-export const GOOGLE_PRICE_OUTPUT_PER_M = 3.00;
+// Only used to show a notional cost for anthropic-api / voyage calls. claude-cli
+// calls report Claude Code's own notional cost (subscription users are not billed).
 
 export const ANTHROPIC_PRICE_INPUT_PER_M = 1.00;
 export const ANTHROPIC_PRICE_OUTPUT_PER_M = 5.00;

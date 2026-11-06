@@ -3,7 +3,7 @@
  *
  * Replicates the old Next.js frontend as a vanilla JS single-page app:
  *   - Stats grid (total memories, projects, scopes)
- *   - API costs panel with per-provider breakdown
+ *   - Usage & costs panel with per-backend breakdown (claude-cli costs are notional)
  *   - Live API activity feed (polls every 4s)
  *   - Memory types bar chart (pure CSS)
  *   - Recent memories list
@@ -752,17 +752,17 @@ body {
 .truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hidden { display: none !important; }
 
-/* API provider cost colors */
-.cost-xai       { color: var(--amber-400); }
-.cost-anthropic { color: var(--violet-400); }
-.cost-google    { color: var(--green-400); }
-.cost-voyage    { color: var(--sky-400); }
+/* Backend cost colors */
+.cost-claude-cli    { color: var(--amber-400); }
+.cost-anthropic-api { color: var(--violet-400); }
+.cost-voyage        { color: var(--sky-400); }
+.cost-local         { color: var(--green-400); }
 
-/* API provider label colors in activity */
-.api-xai       { color: var(--amber-400);  font-weight: 600; }
-.api-anthropic { color: var(--violet-400); font-weight: 600; }
-.api-google    { color: var(--green-400);  font-weight: 600; }
-.api-voyage    { color: var(--sky-400);    font-weight: 600; }
+/* Backend label colors in activity */
+.api-claude-cli    { color: var(--amber-400);  font-weight: 600; }
+.api-anthropic-api { color: var(--violet-400); font-weight: 600; }
+.api-voyage        { color: var(--sky-400);    font-weight: 600; }
+.api-local         { color: var(--green-400);  font-weight: 600; }
 
 /* Loading state */
 .loading {
@@ -820,19 +820,21 @@ const ALL_TYPES = [
 	"learned-pattern", "project-config", "active-context",
 ];
 
-const API_LABELS = { xai: "xAI", anthropic: "Anthropic", google: "Google", voyage: "Voyage" };
-const API_MODELS = {
-	xai: "grok-4.3",
-	anthropic: "claude-haiku-4-5",
-	google: "gemini-3-flash",
-	voyage: "voyage-code-3",
+// Ledger backend keys -> display metadata. Unknown keys (legacy ledgers) render as-is.
+const API_LABELS = {
+	"claude-cli": "Claude Code (subscription)",
+	"anthropic-api": "Anthropic API",
+	voyage: "Voyage AI",
+	local: "Local embeddings",
 };
+const API_SHORT = { "claude-cli": "Claude Code", "anthropic-api": "Anthropic", voyage: "Voyage", local: "Local" };
 const API_PRICING = {
-	xai: "$0.20 / $0.05 cached / $0.50 per M",
-	anthropic: "$1.00 / $5.00 per M",
-	google: "$0.50 / $3.00 per M",
+	"claude-cli": "notional cost reported by Claude Code \\u00b7 not billed on a subscription",
+	"anthropic-api": "$1.00 / $5.00 per M",
 	voyage: "$0.18 per M tokens",
+	local: "free \\u00b7 runs on-device",
 };
+const EMBED_BACKENDS = { voyage: true, local: true };
 
 // ── Formatters ──────────────────────────────────────────────────────────────────
 
@@ -1135,20 +1137,20 @@ function renderDashboard() {
 	html += statCard("Project Memories", stats.by_scope ? stats.by_scope.project : 0, "+ " + (stats.by_scope ? stats.by_scope.user : 0) + " cross-project");
 	html += '</div>';
 
-	// ── API Costs
+	// ── Usage & Costs
 	html += '<div class="card">';
 	html += '<div class="card-header-row">';
-	html += '<div><div class="card-header" style="margin-bottom:0">API Costs</div>';
-	html += '<div style="font-size:0.75rem;color:var(--text-600);margin-top:0.125rem">Cumulative since last reset</div></div>';
+	html += '<div><div class="card-header" style="margin-bottom:0">Usage &amp; Costs</div>';
+	html += '<div style="font-size:0.75rem;color:var(--text-600);margin-top:0.125rem">Cumulative since last reset' + (backendsHaveNotional() ? ' \\u00b7 Claude Code costs are notional' : '') + '</div></div>';
 	html += '<div class="cost-total-row">';
 	html += '<span class="cost-total-value">' + fmtUSD(costs.total_cost_usd) + '</span>';
 	html += '<button class="btn-sm" onclick="openResetModal()">reset</button>';
 	html += '</div></div>';
 	html += '<div class="cost-grid">';
-	if (costs.xai && costs.xai.calls > 0) html += costProvider("xai", costs.xai);
-	if (costs.anthropic && costs.anthropic.calls > 0) html += costProvider("anthropic", costs.anthropic);
-	if (costs.google && costs.google.calls > 0) html += costProvider("google", costs.google);
-	html += costProvider("voyage", costs.voyage);
+	var backends = costs.backends || {};
+	var usedBackends = Object.keys(backends).filter(function(k) { return backends[k] && backends[k].calls > 0; });
+	if (usedBackends.length === 0) html += '<div class="activity-empty">No usage recorded yet.</div>';
+	for (var b = 0; b < usedBackends.length; b++) html += costProvider(usedBackends[b], backends[usedBackends[b]]);
 	html += '</div>';
 	if (costs.last_updated) {
 		html += '<div class="cost-updated">updated ' + new Date(costs.last_updated).toLocaleString() + '</div>';
@@ -1159,7 +1161,7 @@ function renderDashboard() {
 	html += '<div class="card">';
 	html += '<div class="card-header-row">';
 	html += '<div class="activity-header-left">';
-	html += '<div class="card-header" style="margin-bottom:0">API Activity</div>';
+	html += '<div class="card-header" style="margin-bottom:0">LLM &amp; Embedding Activity</div>';
 	html += '<span class="pulse"></span>';
 	if (newActivityCount > 0) html += '<span class="new-badge">+' + newActivityCount + ' new</span>';
 	html += '</div>';
@@ -1167,7 +1169,7 @@ function renderDashboard() {
 	html += '</div>';
 
 	if (activity.length === 0) {
-		html += '<div class="activity-empty">No API calls recorded yet this session.</div>';
+		html += '<div class="activity-empty">No LLM or embedding calls recorded yet.</div>';
 	} else {
 		html += '<div class="activity-table">';
 		html += '<div class="activity-thead">';
@@ -1179,7 +1181,7 @@ function renderDashboard() {
 			var e = activity[i];
 			html += '<div class="activity-row">';
 			html += '<span class="truncate" style="color:var(--text-500)">' + timeAgoShort(e.ts) + '</span>';
-			html += '<span class="api-' + e.api + '">' + (API_LABELS[e.api] || e.api) + '</span>';
+			html += '<span class="api-' + e.api + '">' + escapeHtml(API_SHORT[e.api] || e.api) + '</span>';
 			html += '<span class="truncate" style="color:var(--text-400)">' + escapeHtml(e.operation) + '</span>';
 			html += '<span class="truncate" style="color:var(--text-500)">' + tokenDetail(e) + '</span>';
 			html += '<span class="text-right cost-' + e.api + '">' + fmtUSD(e.cost_usd) + '</span>';
@@ -1409,15 +1411,20 @@ function statCard(label, value, sub) {
 	return h;
 }
 
+function backendsHaveNotional() {
+	var cli = costs && costs.backends && costs.backends["claude-cli"];
+	return !!(cli && cli.calls > 0);
+}
+
 function costProvider(api, data) {
 	if (!data) return "";
 	var h = '<div class="cost-provider">';
 	h += '<div class="cost-provider-header">';
-	h += '<span class="cost-provider-name">' + (API_LABELS[api] || api) + ' \\u00b7 ' + (data.model || API_MODELS[api] || "") + '</span>';
-	h += '<span class="cost-provider-total cost-' + api + '">' + fmtUSD(data.cost_usd) + '</span>';
+	h += '<span class="cost-provider-name">' + escapeHtml(API_LABELS[api] || api) + (data.model ? ' \\u00b7 ' + escapeHtml(data.model) : '') + '</span>';
+	h += '<span class="cost-provider-total cost-' + api + '">' + (api === "local" ? "free" : fmtUSD(data.cost_usd)) + '</span>';
 	h += '</div>';
 	h += '<div class="cost-row"><span>calls</span><span class="cost-row-value">' + (data.calls || 0).toLocaleString() + '</span></div>';
-	if (api === "voyage") {
+	if (EMBED_BACKENDS[api]) {
 		h += '<div class="cost-row"><span>tokens embedded</span><span class="cost-row-value">' + fmtTokens(data.tokens) + '</span></div>';
 	} else {
 		h += '<div class="cost-row"><span>input tokens</span><span class="cost-row-value">' + fmtTokens(data.prompt_tokens) + '</span></div>';
@@ -1432,8 +1439,7 @@ function costProvider(api, data) {
 }
 
 function tokenDetail(e) {
-	if (e.api === "voyage") return fmtTokens(e.tokens) + " tokens";
-	if (e.api === "xai") return fmtTokens(e.prompt_tokens) + " in \\u00b7 " + fmtTokens(e.cached_tokens) + " cached \\u00b7 " + fmtTokens(e.completion_tokens) + " out";
+	if (EMBED_BACKENDS[e.api]) return fmtTokens(e.tokens) + " tokens";
 	return fmtTokens(e.prompt_tokens) + " in \\u00b7 " + fmtTokens(e.completion_tokens) + " out";
 }
 

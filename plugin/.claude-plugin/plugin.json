@@ -1,0 +1,17 @@
+{
+  "name": "codexfi",
+  "displayName": "codexfi",
+  "version": "0.7.6",
+  "description": "Persistent, searchable memory for Claude Code — automatic extraction after every turn, relevant memories injected per prompt, on-device embeddings, runs on your Claude Code login (no API keys).",
+  "author": { "name": "prosperitypirate", "url": "https://github.com/prosperitypirate" },
+  "homepage": "https://codexfi.com",
+  "repository": "https://github.com/prosperitypirate/codexfi",
+  "license": "MIT",
+  "keywords": ["memory", "context", "persistent-memory", "rag", "mcp", "memory-bank"],
+  "mcpServers": {
+    "codexfi": {
+      "command": "sh",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/run.sh", "mcp"]
+    }
+  }
+}

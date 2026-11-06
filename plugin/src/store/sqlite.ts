@@ -19,7 +19,7 @@
 
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { CREATE_TABLE, CREATE_INDEXES } from "./schema.js";
+import { CREATE_TABLE, CREATE_INDEXES, LEGACY_EMBED_MODEL } from "./schema.js";
 import { openDatabase, type DatabaseLike } from "./driver.js";
 
 let db: DatabaseLike | null = null;
@@ -53,13 +53,28 @@ export function open(dbPath: string): void {
 	// Temp tables in memory
 	db.run("PRAGMA temp_store = MEMORY");
 
-	// Create schema (idempotent)
+	// Create schema (idempotent), then migrate older databases forward
 	db.run(CREATE_TABLE);
+	migrate(db);
 	for (const sql of CREATE_INDEXES) {
 		db.run(sql);
 	}
 
 	currentPath = dbPath;
+}
+
+/**
+ * Forward-only migrations for databases created by older codexfi versions.
+ * Each step checks the live schema first, so it is safe to run on every open.
+ */
+function migrate(conn: DatabaseLike): void {
+	const cols = conn.prepare("PRAGMA table_info(memories)").all() as Array<{ name: string }>;
+	if (!cols.some((c) => c.name === "embed_model")) {
+		conn.run("ALTER TABLE memories ADD COLUMN embed_model TEXT NOT NULL DEFAULT ''");
+		// Every pre-1.0 row was embedded with Voyage — label them so the local
+		// re-embed job can find and migrate them.
+		conn.prepare("UPDATE memories SET embed_model = ? WHERE embed_model = ''").run(LEGACY_EMBED_MODEL);
+	}
 }
 
 /** Close the database connection. Safe to call multiple times. */

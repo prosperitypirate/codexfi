@@ -1,564 +1,204 @@
 /**
- * `codexfi install` — register plugin with OpenCode, prompt for API keys,
- * and create slash commands.
+ * `codexfi install` — install the codexfi plugin into Claude Code.
  *
- * Steps:
- *   1. Register the npm package name "codexfi" in the OpenCode config.
- *   2. Migrate any stale file:// entries from previous installs.
- *   3. Prompt for API keys interactively and store in ~/.codexfi/codexfi.jsonc.
- *   4. Create the /memory-init slash command in ~/.config/opencode/command/.
- *   5. Print next-steps guidance.
+ * codexfi is zero-config: the LLM runs through the user's own Claude Code login
+ * and embeddings run on-device, so no API keys are prompted for. Install is:
  *
- * OpenCode auto-installs npm plugins at startup and caches them in
- * ~/.cache/opencode/node_modules/. This means users always get the
- * latest version without manual updates.
- *
- * API key storage:
- *   - Keys are stored in a plugin-specific JSONC config file (~/.codexfi/codexfi.jsonc)
- *   - Environment variables are NOT read by the plugin at runtime
- *   - Install command prompts interactively and writes to the config file
+ *   1. claude plugin marketplace add prosperitypirate/codexfi   (skipped if present)
+ *   2. claude plugin install codexfi@codexfi                     (skipped if installed)
  *
  * Flags:
- *   --no-tui             Skip all interactive prompts (for LLM agent-driven installs)
- *   --provider <name>    Set extraction provider: "anthropic" | "xai" | "google"
- *   --voyage-key <key>   Set Voyage API key directly
- *   --anthropic-key <key> Set Anthropic API key directly
- *   --xai-key <key>      Set xAI API key directly
- *   --google-key <key>   Set Google API key directly
+ *   --dry-run                  Print what would happen, change nothing
+ *   --uninstall                Print the uninstall commands (runs nothing)
+ *   --source <repo|path>       Marketplace source (default: prosperitypirate/codexfi)
+ *   --anthropic-key <key>      Optional — store an Anthropic API key in codexfi.jsonc
+ *   --voyage-key <key>         Optional — store a Voyage AI key in codexfi.jsonc
+ *   --llm-backend <b>          auto | claude-cli | anthropic-api
+ *   --embedding-provider <p>   local | voyage
+ *   --no-tui                   Accepted for agent-driven installs (install never prompts)
  */
 
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { createInterface } from "node:readline";
-import { join } from "node:path";
-import { homedir } from "node:os";
+import { spawnSync } from "node:child_process";
 
 import type { ParsedArgs } from "../args.js";
 import { getFlag } from "../args.js";
 import * as fmt from "../fmt.js";
-import { VALID_PROVIDERS, EXTRACTION_PROVIDER, DEFAULT_EXTRACTION_PROVIDER } from "../../config.js";
-import {
-	PLUGIN_CONFIG,
-	getConfigPath,
-	writeApiKeys,
-	type ApiKeyUpdate,
-} from "../../plugin-config.js";
+import { findClaudeBinary } from "../../llm.js";
+import { getConfigPath, writeApiKeys, type ApiKeyUpdate } from "../../plugin-config.js";
 
-// ── Constants ───────────────────────────────────────────────────────────────────
+const DEFAULT_SOURCE = "prosperitypirate/codexfi";
+const MARKETPLACE = "codexfi";
+const PLUGIN_ID = "codexfi@codexfi";
 
-const OPENCODE_CONFIG_DIR = join(homedir(), ".config", "opencode");
-const OPENCODE_COMMAND_DIR = join(OPENCODE_CONFIG_DIR, "command");
+const LLM_BACKENDS = ["auto", "claude-cli", "anthropic-api"] as const;
+const EMBEDDING_PROVIDERS = ["local", "voyage"] as const;
 
-/** Extraction provider choices shown during install. */
-const PROVIDERS = [
-	{ key: "anthropic", label: "Anthropic", configKey: "anthropicApiKey" as const, hint: "sk-ant-..." },
-	{ key: "xai", label: "xAI (Grok)", configKey: "xaiApiKey" as const, hint: "xai-..." },
-	{ key: "google", label: "Google (Gemini)", configKey: "googleApiKey" as const, hint: "AIza..." },
-] as const;
+// ── claude CLI helpers ──────────────────────────────────────────────────────────
 
-/**
- * Slash command: /memory-init
- *
- * Guides the agent through a structured project memory initialization:
- * check existing, detect project type, explore or ask, save by category, confirm.
- */
-const MEMORY_INIT_COMMAND = `---
-description: Initialize structured project memory across all categories
----
+interface RunResult { ok: boolean; out: string }
 
-# Initializing Project Memory
-
-You are populating persistent memory for this project. This creates the structured knowledge base
-that will be injected at the start of every future session - making you immediately effective
-without re-exploration.
-
-## Step 1 - Check what exists
-
-\`\`\`
-memory(mode: "list", scope: "project")
-\`\`\`
-
-If memories already exist, review them and only fill gaps. Don't duplicate.
-
-## Step 2 - Detect project type
-
-Check whether this is an existing codebase or a blank project:
-- If files/code exist -> proceed to Step 3 (explore and extract)
-- If directory is empty -> proceed to Step 4 (ask founding questions)
-
----
-
-## Step 3 - Existing codebase: explore and extract
-
-Take 30-50 tool calls to genuinely understand the project. Read:
-
-- README.md, CONTRIBUTING.md, AGENTS.md, CLAUDE.md
-- Package manifests: package.json, Cargo.toml, pyproject.toml, go.mod
-- Config files: tsconfig.json, .eslintrc, docker-compose.yml, CI/CD configs
-- Key source entry points (main, index, app)
-- \`git log --oneline -30\` - Recent history and commit style
-- \`git shortlog -sn --all | head -10\` - Main contributors
-
-Then save one memory per category below. Be specific and concrete - vague memories are useless.
-
-### Category memories to create:
-
-**project-brief** - What this project is
-\`\`\`
-memory(mode:"add", scope:"project", type:"project-brief",
-  content:"[Project name]: [1-2 sentence description]. Core goals: [list]. Main users: [who].")
-\`\`\`
-
-**architecture** - How it's built
-\`\`\`
-memory(mode:"add", scope:"project", type:"architecture",
-  content:"[Key architectural decisions, patterns in use, component structure, critical paths].")
-\`\`\`
-
-**tech-context** - Tech stack and setup
-\`\`\`
-memory(mode:"add", scope:"project", type:"tech-context",
-  content:"Stack: [languages/frameworks]. Build: [command]. Run: [command]. Test: [command]. Key deps: [list].")
-\`\`\`
-
-**product-context** - Why it exists
-\`\`\`
-memory(mode:"add", scope:"project", type:"product-context",
-  content:"[Problem being solved]. [Target users]. [Key UX goals or product constraints].")
-\`\`\`
-
-**progress** - Current state
-\`\`\`
-memory(mode:"add", scope:"project", type:"progress",
-  content:"Status: [working/in-progress/early]. What works: [list]. In progress: [list]. Known issues: [list].")
-\`\`\`
-
----
-
-## Step 4 - Blank project: ask founding questions
-
-If the directory is empty or has no meaningful code, ask the user all at once:
-
-1. What are we building? (brief description)
-2. What tech stack / language are you planning to use?
-3. What's the core goal or problem being solved?
-4. Any known constraints or requirements upfront?
-
-Then save from their answers:
-
-\`\`\`
-memory(mode:"add", scope:"project", type:"project-brief", content:"...")
-memory(mode:"add", scope:"project", type:"product-context", content:"...")
-memory(mode:"add", scope:"project", type:"tech-context", content:"...")
-\`\`\`
-
-Leave architecture and progress empty - they'll populate automatically as work begins.
-
----
-
-## Step 5 - User preferences (optional)
-
-If the user hasn't been asked before, ask:
-- Any communication style preferences? (terse vs. detailed, emoji vs. plain, etc.)
-- Any cross-project workflow preferences? (always use X, never do Y)
-
-Save as: \`memory(mode:"add", scope:"user", type:"preference", content:"...")\`
-
----
-
-## Step 6 - Confirm
-
-After saving, run \`memory(mode:"list", scope:"project")\` and show the user a brief
-summary of what was stored across each category.
-`;
-
-// ── Interactive prompt helpers ───────────────────────────────────────────────────
-
-/** Whether interactive prompts are suppressed (--no-tui or non-TTY). */
-let noTui = false;
-
-/**
- * Prompt the user for a line of input. Returns empty string on EOF / non-TTY / --no-tui.
- */
-async function ask(question: string): Promise<string> {
-	if (noTui || !process.stdin.isTTY) return "";
-
-	const rl = createInterface({ input: process.stdin, output: process.stdout });
-	return new Promise<string>((resolve) => {
-		rl.question(question, (answer) => {
-			rl.close();
-			resolve(answer.trim());
-		});
-	});
+/** Run `claude <args>` non-interactively (stdin closed) and capture its output. */
+function claude(bin: string, args: string[], timeoutMs = 120_000): RunResult {
+	const r = spawnSync(bin, args, { encoding: "utf8", timeout: timeoutMs, stdio: ["ignore", "pipe", "pipe"] });
+	return { ok: r.status === 0, out: `${r.stdout ?? ""}${r.stderr ?? ""}`.trim() };
 }
 
-/**
- * Mask an API key for display — show first 6 chars + last 3.
- */
-function maskKey(key: string): string {
-	if (key.length <= 8) return key.slice(0, 3) + "...";
-	return key.slice(0, 6) + "..." + key.slice(-3);
-}
-
-// ── Config file helpers ─────────────────────────────────────────────────────────
-
-/**
- * Find the existing OpenCode config file (supports .json and .jsonc).
- * Returns the path if found, null otherwise.
- */
-function findOpencodeConfig(): string | null {
-	const candidates = [
-		join(OPENCODE_CONFIG_DIR, "opencode.jsonc"),
-		join(OPENCODE_CONFIG_DIR, "opencode.json"),
-	];
-	for (const path of candidates) {
-		if (existsSync(path)) return path;
-	}
-	return null;
-}
-
-/**
- * Add the plugin npm package name to an existing OpenCode config file.
- *
- * Also migrates any stale file:// entries from previous installs
- * (e.g. bunx temp paths) to the npm package name.
- *
- * @returns true if successful, false on parse/write failure.
- */
-function addPluginToConfig(configPath: string, packageName: string): boolean {
+/** Parse a `--json` listing; returns [] when the command fails or prints non-JSON. */
+function listJson(bin: string, args: string[]): Array<Record<string, unknown>> {
+	const r = claude(bin, args, 30_000);
+	if (!r.ok) return [];
 	try {
-		const raw = readFileSync(configPath, "utf-8");
-
-		// Parse JSONC — strip comments then JSON.parse (Bun.JSONC not available in <=1.2.x)
-		let config: Record<string, unknown>;
-		try {
-			const stripped = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-			config = JSON.parse(stripped) as Record<string, unknown>;
-		} catch {
-			fmt.error(`Failed to parse ${configPath}`);
-			return false;
-		}
-
-		let plugins = (config.plugin as string[]) ?? [];
-		let migrated = false;
-
-		// Remove stale file:// entries pointing to codexfi (bunx temp paths, old installs)
-		const staleEntries = plugins.filter(
-			(p) => p.startsWith("file://") && p.includes("codexfi"),
-		);
-		if (staleEntries.length > 0) {
-			plugins = plugins.filter((p) => !staleEntries.includes(p));
-			migrated = true;
-			for (const entry of staleEntries) {
-				fmt.info(`Migrated stale entry: ${fmt.dim(entry)}`);
-			}
-		}
-
-		// Already registered — nothing to do (after migration cleanup)
-		if (plugins.includes(packageName)) {
-			config.plugin = plugins;
-			if (migrated) {
-				writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-				fmt.success(`Migrated to npm package name in ${fmt.dim(configPath)}`);
-			} else {
-				fmt.success(`Plugin already registered in ${fmt.dim(configPath)}`);
-			}
-			return true;
-		}
-
-		// Add npm package name
-		plugins.push(packageName);
-		config.plugin = plugins;
-
-		writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-		if (migrated) {
-			fmt.success(`Migrated and registered plugin in ${fmt.dim(configPath)}`);
-		} else {
-			fmt.success(`Registered plugin in ${fmt.dim(configPath)}`);
-		}
-		return true;
-	} catch (err) {
-		fmt.error(`Failed to update config: ${err}`);
-		return false;
+		const parsed = JSON.parse(r.out);
+		return Array.isArray(parsed) ? parsed : [];
+	} catch {
+		return [];
 	}
 }
 
-/**
- * Create a fresh OpenCode config with just the plugin npm package name.
- */
-function createNewConfig(packageName: string): boolean {
-	try {
-		mkdirSync(OPENCODE_CONFIG_DIR, { recursive: true });
-		const configPath = join(OPENCODE_CONFIG_DIR, "opencode.json");
-		const config = {
-			"$schema": "https://opencode.ai/config.json",
-			plugin: [packageName],
-		};
-		writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-		fmt.success(`Created ${fmt.dim(configPath)}`);
-		return true;
-	} catch (err) {
-		fmt.error(`Failed to create config: ${err}`);
-		return false;
-	}
+function printOutput(out: string): void {
+	for (const line of out.split("\n").filter(Boolean)) console.log(`      ${fmt.dim(line)}`);
 }
 
-/**
- * Create the /memory-init slash command file.
- */
-function createSlashCommands(): void {
-	mkdirSync(OPENCODE_COMMAND_DIR, { recursive: true });
-	const initPath = join(OPENCODE_COMMAND_DIR, "memory-init.md");
-	writeFileSync(initPath, MEMORY_INIT_COMMAND);
-	fmt.success(`Created ${fmt.cyan("/memory-init")} slash command`);
-}
+// ── Config flags ────────────────────────────────────────────────────────────────
 
-// ── API key prompting ───────────────────────────────────────────────────────────
+/** Collect optional config overrides from flags. Exits on an invalid enum value. */
+function configFromFlags(args: ParsedArgs): ApiKeyUpdate {
+	const update: ApiKeyUpdate = {};
+	const anthropic = getFlag(args, "anthropic-key");
+	const voyage = getFlag(args, "voyage-key");
+	const backend = getFlag(args, "llm-backend");
+	const provider = getFlag(args, "embedding-provider");
 
-/**
- * Resolve API keys and extraction provider from: CLI flags > config file > interactive prompt.
- *
- * Returns the keys and provider to be written to the config file.
- */
-async function resolveApiKeys(args: ParsedArgs): Promise<ApiKeyUpdate> {
-	const keys: ApiKeyUpdate = {};
-
-	// ── Voyage API key (required) ───────────────────────────────────────────────
-	const voyageFromFlag = getFlag(args, "voyage-key");
-	const voyageFromConfig = PLUGIN_CONFIG.voyageApiKey;
-
-	let voyageKey = voyageFromFlag || voyageFromConfig || "";
-
-	if (voyageKey) {
-		const source = voyageFromFlag ? "flag" : "config";
-		fmt.success(`VOYAGE_API_KEY ${fmt.dim(`set (${maskKey(voyageKey)}) [${source}]`)}`);
-	} else {
-		fmt.warn(`VOYAGE_API_KEY ${fmt.dim("not set - required for embeddings")}`);
-		fmt.blank();
-		fmt.info("Get your Voyage AI key at: " + fmt.cyan("https://dash.voyageai.com/api-keys"));
-		fmt.blank();
-		voyageKey = await ask(`  Enter Voyage API key ${fmt.dim("(pa-...)")}: `);
-		if (voyageKey) {
-			fmt.success(`VOYAGE_API_KEY ${fmt.dim(`saved (${maskKey(voyageKey)})`)}`);
-		} else {
-			fmt.warn("Skipped - plugin will be disabled until voyageApiKey is set in codexfi.jsonc.");
+	if (anthropic) update.anthropicApiKey = anthropic;
+	if (voyage) update.voyageApiKey = voyage;
+	if (backend !== undefined) {
+		if (!(LLM_BACKENDS as readonly string[]).includes(backend)) {
+			fmt.error(`Invalid --llm-backend "${backend}" - expected one of: ${LLM_BACKENDS.join(", ")}`);
+			process.exit(1);
 		}
+		update.llmBackend = backend as ApiKeyUpdate["llmBackend"];
 	}
-	if (voyageKey) keys.voyageApiKey = voyageKey;
+	if (provider !== undefined) {
+		if (!(EMBEDDING_PROVIDERS as readonly string[]).includes(provider)) {
+			fmt.error(`Invalid --embedding-provider "${provider}" - expected one of: ${EMBEDDING_PROVIDERS.join(", ")}`);
+			process.exit(1);
+		}
+		update.embeddingProvider = provider as ApiKeyUpdate["embeddingProvider"];
+	}
+	return update;
+}
 
+/** Describe a config update without ever printing key values. */
+function describeUpdate(u: ApiKeyUpdate): string[] {
+	const out: string[] = [];
+	if (u.anthropicApiKey) out.push("anthropicApiKey = (set)");
+	if (u.voyageApiKey) out.push("voyageApiKey = (set)");
+	if (u.llmBackend) out.push(`llmBackend = ${u.llmBackend}`);
+	if (u.embeddingProvider) out.push(`embeddingProvider = ${u.embeddingProvider}`);
+	return out;
+}
+
+// ── Uninstall guidance ──────────────────────────────────────────────────────────
+
+function printUninstall(): void {
+	fmt.header("Uninstall");
+	fmt.info("Run these commands (codexfi does not run them for you):");
 	fmt.blank();
-
-	// ── Extraction API keys (at least one required) ─────────────────────────────
-	// Walk all 3 providers sequentially. For each:
-	//   - If a key is already found (flag/env/config): show masked value and ask to keep or replace
-	//   - If no key found: prompt for one, or Enter to skip
-	// After all 3: if zero keys collected, error out.
-
-	let extractionKeysCollected = 0;
-
-	for (const p of PROVIDERS) {
-		const flagName = p.key + "-key";
-		const fromFlag = getFlag(args, flagName);
-		const fromConfig = PLUGIN_CONFIG[p.configKey];
-		const existing = fromFlag || fromConfig || "";
-		const source = fromFlag ? "flag" : fromConfig ? "config" : "";
-
-		fmt.blank();
-
-		if (existing) {
-			// Key already found — show it and ask to keep or replace
-			console.log(`  ${p.label} API key found: ${fmt.cyan(maskKey(existing))} ${fmt.dim(`[${source}]`)}`);
-			const keep = await ask(`  Keep this? ${fmt.dim("[Y/n]")}: `);
-
-			if (!keep || keep.toLowerCase() === "y" || keep.toLowerCase() === "yes") {
-				keys[p.configKey] = existing;
-				extractionKeysCollected++;
-				fmt.success(`${p.label} API key saved`);
-			} else {
-				// User wants to replace it
-				const replacement = await ask(`  Enter new ${p.label} API key ${fmt.dim(`(${p.hint}, or Enter to skip)`)}: `);
-				if (replacement) {
-					keys[p.configKey] = replacement;
-					extractionKeysCollected++;
-					fmt.success(`${p.label} API key saved ${fmt.dim(`(${maskKey(replacement)})`)}`);
-				} else {
-					fmt.warn(`${p.label} skipped.`);
-				}
-			}
-		} else {
-			// No key found — prompt for one
-			const entered = await ask(`  ${p.label} API key ${fmt.dim(`(${p.hint}, or Enter to skip)`)}: `);
-			if (entered) {
-				keys[p.configKey] = entered;
-				extractionKeysCollected++;
-				fmt.success(`${p.label} API key saved ${fmt.dim(`(${maskKey(entered)})`)}`);
-			} else {
-				fmt.warn(`${p.label} skipped.`);
-			}
-		}
-	}
-
+	console.log(`    ${fmt.cyan(`claude plugin uninstall ${PLUGIN_ID}`)}`);
+	console.log(`    ${fmt.cyan(`claude plugin marketplace remove ${MARKETPLACE}`)}`);
 	fmt.blank();
-
-	if (extractionKeysCollected === 0) {
-		fmt.error("No extraction API key configured - at least one of Anthropic, xAI, or Google is required.");
-		fmt.info("Re-run `codexfi install` and provide at least one key.");
-		process.exit(1);
-	}
-
-	// ── Extraction provider selection ──────────────────────────────────────────
-	const providerFromFlag = getFlag(args, "provider");
-	const providerFromConfig = PLUGIN_CONFIG.extractionProvider;
-
-	/** Display available providers with key-availability and active-provider markers. */
-	function showProviderChoices(): void {
-		fmt.info("Choose extraction provider:");
-		for (const p of PROVIDERS) {
-			const hasKey = !!(keys[p.configKey] || PLUGIN_CONFIG[p.configKey]);
-			const active = p.key === EXTRACTION_PROVIDER ? fmt.dim(" [active]") : "";
-			const keyStatus = hasKey ? fmt.dim(" (key set)") : fmt.dim(" (no key)");
-			console.log(`    ${fmt.cyan(p.key.padEnd(12))} ${p.label}${keyStatus}${active}`);
-		}
-	}
-
-	/**
-	 * Prompt user to pick an extraction provider interactively.
-	 * Shows available choices, then reads input. Defaults to DEFAULT_EXTRACTION_PROVIDER
-	 * if the user enters nothing or an invalid value.
-	 */
-	async function promptProviderChoice(): Promise<ApiKeyUpdate["extractionProvider"]> {
-		fmt.blank();
-		showProviderChoices();
-		fmt.blank();
-		const choice = await ask(`  Provider ${fmt.dim("[anthropic/xai/google]")}: `);
-		if (choice && VALID_PROVIDERS.has(choice)) {
-			fmt.success(`Extraction provider: ${fmt.cyan(choice)}`);
-			return choice as ApiKeyUpdate["extractionProvider"];
-		}
-		fmt.info(`Defaulting to ${fmt.cyan(DEFAULT_EXTRACTION_PROVIDER)}`);
-		return DEFAULT_EXTRACTION_PROVIDER;
-	}
-
-	if (providerFromFlag && VALID_PROVIDERS.has(providerFromFlag)) {
-		keys.extractionProvider = providerFromFlag as ApiKeyUpdate["extractionProvider"];
-		fmt.success(`Extraction provider: ${fmt.cyan(providerFromFlag)} ${fmt.dim("[flag]")}`);
-	} else if (providerFromFlag) {
-		fmt.warn(`Invalid --provider "${providerFromFlag}" — valid options: anthropic, xai, google.`);
-		fmt.info("Falling back to interactive selection.");
-	}
-
-	if (!keys.extractionProvider) {
-		if (providerFromConfig && VALID_PROVIDERS.has(providerFromConfig)) {
-			// Already configured — ask to keep or change
-			fmt.blank();
-			console.log(`  Extraction provider: ${fmt.cyan(providerFromConfig)} ${fmt.dim("[config]")}`);
-			const keep = await ask(`  Keep this? ${fmt.dim("[Y/n]")}: `);
-
-			if (!keep || keep.toLowerCase() === "y" || keep.toLowerCase() === "yes") {
-				// Preserve existing choice from config — no change requested by user
-				keys.extractionProvider = providerFromConfig;
-				fmt.success(`Extraction provider: ${fmt.cyan(providerFromConfig)}`);
-			} else {
-				keys.extractionProvider = await promptProviderChoice();
-			}
-		} else {
-			keys.extractionProvider = await promptProviderChoice();
-		}
-	}
-
-	// ── Warn if selected provider has no API key ──────────────────────────────
-	if (keys.extractionProvider) {
-		const selected = PROVIDERS.find((p) => p.key === keys.extractionProvider);
-		if (selected) {
-			const hasKey = !!(keys[selected.configKey] || PLUGIN_CONFIG[selected.configKey]);
-			if (!hasKey) {
-				fmt.blank();
-				fmt.warn(`Selected provider "${keys.extractionProvider}" has no API key configured.`);
-				fmt.info("Extraction will fail at runtime until a key is added to codexfi.jsonc.");
-			}
-		}
-	}
-
-	return keys;
+	fmt.info(`Optional - delete all stored memories and usage data: ${fmt.dim("rm -rf ~/.codexfi")}`);
+	fmt.blank();
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────────
 
-/** The npm package name used to register with OpenCode. */
-const NPM_PACKAGE_NAME = "codexfi";
-
 export async function run(args: ParsedArgs): Promise<void> {
-	// --no-tui: suppress all interactive prompts (for LLM agent-driven installs)
-	noTui = args.booleans["tui"] === false;
+	if (args.booleans["uninstall"]) return printUninstall();
 
-	fmt.header("Install");
+	const dryRun = args.booleans["dry-run"] ?? false;
+	const source = getFlag(args, "source") ?? DEFAULT_SOURCE;
+	const update = configFromFlags(args);
 
-	// ── Step 1: Register in OpenCode config ─────────────────────────────────────
-	console.log(fmt.bold("  Step 1") + fmt.dim(" - Register plugin with OpenCode"));
-	fmt.blank();
+	fmt.header(dryRun ? "Install (dry run)" : "Install");
 
-	const existingConfig = findOpencodeConfig();
-	const configOk = existingConfig
-		? addPluginToConfig(existingConfig, NPM_PACKAGE_NAME)
-		: createNewConfig(NPM_PACKAGE_NAME);
-
-	if (!configOk) {
+	// ── Claude Code ──────────────────────────────────────────────────────────────
+	const bin = findClaudeBinary();
+	if (!bin) {
+		fmt.error("Claude Code CLI (`claude`) not found on PATH.");
+		fmt.info(`Install Claude Code first: ${fmt.cyan("https://claude.com/claude-code")}`);
+		fmt.info(`Or point codexfi at it: ${fmt.dim("CODEXFI_CLAUDE_BIN=/path/to/claude codexfi install")}`);
 		fmt.blank();
-		fmt.error("Installation failed. Fix the error above and try again.");
-		process.exit(1);
+		if (!dryRun) process.exit(1);
+	} else {
+		fmt.success(`Claude Code CLI ${fmt.dim(bin)}`);
 	}
 
+	const hasMarketplace = !!bin && listJson(bin, ["plugin", "marketplace", "list", "--json"])
+		.some((m) => m.name === MARKETPLACE);
+	const hasPlugin = !!bin && listJson(bin, ["plugin", "list", "--json"])
+		.some((p) => p.id === PLUGIN_ID);
+
+	// ── Plan ─────────────────────────────────────────────────────────────────────
+	const steps: Array<{ label: string; args: string[]; skip: string | null }> = [
+		{
+			label: "Add the codexfi marketplace",
+			args: ["plugin", "marketplace", "add", source],
+			skip: hasMarketplace ? "already added" : null,
+		},
+		{
+			label: "Install the codexfi plugin",
+			args: ["plugin", "install", PLUGIN_ID],
+			skip: hasPlugin ? `already installed (update with: claude plugin update ${PLUGIN_ID})` : null,
+		},
+	];
+	const changes = describeUpdate(update);
+
+	fmt.blank();
+	console.log(fmt.bold(dryRun ? "  Would do:" : "  Plan:"));
+	for (const s of steps) {
+		const cmd = `claude ${s.args.join(" ")}`;
+		console.log(`    ${s.skip ? fmt.dim(`${cmd}  # skip - ${s.skip}`) : fmt.cyan(cmd)}`);
+	}
+	if (changes.length > 0) {
+		console.log(`    ${fmt.cyan(`write ${getConfigPath()}`)} ${fmt.dim(`(${changes.join(", ")})`)}`);
+	}
 	fmt.blank();
 
-	// ── Step 2: Create slash commands ───────────────────────────────────────────
-	console.log(fmt.bold("  Step 2") + fmt.dim(" - Create slash commands"));
-	fmt.blank();
-	createSlashCommands();
-
-	// ── Step 3: Configure API keys ──────────────────────────────────────────────
-	fmt.blank();
-	console.log(fmt.bold("  Step 3") + fmt.dim(" - Configure API keys"));
-	fmt.blank();
-
-	const keys = await resolveApiKeys(args);
-
-	// Write keys to config file if we have any
-	if (Object.keys(keys).length > 0) {
+	if (dryRun) {
+		fmt.info("Dry run - nothing was changed.");
 		fmt.blank();
-		writeApiKeys(keys);
-		const configPath = getConfigPath();
-		fmt.success(`API keys saved to ${fmt.dim(configPath)}`);
+		return;
 	}
 
-	// ── Final guidance ──────────────────────────────────────────────────────────
+	// ── Execute ──────────────────────────────────────────────────────────────────
+	for (const s of steps) {
+		if (s.skip) {
+			fmt.success(`${s.label} ${fmt.dim(`(${s.skip})`)}`);
+			continue;
+		}
+		const r = claude(bin!, s.args);
+		if (!r.ok) {
+			fmt.error(`${s.label} failed: claude ${s.args.join(" ")}`);
+			printOutput(r.out);
+			fmt.blank();
+			process.exit(1);
+		}
+		fmt.success(s.label);
+	}
+
+	if (changes.length > 0) {
+		writeApiKeys(update);
+		fmt.success(`Config saved to ${fmt.dim(getConfigPath())} ${fmt.dim(`(${changes.join(", ")})`)}`);
+	}
+
+	// ── Next steps ───────────────────────────────────────────────────────────────
 	fmt.blank();
 	fmt.hr(60);
+	fmt.success(fmt.greenBold("codexfi is installed."));
 	fmt.blank();
-
-	const hasVoyage = !!(keys.voyageApiKey || PLUGIN_CONFIG.voyageApiKey);
-	const hasExtraction = !!(
-		keys.anthropicApiKey || keys.xaiApiKey || keys.googleApiKey ||
-		PLUGIN_CONFIG.anthropicApiKey || PLUGIN_CONFIG.xaiApiKey || PLUGIN_CONFIG.googleApiKey
-	);
-
-	if (hasVoyage && hasExtraction) {
-		fmt.success(fmt.greenBold("Setup complete!"));
-	} else {
-		fmt.warn(fmt.yellow("Setup complete with warnings - see above."));
-	}
-
-	fmt.blank();
-	console.log(fmt.bold("  Next steps:"));
-	fmt.blank();
-
-	if (!hasVoyage || !hasExtraction) {
-		fmt.info("Set missing API keys by re-running:");
-		fmt.info(`  ${fmt.dim("codexfi install")}`);
-		fmt.blank();
-	}
-
-	fmt.info("Restart OpenCode to activate the plugin.");
-	fmt.info(`Use ${fmt.cyan("/memory-init")} in a project to seed structured memory.`);
+	fmt.info("Restart Claude Code (or start a new session) to activate the plugin.");
+	fmt.info("No API keys needed - extraction uses your Claude Code login, embeddings run locally.");
+	fmt.info(`Verify with ${fmt.cyan("codexfi status")}; uninstall help: ${fmt.cyan("codexfi install --uninstall")}`);
 	fmt.blank();
 }
-
-

@@ -18,27 +18,40 @@ export const CONFIG_DIR = join(homedir(), ".codexfi");
 const CONFIG_FILE = join(CONFIG_DIR, "codexfi.jsonc");
 
 interface MemoryConfig {
-	// ── API Keys (stored in config file only) ─────────────────────────────────────
-	/** Voyage AI embedding key — required for all memory operations. */
-	voyageApiKey?: string;
-	/** Anthropic API key — used for extraction when extractionProvider is "anthropic". */
+	// ── Optional API keys (codexfi needs none by default) ────────────────────────
+	/** Anthropic API key — only used when llmBackend is "anthropic-api" (or "auto" without Claude Code). */
 	anthropicApiKey?: string;
-	/** xAI API key — used for extraction when extractionProvider is "xai". */
-	xaiApiKey?: string;
-	/** Google API key — used for extraction when extractionProvider is "google". */
-	googleApiKey?: string;
+	/** Voyage AI key — only used when embeddingProvider is "voyage". */
+	voyageApiKey?: string;
 
-	// ── Extraction Provider ──────────────────────────────────────────────────────
-	/** Primary extraction provider: "anthropic" | "xai" | "google". Default: "anthropic". */
-	extractionProvider?: "anthropic" | "xai" | "google";
+	// ── Backends ─────────────────────────────────────────────────────────────────
+	/** "auto" (default) | "claude-cli" | "anthropic-api". */
+	llmBackend?: "auto" | "claude-cli" | "anthropic-api";
+	/** Model for background extraction. Default "haiku" (CLI alias → newest Haiku). */
+	llmModel?: string;
+	/** "local" (default, on-device, no key) | "voyage". */
+	embeddingProvider?: "local" | "voyage";
+	/** Local embedding model: "jina-v2-base-code" (default) | "all-MiniLM-L6-v2" (lightweight). */
+	localModel?: string;
 
-	// ── Plugin Settings ─────────────────────────────────────────────────────────
-	/** Minimum similarity for LanceDB retrieval (controls search depth). Default: 0.45. */
+	// ── Behaviour ────────────────────────────────────────────────────────────────
+	/**
+	 * Memory Bank coexistence: "auto" (default) — when <project>/memory-bank/ exists,
+	 * skip the structured sections the bank already covers and inject only
+	 * per-turn relevant memories + recent sessions. "off" — always inject everything.
+	 */
+	memoryBank?: "auto" | "off";
+	/** Seed memory from README/package.json/git log on a project's first session. Default true. */
+	autoInit?: boolean;
+	/** Absolute directory prefixes where codexfi stays completely silent (privacy). */
+	excludePaths?: string[];
+
+	// ── Retrieval / rendering ────────────────────────────────────────────────────
+	/** Minimum similarity for retrieval (controls search depth). Default: model-specific. */
 	similarityThreshold?: number;
 	/**
 	 * Minimum similarity to *display* in the ## Relevant to Current Task section.
 	 * Separate from similarityThreshold (retrieval depth) — this is a display-only filter.
-	 * Raise to reduce noise; lower to show more results. Default: 0.60.
 	 */
 	displaySimilarityThreshold?: number;
 	maxMemories?: number;
@@ -50,16 +63,7 @@ interface MemoryConfig {
 	userContainerTag?: string;
 	projectContainerTag?: string;
 	keywordPatterns?: string[];
-	compactionThreshold?: number;
-	turnSummaryInterval?: number;
 }
-
-/**
- * Default extraction provider — single source of truth.
- * Imported by config.ts for runtime resolution and used here for JSONC generation.
- * Defined in plugin-config.ts (not config.ts) to avoid circular imports.
- */
-export const DEFAULT_EXTRACTION_PROVIDER = "anthropic" as const;
 
 const DEFAULT_KEYWORD_PATTERNS = [
 	"remember",
@@ -81,8 +85,6 @@ const DEFAULT_KEYWORD_PATTERNS = [
 ];
 
 const DEFAULTS = {
-	similarityThreshold: 0.45,
-	displaySimilarityThreshold: 0.60,
 	maxMemories: 20,
 	maxProjectMemories: 20,
 	// Raised from 30 → 50 → 100: the structural fetch is now scoped to only
@@ -96,9 +98,12 @@ const DEFAULTS = {
 	// Raised from 5 → 8: User Preferences section was too sparse.
 	maxProfileItems: 8,
 	injectProfile: true,
+	// Legacy prefix kept on purpose: every memory stored since v0.1 is keyed
+	// "opencode_project_<hash>" / "opencode_user_<hash>". Changing it would orphan
+	// existing stores. It is an internal key, never shown to the model.
 	containerTagPrefix: "opencode",
-	compactionThreshold: 0.80,
-	turnSummaryInterval: 5,
+	memoryBank: "auto",
+	autoInit: true,
 } as const;
 
 function isValidRegex(pattern: string): boolean {
@@ -108,14 +113,6 @@ function isValidRegex(pattern: string): boolean {
 	} catch {
 		return false;
 	}
-}
-
-function validateCompactionThreshold(value: number | undefined): number {
-	if (value === undefined || typeof value !== "number" || isNaN(value)) {
-		return DEFAULTS.compactionThreshold;
-	}
-	if (value <= 0 || value > 1) return DEFAULTS.compactionThreshold;
-	return value;
 }
 
 /**
@@ -149,18 +146,25 @@ function loadConfig(): MemoryConfig {
 const fileConfig = loadConfig();
 
 export const PLUGIN_CONFIG = {
-	// API keys from config file only — no env var fallback
+	// Optional keys (env fallbacks are resolved in config.ts)
 	voyageApiKey: fileConfig.voyageApiKey ?? "",
 	anthropicApiKey: fileConfig.anthropicApiKey ?? "",
-	xaiApiKey: fileConfig.xaiApiKey ?? "",
-	googleApiKey: fileConfig.googleApiKey ?? "",
 
-	// Extraction provider
-	extractionProvider: fileConfig.extractionProvider,
+	// Backends
+	llmBackend: fileConfig.llmBackend,
+	llmModel: fileConfig.llmModel,
+	embeddingProvider: fileConfig.embeddingProvider,
+	localModel: fileConfig.localModel,
 
-	// Plugin settings
-	similarityThreshold: fileConfig.similarityThreshold ?? DEFAULTS.similarityThreshold,
-	displaySimilarityThreshold: fileConfig.displaySimilarityThreshold ?? DEFAULTS.displaySimilarityThreshold,
+	// Behaviour
+	memoryBank: fileConfig.memoryBank === "off" ? "off" as const : DEFAULTS.memoryBank,
+	autoInit: fileConfig.autoInit ?? DEFAULTS.autoInit,
+	excludePaths: (fileConfig.excludePaths ?? []).filter((p) => typeof p === "string" && p.length > 0),
+
+	// Retrieval / rendering
+	// Model-specific defaults live in embedder.ts (activeThresholds); these are overrides.
+	similarityThreshold: fileConfig.similarityThreshold,
+	displaySimilarityThreshold: fileConfig.displaySimilarityThreshold,
 	maxMemories: fileConfig.maxMemories ?? DEFAULTS.maxMemories,
 	maxProjectMemories: fileConfig.maxProjectMemories ?? DEFAULTS.maxProjectMemories,
 	maxStructuredMemories: fileConfig.maxStructuredMemories ?? DEFAULTS.maxStructuredMemories,
@@ -173,19 +177,14 @@ export const PLUGIN_CONFIG = {
 		...DEFAULT_KEYWORD_PATTERNS,
 		...(fileConfig.keywordPatterns ?? []).filter(isValidRegex),
 	],
-	compactionThreshold: validateCompactionThreshold(fileConfig.compactionThreshold),
-	turnSummaryInterval: fileConfig.turnSummaryInterval ?? DEFAULTS.turnSummaryInterval,
 };
 
 /**
- * Returns true if the plugin has the minimum configuration to operate.
- *
- * Checks for voyageApiKey in ~/.codexfi/codexfi.jsonc only.
- * Environment variables are not read for API keys — use `codexfi install`
- * to store keys in the config file.
+ * codexfi works with zero configuration — LLM via Claude Code, embeddings local.
+ * Kept for callers that gate on configuration; always true now.
  */
 export function isConfigured(): boolean {
-	return !!PLUGIN_CONFIG.voyageApiKey;
+	return true;
 }
 
 // ── Config file writing (used by `install` command) ─────────────────────────────
@@ -194,9 +193,8 @@ export function isConfigured(): boolean {
 export interface ApiKeyUpdate {
 	voyageApiKey?: string;
 	anthropicApiKey?: string;
-	xaiApiKey?: string;
-	googleApiKey?: string;
-	extractionProvider?: "anthropic" | "xai" | "google";
+	llmBackend?: "auto" | "claude-cli" | "anthropic-api";
+	embeddingProvider?: "local" | "voyage";
 }
 
 /**
@@ -238,22 +236,18 @@ function generateConfigJsonc(config: MemoryConfig): string {
 	lines.push("// Docs: https://github.com/prosperitypirate/codexfi");
 	lines.push("{");
 
-	// ── API Keys section ────────────────────────────────────────────────────────
-	lines.push("\t// -- API Keys ------------------------------------------------------------------");
+	// ── Backends + optional keys ─────────────────────────────────────────────────
+	lines.push("\t// -- Backends -------------------------------------------------------------------");
+	lines.push("\t// codexfi needs no API keys: background LLM work runs through your Claude Code");
+	lines.push("\t// login (claude -p) and embeddings run on-device.");
+	lines.push("\t// llmBackend: \"auto\" | \"claude-cli\" | \"anthropic-api\"");
+	lines.push(`\t"llmBackend": ${jsonValue(config.llmBackend ?? "auto")},`);
+	lines.push("\t// embeddingProvider: \"local\" | \"voyage\"");
+	lines.push(`\t"embeddingProvider": ${jsonValue(config.embeddingProvider ?? "local")},`);
 	lines.push("");
-	lines.push("\t// Required: Voyage AI embedding key (https://dash.voyageai.com/api-keys)");
-	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)},`);
-	lines.push("");
-	lines.push("\t// Extraction LLM key - at least one is required.");
-	lines.push("\t// Provider is set via extractionProvider below (default: \"anthropic\").");
+	lines.push("\t// Optional: only needed for llmBackend \"anthropic-api\" / embeddingProvider \"voyage\"");
 	lines.push(`\t"anthropicApiKey": ${jsonValue(config.anthropicApiKey)},`);
-	lines.push(`\t"xaiApiKey": ${jsonValue(config.xaiApiKey)},`);
-	lines.push(`\t"googleApiKey": ${jsonValue(config.googleApiKey)},`);
-	lines.push("");
-	lines.push("\t// -- Extraction Provider -----------------------------------------------------");
-	lines.push("\t// Which LLM provider to use for memory extraction.");
-	lines.push("\t// Options: \"anthropic\" (Claude Haiku) | \"xai\" (Grok) | \"google\" (Gemini)");
-	lines.push(`\t"extractionProvider": ${jsonValue(config.extractionProvider ?? DEFAULT_EXTRACTION_PROVIDER)}`);
+	lines.push(`\t"voyageApiKey": ${jsonValue(config.voyageApiKey)}`);
 
 	// ── Plugin settings (only include non-defaults) ─────────────────────────────
 	const overrides = collectNonDefaults(config);
@@ -290,15 +284,16 @@ function collectNonDefaults(config: MemoryConfig): string[] {
 	const result: string[] = [];
 
 	const numericFields: Array<[keyof MemoryConfig, number]> = [
-		["similarityThreshold", DEFAULTS.similarityThreshold],
-		["displaySimilarityThreshold", DEFAULTS.displaySimilarityThreshold],
 		["maxMemories", DEFAULTS.maxMemories],
 		["maxProjectMemories", DEFAULTS.maxProjectMemories],
 		["maxStructuredMemories", DEFAULTS.maxStructuredMemories],
 		["maxProfileItems", DEFAULTS.maxProfileItems],
-		["compactionThreshold", DEFAULTS.compactionThreshold],
-		["turnSummaryInterval", DEFAULTS.turnSummaryInterval],
 	];
+
+	for (const key of ["similarityThreshold", "displaySimilarityThreshold"] as const) {
+		if (typeof config[key] === "number") result.push(`"${key}": ${JSON.stringify(config[key])}`);
+	}
+	if (config.localModel) result.push(`"localModel": ${JSON.stringify(config.localModel)}`);
 
 	for (const [key, defaultVal] of numericFields) {
 		const val = config[key];
@@ -318,6 +313,18 @@ function collectNonDefaults(config: MemoryConfig): string[] {
 	}
 	if (config.projectContainerTag) {
 		result.push(`"projectContainerTag": ${JSON.stringify(config.projectContainerTag)}`);
+	}
+	if (config.llmModel) {
+		result.push(`"llmModel": ${JSON.stringify(config.llmModel)}`);
+	}
+	if (config.memoryBank === "off") {
+		result.push(`"memoryBank": "off"`);
+	}
+	if (config.autoInit === false) {
+		result.push(`"autoInit": false`);
+	}
+	if (config.excludePaths && config.excludePaths.length > 0) {
+		result.push(`"excludePaths": ${JSON.stringify(config.excludePaths)}`);
 	}
 	if (config.keywordPatterns && config.keywordPatterns.length > 0) {
 		result.push(`"keywordPatterns": ${JSON.stringify(config.keywordPatterns)}`);

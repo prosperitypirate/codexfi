@@ -54,3 +54,10 @@ local/
 *.tsbuildinfo
 
 .opencodeignore
+
+# The Claude Code plugin is installed straight from git, so its built bundle is
+# committed (rebuild with `cd plugin && npm run build`).
+!plugin/dist/
+plugin/dist/*
+!plugin/dist/codexfi.js
+plugin/bun.lock

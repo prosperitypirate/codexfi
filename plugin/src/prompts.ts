@@ -6,7 +6,7 @@
 // ── Conversation extraction ────────────────────────────────────────────────────
 
 export const EXTRACTION_SYSTEM = `\
-You are a memory extraction assistant for an AI coding agent (OpenCode).
+You are a memory extraction assistant for an AI coding agent (Claude Code).
 Your job is to extract what is WORTH REMEMBERING from this exchange for future sessions.
 
 You are reading a conversation between a [user] and an AI [assistant].
@@ -114,7 +114,7 @@ If nothing is worth remembering, return: []`;
 // ── Project-file extraction (silent auto-init) ────────────────────────────────
 
 export const INIT_EXTRACTION_SYSTEM = `\
-You are a memory extraction assistant for an AI coding agent (OpenCode).
+You are a memory extraction assistant for an AI coding agent (Claude Code).
 Your job is to extract structured project knowledge from raw project files.
 
 Extract facts for these categories:

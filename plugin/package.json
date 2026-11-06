@@ -1,24 +1,19 @@
 {
 	"name": "codexfi",
 	"version": "0.7.6",
-	"description": "Persistent, semantic memory for AI coding agents — zero native dependencies, fully self-hosted, one-command install",
+	"description": "Persistent, searchable memory for Claude Code \u2014 automatic extraction, local embeddings, no API keys",
 	"type": "module",
-	"main": "dist/index.js",
+	"main": "dist/codexfi.js",
 	"bin": {
-		"codexfi": "./dist/cli.js"
+		"codexfi": "./dist/codexfi.js"
 	},
 	"scripts": {
-		"prebuild": "rm -f dist/*.node",
-		"build": "bun build src/index.ts --outdir dist --target node && bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
-		"build:plugin": "bun build src/index.ts --outdir dist --target node",
-		"build:cli": "bun build src/cli/index.ts --outdir dist --entry-naming cli.js --target node",
+		"build": "bun build src/cli/index.ts --outfile dist/codexfi.js --target node --external @huggingface/transformers",
 		"typecheck": "tsc --noEmit",
-		"cli": "bun run src/cli/index.ts",
-		"smoke:e2e": "bun run src/smoke-e2e.ts"
+		"cli": "bun run src/cli/index.ts"
 	},
 	"dependencies": {
-		"@opencode-ai/plugin": "^1.17.11",
-		"@opencode-ai/sdk": "^1.17.11",
+		"@huggingface/transformers": "4.3.1",
 		"zod": "^4.4.3"
 	},
 	"devDependencies": {
@@ -26,12 +21,13 @@
 		"typescript": "6.0.3"
 	},
 	"keywords": [
-		"opencode",
+		"claude-code",
+		"claude-code-plugin",
 		"memory",
 		"ai",
 		"coding-agent",
 		"persistent-memory",
-		"plugin"
+		"mcp"
 	],
 	"license": "MIT",
 	"repository": {
@@ -43,13 +39,6 @@
 	"publishConfig": {
 		"access": "public",
 		"provenance": true
-	},
-	"opencode": {
-		"type": "plugin",
-		"hooks": [
-			"chat.message",
-			"event"
-		]
 	},
 	"files": [
 		"dist"

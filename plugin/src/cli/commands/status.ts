@@ -1,26 +1,38 @@
 /**
- * `codexfi status` — health check for the memory system.
+ * `codexfi status` — health check for codexfi running inside Claude Code.
  *
- * Verifies:
- *   - Vector store exists and is readable
- *   - Config file (~/.codexfi/codexfi.jsonc) exists
- *   - Required API keys are set
- *   - Plugin is registered in OpenCode config
- *   - Data directory permissions
+ * Verifies (read-only — never creates files, never prints key values):
+ *   - Claude Code CLI found (path + version)
+ *   - LLM backend resolution (claude-cli / anthropic-api)
+ *   - Embedding provider + model (and local model cache, when the embedder reports it)
+ *   - Data directory, config file, vector store + memory count
+ *   - Background worker (worker.lock pid alive?) and queue length
+ *   - Memory Bank detection for the current directory
+ *   - Claude Code has the plugin enabled (~/.claude/settings.json "enabledPlugins")
  *
  * Flags:
  *   --json   Output raw JSON instead of formatted display
  */
 
-import { existsSync, accessSync, constants } from "node:fs";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
+import { accessSync, constants, existsSync, readdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
+import { join } from "node:path";
 
 import type { ParsedArgs } from "../args.js";
 import * as fmt from "../fmt.js";
-import { DATA_DIR, EXTRACTION_PROVIDER, VOYAGE_API_KEY, ANTHROPIC_API_KEY, XAI_API_KEY, GOOGLE_API_KEY } from "../../config.js";
-import { CONFIG_DIR } from "../../plugin-config.js";
+import {
+	ANTHROPIC_API_KEY,
+	DATA_DIR,
+	EMBEDDING_PROVIDER,
+	LLM_BACKEND,
+	LLM_MODEL,
+	VOYAGE_API_KEY,
+	VOYAGE_EMBEDDING_MODEL,
+} from "../../config.js";
+import { getConfigPath, PLUGIN_CONFIG } from "../../plugin-config.js";
+import { findClaudeBinary, resolveBackend } from "../../llm.js";
+import { detectMemoryBank } from "../../services/memory-bank.js";
 
 // ── Check types ─────────────────────────────────────────────────────────────────
 
@@ -30,78 +42,141 @@ interface CheckResult {
 	detail: string;
 }
 
+const set = (v: string): string => (v ? "set" : "unset");
+
 // ── Main ────────────────────────────────────────────────────────────────────────
 
 export async function run(args: ParsedArgs): Promise<void> {
 	const jsonOutput = args.booleans["json"] ?? false;
-	const checks: CheckResult[] = [];
 
-	// 1. Data directory
-	checks.push(checkDataDir());
+	const checks: CheckResult[] = [
+		checkClaudeCli(),
+		checkLlmBackend(),
+		await checkEmbeddings(),
+		checkDataDir(),
+		checkConfigFile(),
+		await checkStore(),
+		checkWorker(),
+		checkMemoryBank(),
+		checkPluginEnabled(),
+	];
 
-	// 2. Vector store
-	checks.push(checkDatabase());
+	const failed = checks.filter((c) => c.status === "fail").length;
+	const warned = checks.filter((c) => c.status === "warn").length;
+	const okCount = checks.length - failed - warned;
+	const verdict = failed > 0 ? "unhealthy" : warned > 0 ? "healthy-with-warnings" : "healthy";
 
-	// 3. Config file
-	checks.push(checkConfigFile());
-
-	// 4. Voyage AI key (embeddings)
-	checks.push(checkVoyageKey());
-
-	// 5. Extraction provider key
-	checks.push(checkExtractionKey());
-
-	// 6. Plugin registration
-	checks.push(checkPluginRegistered());
-
-	// 7. Log file
-	checks.push(checkLogFile());
-
-	// JSON output
 	if (jsonOutput) {
-		const allOk = checks.every((c) => c.status === "ok");
-		console.log(JSON.stringify({ healthy: allOk, checks }, null, 2));
+		console.log(JSON.stringify({
+			healthy: failed === 0,
+			verdict,
+			apiKeys: { anthropic: set(ANTHROPIC_API_KEY), voyage: set(VOYAGE_API_KEY) },
+			checks,
+		}, null, 2));
 		return;
 	}
 
-	// Formatted output
 	fmt.header("Status");
-
-	let hasFailure = false;
 	for (const check of checks) {
-		switch (check.status) {
-			case "ok":
-				fmt.success(`${check.name} ${fmt.dim(check.detail)}`);
-				break;
-			case "warn":
-				fmt.warn(`${check.name} ${fmt.dim(check.detail)}`);
-				break;
-			case "fail":
-				fmt.error(`${check.name} ${fmt.dim(check.detail)}`);
-				hasFailure = true;
-				break;
-		}
+		const line = `${check.name} ${fmt.dim(check.detail)}`;
+		if (check.status === "ok") fmt.success(line);
+		else if (check.status === "warn") fmt.warn(line);
+		else fmt.error(line);
 	}
+	fmt.info(`API keys ${fmt.dim(`anthropic: ${set(ANTHROPIC_API_KEY)}, voyage: ${set(VOYAGE_API_KEY)} (optional)`)}`);
 
 	fmt.blank();
-	const okCount = checks.filter((c) => c.status === "ok").length;
-	const total = checks.length;
-
-	if (hasFailure) {
-		console.log(`  ${fmt.redBold(`${okCount}/${total} checks passed`)} - fix errors above to proceed.`);
+	const summary = `${okCount}/${checks.length} checks passed`;
+	if (failed > 0) {
+		console.log(`  ${fmt.redBold(summary)} - fix errors above to proceed.`);
+	} else if (warned > 0) {
+		console.log(`  ${fmt.greenBold(summary)} - working, see warnings above.`);
 	} else {
-		console.log(`  ${fmt.greenBold(`${okCount}/${total} checks passed`)} - system healthy.`);
+		console.log(`  ${fmt.greenBold(summary)} - system healthy.`);
 	}
 	fmt.blank();
 }
 
 // ── Individual checks ───────────────────────────────────────────────────────────
 
+function checkClaudeCli(): CheckResult {
+	const name = "Claude Code CLI";
+	const bin = findClaudeBinary();
+	if (!bin) {
+		return { name, status: "fail", detail: "`claude` not found - install Claude Code (https://claude.com/claude-code)" };
+	}
+	const r = spawnSync(bin, ["--version"], { encoding: "utf8", timeout: 5_000, stdio: ["ignore", "pipe", "pipe"] });
+	const version = r.status === 0 ? (r.stdout ?? "").trim().split("\n")[0] : "";
+	if (!version) {
+		return { name, status: "warn", detail: `${bin} (could not read version)` };
+	}
+	return { name, status: "ok", detail: `${version} - ${bin}` };
+}
+
+function checkLlmBackend(): CheckResult {
+	const name = "LLM backend";
+	const resolved = resolveBackend();
+	const ctx = `configured: ${LLM_BACKEND}, model: ${LLM_MODEL}`;
+	if (!resolved) {
+		return { name, status: "fail", detail: `none available (${ctx}) - install Claude Code or set anthropicApiKey` };
+	}
+	if (resolved === "anthropic-api" && !ANTHROPIC_API_KEY) {
+		return { name, status: "fail", detail: `anthropic-api selected but no Anthropic API key set (${ctx})` };
+	}
+	if (resolved === "claude-cli" && !findClaudeBinary()) {
+		return { name, status: "fail", detail: `claude-cli selected but \`claude\` not found (${ctx})` };
+	}
+	return { name, status: "ok", detail: `${resolved} (${ctx})` };
+}
+
+/** Embedder metadata — loaded defensively so a broken embedder never breaks `status`. */
+interface EmbedderInfo { provider: string; model: string; dims: number; cacheDir?: string }
+
+async function loadEmbedderInfo(): Promise<EmbedderInfo | null> {
+	try {
+		const mod = (await import("../../embedder.js")) as { embedderInfo?: () => EmbedderInfo };
+		return typeof mod.embedderInfo === "function" ? mod.embedderInfo() : null;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * Best-effort: transformers.js caches weights at <cacheDir>/<org>/<model>/,
+ * so look for a <model> directory one level below the cache root.
+ */
+function isModelCached(cacheDir: string, model: string): boolean {
+	try {
+		return readdirSync(cacheDir).some((org) => existsSync(join(cacheDir, org, model)));
+	} catch {
+		return false;
+	}
+}
+
+async function checkEmbeddings(): Promise<CheckResult> {
+	const name = "Embeddings";
+	if (EMBEDDING_PROVIDER === "voyage" && !VOYAGE_API_KEY) {
+		return { name, status: "fail", detail: "provider voyage but no Voyage API key set - set voyageApiKey or use local" };
+	}
+	const info = await loadEmbedderInfo();
+	if (!info) {
+		const model = EMBEDDING_PROVIDER === "voyage" ? VOYAGE_EMBEDDING_MODEL : "model unknown";
+		return { name, status: "warn", detail: `${EMBEDDING_PROVIDER} (${model}; embedder info unavailable)` };
+	}
+	let detail = `${info.provider} - ${info.model} (${info.dims} dims)`;
+	if (info.provider === "local" && info.cacheDir) {
+		detail += isModelCached(info.cacheDir, info.model)
+			? `, model cached in ${info.cacheDir}`
+			: ", model not downloaded yet (fetched on first use)";
+	}
+	return { name, status: "ok", detail };
+}
+
 function checkDataDir(): CheckResult {
 	const name = "Data directory";
 	try {
 		if (!existsSync(DATA_DIR)) {
-			return { name, status: "warn", detail: `${DATA_DIR} does not exist yet (will be created on first run)` };
+			return { name, status: "warn", detail: `${DATA_DIR} does not exist yet (created on first session)` };
 		}
 		accessSync(DATA_DIR, constants.R_OK | constants.W_OK);
 		return { name, status: "ok", detail: DATA_DIR };
@@ -110,108 +185,93 @@ function checkDataDir(): CheckResult {
 	}
 }
 
-function checkDatabase(): CheckResult {
+function checkConfigFile(): CheckResult {
+	const name = "Config file";
+	const path = getConfigPath();
+	return existsSync(path)
+		? { name, status: "ok", detail: path }
+		: { name, status: "ok", detail: "none (optional - defaults in use)" };
+}
+
+async function checkStore(): Promise<CheckResult> {
 	const name = "Vector store";
 	const storePath = join(DATA_DIR, "store", "store.db");
+	if (!existsSync(storePath)) {
+		return { name, status: "warn", detail: "not initialized yet (created on first session)" };
+	}
 	try {
-		if (!existsSync(storePath)) {
-			return { name, status: "warn", detail: "not initialized yet (will be created on first session)" };
-		}
-		return { name, status: "ok", detail: storePath };
-	} catch {
-		return { name, status: "fail", detail: "unable to check store" };
+		const { init, store } = await import("../../db.js");
+		await init();
+		const total = store.countRows();
+		const active = store.scan({ superseded_by: "" }).length;
+		return { name, status: "ok", detail: `${active} active / ${total} total memories - ${storePath}` };
+	} catch (err) {
+		return { name, status: "fail", detail: `cannot open ${storePath}: ${err instanceof Error ? err.message : err}` };
 	}
 }
 
-export function checkConfigFile(): CheckResult {
-	const name = "Config file";
-	const configPath = join(CONFIG_DIR, "codexfi.jsonc");
-	if (existsSync(configPath)) {
-		return { name, status: "ok", detail: configPath };
-	}
-	return {
-		name,
-		status: "fail",
-		detail: `not found - run 'codexfi install' to create ${configPath}`,
-	};
-}
-
-function checkVoyageKey(): CheckResult {
-	const name = "Voyage API key";
-	if (VOYAGE_API_KEY) {
-		return { name, status: "ok", detail: `set (${VOYAGE_API_KEY.slice(0, 6)}...)` };
-	}
-	return { name, status: "fail", detail: "VOYAGE_API_KEY not set - required for embeddings" };
-}
-
-function checkExtractionKey(): CheckResult {
-	const name = "Extraction API key";
-	const provider = EXTRACTION_PROVIDER;
-
-	const keyMap: Record<string, string> = {
-		anthropic: ANTHROPIC_API_KEY,
-		xai: XAI_API_KEY,
-		google: GOOGLE_API_KEY,
-	};
-
-	const key = keyMap[provider];
-	if (key) {
-		return { name, status: "ok", detail: `${provider} (${key.slice(0, 6)}...)` };
-	}
-
-	// Check if any key is set even if not for the configured provider
-	const anyKey = Object.entries(keyMap).find(([, v]) => !!v);
-	if (anyKey) {
-		return {
-			name,
-			status: "warn",
-			detail: `EXTRACTION_PROVIDER=${provider} but key missing - ${anyKey[0]} key is available`,
-		};
-	}
-
-	return { name, status: "fail", detail: "no extraction API key set" };
-}
-
-function checkPluginRegistered(): CheckResult {
-	const name = "OpenCode plugin";
-	const configDir = join(homedir(), ".config", "opencode");
-
+function isAlive(pid: number): boolean {
 	try {
-		const candidates = ["opencode.jsonc", "opencode.json"];
-		for (const filename of candidates) {
-			const configPath = join(configDir, filename);
-			if (!existsSync(configPath)) continue;
-
-			const raw = readFileSync(configPath, "utf-8");
-			const stripped = raw.replace(/^\s*\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
-			const config = JSON.parse(stripped) as Record<string, unknown>;
-			const plugins = (config.plugin as string[]) ?? [];
-
-			// Check if any plugin entry looks like it points to this package
-			// Also match "opencode-memory/plugin" for pre-rename dev installs
-			const hasMemory = plugins.some(
-				(p) => p.includes("codexfi") || p.includes("opencode-memory/plugin"),
-			);
-
-			if (hasMemory) {
-				return { name, status: "ok", detail: `registered in ${filename}` };
-			}
-
-			return { name, status: "warn", detail: `${filename} exists but plugin not registered - run 'install'` };
-		}
-
-		return { name, status: "warn", detail: "no OpenCode config found - run 'install'" };
-	} catch {
-		return { name, status: "warn", detail: "unable to read OpenCode config" };
+		process.kill(pid, 0);
+		return true;
+	} catch (e) {
+		return (e as NodeJS.ErrnoException).code === "EPERM";
 	}
 }
 
-function checkLogFile(): CheckResult {
-	const name = "Log file";
-	const logPath = join(homedir(), ".codexfi.log");
-
-	if (existsSync(logPath)) {
-		return { name, status: "ok", detail: logPath };
+function checkWorker(): CheckResult {
+	const name = "Background worker";
+	let pid: number | null = null;
+	try {
+		pid = (JSON.parse(readFileSync(join(DATA_DIR, "worker.lock"), "utf8")) as { pid?: number }).pid ?? null;
+	} catch {
+		// no lock file
 	}
-	return { name, status: "warn", detail: "not created yet (appears after first session)" };
+	let queued = 0;
+	try {
+		queued = readdirSync(join(DATA_DIR, "queue")).filter((f) => f.endsWith(".json")).length;
+	} catch {
+		// no queue dir yet
+	}
+	const running = pid !== null && isAlive(pid);
+	const state = running ? `running (pid ${pid})` : "idle";
+	if (!running && queued > 0) {
+		return { name, status: "warn", detail: `${state}, ${queued} queued job(s) - drained on the next Claude Code hook` };
+	}
+	return { name, status: "ok", detail: `${state}, ${queued} queued job(s)` };
+}
+
+function checkMemoryBank(): CheckResult {
+	const name = "Memory Bank";
+	const bank = detectMemoryBank(process.cwd());
+	if (!bank) return { name, status: "ok", detail: "none for this directory" };
+	const saved = new Date(bank.lastSavedAt).toISOString().slice(0, 16).replace("T", " ");
+	const mode = PLUGIN_CONFIG.memoryBank === "off" ? "memoryBank: off" : "codexfi complements it";
+	return { name, status: "ok", detail: `${bank.dir} (${bank.files.length}/6 files, last saved ${saved}; ${mode})` };
+}
+
+/**
+ * Best-effort: read ONLY the "enabledPlugins" key of Claude Code's user settings
+ * and look for entries containing "codexfi". Nothing else from the file is used.
+ */
+function checkPluginEnabled(): CheckResult {
+	const name = "Claude Code plugin";
+	const configDir = process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), ".claude");
+	const settingsPath = join(configDir, "settings.json");
+	let enabled: Record<string, unknown> = {};
+	try {
+		const parsed = JSON.parse(readFileSync(settingsPath, "utf8")) as { enabledPlugins?: unknown };
+		if (parsed.enabledPlugins && typeof parsed.enabledPlugins === "object") {
+			enabled = parsed.enabledPlugins as Record<string, unknown>;
+		}
+	} catch {
+		return { name, status: "warn", detail: `could not read ${settingsPath} - run 'codexfi install'` };
+	}
+	const entries = Object.entries(enabled).filter(([id]) => id.toLowerCase().includes("codexfi"));
+	const on = entries.filter(([, v]) => v === true).map(([id]) => id);
+	if (on.length > 0) return { name, status: "ok", detail: `enabled (${on.join(", ")})` };
+	if (entries.length > 0) {
+		return { name, status: "warn", detail: `installed but disabled - run 'claude plugin enable ${entries[0][0]}'` };
+	}
+	return { name, status: "warn", detail: "not enabled in user settings - run 'codexfi install'" };
 }

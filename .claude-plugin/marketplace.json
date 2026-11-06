@@ -1,0 +1,16 @@
+{
+  "name": "codexfi",
+  "owner": { "name": "prosperitypirate", "url": "https://github.com/prosperitypirate" },
+  "metadata": {
+    "description": "codexfi — persistent, searchable memory for Claude Code"
+  },
+  "plugins": [
+    {
+      "name": "codexfi",
+      "source": "./plugin",
+      "description": "Automatic, searchable long-term memory for Claude Code: extracts what matters from every turn, injects relevant memories per prompt, on-device embeddings, runs on your Claude Code login — no API keys.",
+      "category": "productivity",
+      "keywords": ["memory", "context", "persistent-memory", "rag", "mcp", "memory-bank"]
+    }
+  ]
+}
